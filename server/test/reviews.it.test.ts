@@ -209,6 +209,15 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     expect(run!.findingsCount).toBe(1);
     expect(run!.grounding).toBe('1/2 passed');
 
+    // Cost is persisted (not recomputed on read) and the trace agrees with the
+    // row — the mock provider reports a per-call cost, so this must be > 0.
+    expect(run!.costUsd).toBeGreaterThan(0);
+    expect(trace.stats.cost_usd).toBe(run!.costUsd);
+
+    // …and it survives a reload: the run-history endpoint carries it too.
+    const runs = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/runs` })).json();
+    expect(runs.find((x: { run_id: string }) => x.run_id === runId).cost_usd).toBe(run!.costUsd);
+
     await app.close();
   });
 
@@ -286,6 +295,51 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     // The replay buffer should contain our log lines as SSE `data:` frames.
     expect(sse.payload).toContain('Starting review');
     expect(sse.payload).toContain('Citation grounding');
+    await app.close();
+  });
+
+  it('PR list sums run cost per PR, and reports null (not 0) when nothing is known', async () => {
+    const app = await appWith(REVIEW_FIXTURE);
+    const { repo, pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    // A second PR in the SAME repo, so one list response covers both cases.
+    const [untouched] = await pg.handle.db
+      .insert(t.pullRequests)
+      .values({
+        workspaceId,
+        repoId: repo.id,
+        number: 483,
+        title: 'Bump ioredis',
+        author: 'dependabot',
+        branch: 'deps/ioredis',
+        base: 'main',
+        headSha: 'e5f6a7b8',
+        additions: 1,
+        deletions: 1,
+        filesCount: 1,
+        status: 'needs_review',
+      })
+      .returning();
+
+    // Three runs on one PR: two priced, one whose model had no price. SUM skips
+    // the NULL, so the total is the two known ones — deliberately partial.
+    await pg.handle.db.insert(t.agentRuns).values([
+      { workspaceId, prId: pr.id, status: 'done', costUsd: 0.01 },
+      { workspaceId, prId: pr.id, status: 'failed', costUsd: 0.002 },
+      { workspaceId, prId: pr.id, status: 'done', costUsd: null },
+    ]);
+    // The second PR gets a run with an UNKNOWN cost only — an all-NULL group
+    // must stay null, never collapse to $0.00.
+    await pg.handle.db
+      .insert(t.agentRuns)
+      .values({ workspaceId, prId: untouched!.id, status: 'done', costUsd: null });
+
+    const list = (await app.inject({ method: 'GET', url: `/repos/${repo.id}/pulls` })).json();
+    const row = list.find((p: { id: string }) => p.id === pr.id);
+    const other = list.find((p: { id: string }) => p.id === untouched!.id);
+
+    expect(row.cost_usd).toBeCloseTo(0.012, 10);
+    expect(other.cost_usd).toBeNull();
+
     await app.close();
   });
 

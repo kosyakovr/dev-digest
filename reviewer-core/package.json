@@ -18,5 +18,10 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
+  },
+  "allowScripts": {
+    "fsevents@2.3.3": true,
+    "esbuild@0.28.0": true,
+    "esbuild@0.21.5": true
   }
 }
