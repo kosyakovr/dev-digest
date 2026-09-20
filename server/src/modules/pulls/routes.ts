@@ -4,10 +4,11 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { PrMeta, PrDetail, GitHubClient, PrReviewComment } from '@devdigest/shared';
 import { PrCommentInput } from '@devdigest/shared';
 import * as t from '../../db/schema.js';
+import type { FindingRow } from '../../db/rows.js';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { AppError, NotFoundError } from '../../platform/errors.js';
-import { deriveReviewStatus } from './status.js';
+import { deriveReviewStatus, rollupSeverities, toFindingPreviews } from './status.js';
 
 /**
  * F1 — pulls module. PR import via Octokit (list + per-PR detail).
@@ -113,19 +114,44 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
 
     // Latest-review SCORE per PR for the list's score ring. Computed on read
     // from reviews (no FK denorm); the list is small, so one IN-query + JS
-    // grouping is cheap. (The per-severity FINDINGS breakdown is intentionally
-    // not surfaced on the list — findings live on the PR detail page.)
+    // grouping is cheap. The review's `id` comes along so the FINDINGS rollup
+    // below reads the SAME row — score and findings can never disagree.
     const prIds = rows.map((r) => r.id);
-    const latestReviewByPr = new Map<string, { score: number | null }>();
+    const latestReviewByPr = new Map<string, { id: string; score: number | null }>();
     if (prIds.length > 0) {
       const reviewRows = await container.db
-        .select({ prId: t.reviews.prId, score: t.reviews.score })
+        .select({ id: t.reviews.id, prId: t.reviews.prId, score: t.reviews.score })
         .from(t.reviews)
         .where(and(inArray(t.reviews.prId, prIds), eq(t.reviews.kind, 'review')))
         .orderBy(desc(t.reviews.createdAt));
       // Rows are newest-first → first seen per PR is the latest review.
       for (const rv of reviewRows) {
-        if (!latestReviewByPr.has(rv.prId)) latestReviewByPr.set(rv.prId, { score: rv.score });
+        if (!latestReviewByPr.has(rv.prId)) {
+          latestReviewByPr.set(rv.prId, { id: rv.id, score: rv.score });
+        }
+      }
+    }
+
+    // Latest-review FINDINGS per PR, for the list's FINDINGS column and its
+    // hover popover. ONE IN-query over the latest reviews' ids (not one per PR —
+    // no N+1), then grouped in JS, exactly like the score above.
+    //
+    // The full findings are NOT shipped to the list: only a severity tally plus
+    // a capped, read-only preview. The whole list, the markdown rationale and
+    // the acting UI (accept / dismiss) stay on the PR detail page. The column
+    // describes the LATEST run only — which is what the popover title,
+    // "N FINDINGS IN THIS RUN", promises.
+    const findingsByReview = new Map<string, FindingRow[]>();
+    const latestReviewIds = [...latestReviewByPr.values()].map((rv) => rv.id);
+    if (latestReviewIds.length > 0) {
+      const findingRows = await container.db
+        .select()
+        .from(t.findings)
+        .where(inArray(t.findings.reviewId, latestReviewIds));
+      for (const f of findingRows) {
+        const list = findingsByReview.get(f.reviewId);
+        if (list) list.push(f);
+        else findingsByReview.set(f.reviewId, [f]);
       }
     }
 
@@ -157,6 +183,8 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
     const now = Date.now();
     return rows.map((r) => {
       const review = latestReviewByPr.get(r.id);
+      const reviewFindings = review ? findingsByReview.get(review.id) ?? [] : [];
+      const sev = rollupSeverities(reviewFindings);
       return {
         id: r.id,
         number: r.number,
@@ -179,6 +207,19 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         updated_at: r.updatedAt?.toISOString() ?? null,
         score: review ? review.score : null,
         cost_usd: costByPr.get(r.id) ?? null,
+        // No review at all ⇒ null (the cell renders "—"). A review that found
+        // nothing ⇒ an all-zero rollup, which is a different fact and renders 0.
+        latest_findings: review
+          ? {
+              total: reviewFindings.length,
+              by_severity: {
+                CRITICAL: sev.critical,
+                WARNING: sev.warning,
+                SUGGESTION: sev.suggestion,
+              },
+              preview: toFindingPreviews(reviewFindings),
+            }
+          : null,
       };
     });
   });

@@ -13,6 +13,16 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## What Doesn't Work
 
+- 2026-09-19 — A global markdown strip (``/[`*_>#]/g``) silently mangles code
+  identifiers: flattening a finding's rationale for the PR-list preview turned
+  the seeded `` `sk_live_` `` into "sklive", and would equally eat `=>` and
+  `#482`. Every unit test passed, because the fixtures contained no code
+  punctuation — only curling a freshly-seeded stack surfaced it → in a
+  code-review tool strip LEADING block markers per line
+  (`/^\s*(?:#{1,6}\s+|>\s*|[-+*]\s+)/gm`) plus `**` and backticks, and never
+  strip `_`, `>` or `#` globally; and put a code-shaped string in the fixture.
+  (ref: server/src/modules/pulls/status.ts:previewDescription)
+
 ## Codebase Patterns
 
 ## Tool & Library Notes
@@ -30,5 +40,9 @@ Non-obvious findings a future session needs. **Read this before working here.**
 ## Recurring Errors & Fixes
 
 ## Session Notes
+
+- 2026-09-19 — L01-b findings visibility: added `PrMeta.latest_findings` (counts
+  + capped read-only preview of the LATEST review) to `GET /repos/:id/pulls` in
+  one extra IN-query (spec: server/specs/L01-findings-visibility.md).
 
 ## Open Questions

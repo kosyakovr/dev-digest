@@ -343,6 +343,159 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     await app.close();
   });
 
+  it('PR list rolls up the LATEST review\'s findings, capped, and null when never reviewed', async () => {
+    const app = await appWith(REVIEW_FIXTURE);
+    const { repo, pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+
+    // Two more PRs in the SAME repo so one list response covers all three cases.
+    const [cleanPr, neverPr] = await pg.handle.db
+      .insert(t.pullRequests)
+      .values(
+        [484, 485].map((number) => ({
+          workspaceId,
+          repoId: repo.id,
+          number,
+          title: `PR ${number}`,
+          author: 'dependabot',
+          branch: `deps/${number}`,
+          base: 'main',
+          headSha: `sha-${number}`,
+          additions: 1,
+          deletions: 1,
+          filesCount: 1,
+          status: 'needs_review' as const,
+        })),
+      )
+      .returning();
+
+    // Two reviews on the SAME PR with EXPLICIT, distinct timestamps. The route
+    // picks the latest by created_at and takes the first row per PR, so a
+    // same-millisecond tie would make this assertion nondeterministic.
+    const [oldReview, newReview] = await pg.handle.db
+      .insert(t.reviews)
+      .values([
+        {
+          workspaceId,
+          prId: pr.id,
+          kind: 'review' as const,
+          verdict: 'approve' as const,
+          score: 90,
+          createdAt: new Date('2026-09-01T00:00:00Z'),
+        },
+        {
+          workspaceId,
+          prId: pr.id,
+          kind: 'review' as const,
+          verdict: 'request_changes' as const,
+          score: 41,
+          createdAt: new Date('2026-09-02T00:00:00Z'),
+        },
+      ])
+      .returning();
+
+    // The OLD review has findings that must NOT leak into the rollup.
+    await pg.handle.db.insert(t.findings).values({
+      reviewId: oldReview!.id,
+      file: 'src/old.ts',
+      startLine: 1,
+      endLine: 1,
+      severity: 'CRITICAL',
+      category: 'bug',
+      title: 'From the superseded run',
+      rationale: 'stale',
+      confidence: 0.9,
+    });
+
+    // The LATEST review: 7 findings across all three severities — more than the
+    // preview cap of 5, so `total` and `preview.length` must diverge.
+    await pg.handle.db.insert(t.findings).values([
+      ...[0.99, 0.8].map((confidence, i) => ({
+        reviewId: newReview!.id,
+        file: 'src/config.ts',
+        startLine: 11,
+        endLine: 11,
+        severity: 'CRITICAL',
+        category: 'security',
+        title: `Critical ${i}`,
+        rationale: 'A `secret` is committed in **plain text**.',
+        confidence,
+      })),
+      ...[0.7, 0.6, 0.5].map((confidence, i) => ({
+        reviewId: newReview!.id,
+        file: 'src/a.ts',
+        startLine: 2,
+        endLine: 3,
+        severity: 'WARNING',
+        category: 'perf',
+        title: `Warning ${i}`,
+        rationale: 'N+1 query.',
+        confidence,
+      })),
+      ...[0.4, 0.3].map((confidence, i) => ({
+        reviewId: newReview!.id,
+        file: 'src/b.ts',
+        startLine: 9,
+        endLine: 9,
+        severity: 'SUGGESTION',
+        category: 'style',
+        title: `Suggestion ${i}`,
+        rationale: 'Magic number.',
+        confidence,
+      })),
+    ]);
+
+    // A review that found nothing — a real, all-zero rollup, NOT null.
+    await pg.handle.db.insert(t.reviews).values({
+      workspaceId,
+      prId: cleanPr!.id,
+      kind: 'review' as const,
+      verdict: 'approve' as const,
+      score: 100,
+      createdAt: new Date('2026-09-02T00:00:00Z'),
+    });
+
+    const list = (await app.inject({ method: 'GET', url: `/repos/${repo.id}/pulls` })).json();
+    const reviewed = list.find((p: { id: string }) => p.id === pr.id);
+    const clean = list.find((p: { id: string }) => p.id === cleanPr!.id);
+    const never = list.find((p: { id: string }) => p.id === neverPr!.id);
+
+    // Latest run only — the superseded review's critical must not be counted.
+    expect(reviewed.latest_findings.total).toBe(7);
+    expect(reviewed.latest_findings.by_severity).toEqual({
+      CRITICAL: 2,
+      WARNING: 3,
+      SUGGESTION: 2,
+    });
+    expect(reviewed.score).toBe(41); // score comes from that same review row
+
+    // The preview is capped and worst-first, with markdown flattened.
+    expect(reviewed.latest_findings.preview).toHaveLength(5);
+    expect(reviewed.latest_findings.preview.map((f: { severity: string }) => f.severity)).toEqual([
+      'CRITICAL',
+      'CRITICAL',
+      'WARNING',
+      'WARNING',
+      'WARNING',
+    ]);
+    expect(reviewed.latest_findings.preview[0].confidence).toBe(0.99);
+    expect(reviewed.latest_findings.preview[0].description).toBe(
+      'A secret is committed in plain text.',
+    );
+    // Read-only: no action state rides along to the list.
+    expect(reviewed.latest_findings.preview[0]).not.toHaveProperty('accepted_at');
+
+    // Reviewed and clean ⇒ zeros, never null.
+    expect(clean.latest_findings).toEqual({
+      total: 0,
+      by_severity: { CRITICAL: 0, WARNING: 0, SUGGESTION: 0 },
+      preview: [],
+    });
+    // Never reviewed ⇒ null, so the UI can render "—" instead of a confident 0.
+    expect(never.latest_findings).toBeNull();
+
+    await app.close();
+  });
+
   it('run all enabled agents reviews with each enabled agent', async () => {
     const app = await appWith(REVIEW_FIXTURE);
     const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);

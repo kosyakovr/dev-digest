@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Provider } from './knowledge.js';
+import { Severity, FindingCategory } from './findings.js';
 
 /**
  * Platform / scaffolding DTOs owned by F1:
@@ -154,6 +155,48 @@ export type Repo = z.infer<typeof Repo>;
 export const PrStatus = z.enum(['needs_review', 'reviewed', 'stale', 'open', 'closed', 'merged']);
 export type PrStatus = z.infer<typeof PrStatus>;
 
+/**
+ * One finding of a PR's LATEST review, trimmed to what the PR list's FINDINGS
+ * popover previews. READ-ONLY by construction: no `review_id`, `accepted_at` or
+ * `dismissed_at`, because nothing on the list may act on a finding — accept and
+ * dismiss live on the PR detail page's expanded run card.
+ */
+export const PrFindingPreview = z.object({
+  id: z.string(),
+  severity: Severity,
+  category: FindingCategory,
+  title: z.string(),
+  file: z.string(),
+  start_line: z.number().int(),
+  end_line: z.number().int(),
+  confidence: z.number().min(0).max(1),
+  /**
+   * `rationale` flattened to one plain-text line and truncated — the popover
+   * never renders markdown.
+   */
+  description: z.string(),
+});
+export type PrFindingPreview = z.infer<typeof PrFindingPreview>;
+
+/**
+ * The latest review RUN's findings, rolled up for the PR list.
+ *
+ * `total` counts every finding of that run; `preview` is CAPPED, so
+ * `preview.length <= total` and the popover title must use `total`.
+ * `by_severity` tallies only the three known severities (the DB column is free
+ * text), so in the presence of an off-enum row `sum(by_severity) < total`.
+ */
+export const PrFindingsRollup = z.object({
+  total: z.number().int(),
+  by_severity: z.object({
+    CRITICAL: z.number().int(),
+    WARNING: z.number().int(),
+    SUGGESTION: z.number().int(),
+  }),
+  preview: z.array(PrFindingPreview),
+});
+export type PrFindingsRollup = z.infer<typeof PrFindingsRollup>;
+
 export const PrMeta = z.object({
   id: z.string().nullish(),
   number: z.number().int(),
@@ -174,6 +217,12 @@ export const PrMeta = z.object({
   // (list endpoint only). null = no run has a known cost; NULL-cost runs are
   // skipped by the sum, so a partial total can understate. Never 0-as-unknown.
   cost_usd: z.number().nullish(),
+  // Latest-review FINDINGS rollup (list endpoint only, like `score` — and read
+  // from the SAME review row, so the two can never disagree). null/absent = this
+  // PR has never been reviewed, which is DISTINCT from a review that found
+  // nothing (`{ total: 0, by_severity: all-zero, preview: [] }`). Never
+  // 0-as-unknown: the list renders "—" for null and a muted "0" for a clean run.
+  latest_findings: PrFindingsRollup.nullish(),
 });
 export type PrMeta = z.infer<typeof PrMeta>;
 

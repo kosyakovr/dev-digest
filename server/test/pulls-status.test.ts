@@ -6,7 +6,16 @@
  * + age, so it gets unit coverage independent of the route's queries.
  */
 import { describe, it, expect } from 'vitest';
-import { deriveReviewStatus, rollupSeverities, STALE_DAYS } from '../src/modules/pulls/status.js';
+import {
+  deriveReviewStatus,
+  rollupSeverities,
+  previewDescription,
+  toFindingPreviews,
+  PR_FINDING_PREVIEW_LIMIT,
+  PR_FINDING_DESCRIPTION_MAX,
+  STALE_DAYS,
+  type PreviewableFinding,
+} from '../src/modules/pulls/status.js';
 
 const DAY = 86_400_000;
 const now = Date.UTC(2026, 5, 11);
@@ -64,5 +73,103 @@ describe('rollupSeverities', () => {
 
   it('is all-zero for no findings', () => {
     expect(rollupSeverities([])).toEqual({ critical: 0, warning: 0, suggestion: 0 });
+  });
+});
+
+describe('previewDescription', () => {
+  it('flattens markdown to one plain-text line', () => {
+    expect(previewDescription('The `foo` loop\nruns **twice**.\n\n- once per user')).toBe(
+      'The foo loop runs twice. once per user',
+    );
+  });
+
+  it('keeps code punctuation intact — this is a code-review tool', () => {
+    // Regression: a global /[`*_>#]/ strip turned `sk_live_` into "sklive".
+    expect(previewDescription('Line 12 contains a literal `sk_live_` Stripe key.')).toBe(
+      'Line 12 contains a literal sk_live_ Stripe key.',
+    );
+    expect(previewDescription('The `() => {}` in `user_id` handling, see #482.')).toBe(
+      'The () => {} in user_id handling, see #482.',
+    );
+  });
+
+  it('strips block markers only at the start of a line', () => {
+    expect(previewDescription('# Heading\n> quoted\n- bullet')).toBe('Heading quoted bullet');
+  });
+
+  it('drops fenced code blocks, which carry no summary value', () => {
+    expect(previewDescription('Use a set:\n```ts\nconst s = new Set()\n```\nIt is O(1).')).toBe(
+      'Use a set: It is O(1).',
+    );
+  });
+
+  it('leaves a short line untruncated — no gratuitous ellipsis', () => {
+    const short = 'A secret is committed in plain text.';
+    expect(previewDescription(short)).toBe(short);
+    expect(previewDescription(short)).not.toContain('…');
+  });
+
+  it('truncates on a word boundary and marks it', () => {
+    const long = `${'alpha bravo '.repeat(40)}omega`;
+    const out = previewDescription(long);
+    expect(out.length).toBeLessThanOrEqual(PR_FINDING_DESCRIPTION_MAX + 1); // + the ellipsis
+    expect(out.endsWith('…')).toBe(true);
+    expect(out).not.toContain('omega');
+    // Word boundary: the character before the ellipsis is not a partial word.
+    expect(out.slice(0, -1).endsWith(' ')).toBe(false);
+  });
+});
+
+describe('toFindingPreviews', () => {
+  const f = (o: Partial<PreviewableFinding> & { id: string }): PreviewableFinding => ({
+    severity: 'WARNING',
+    category: 'bug',
+    title: `title ${o.id}`,
+    file: 'src/a.ts',
+    startLine: 1,
+    endLine: 2,
+    rationale: 'because',
+    confidence: 0.5,
+    ...o,
+  });
+
+  it('orders worst-first, then by confidence, then stably by id', () => {
+    const out = toFindingPreviews([
+      f({ id: 'b', severity: 'SUGGESTION' }),
+      f({ id: 'c', severity: 'CRITICAL', confidence: 0.7 }),
+      f({ id: 'a', severity: 'CRITICAL', confidence: 0.9 }),
+      f({ id: 'd', severity: 'WARNING' }),
+      f({ id: 'e', severity: 'CRITICAL', confidence: 0.7 }),
+    ]);
+    expect(out.map((p) => p.id)).toEqual(['a', 'c', 'e', 'd', 'b']);
+  });
+
+  it('caps the list — the count and the preview length are separate concerns', () => {
+    const many = Array.from({ length: PR_FINDING_PREVIEW_LIMIT + 4 }, (_, i) =>
+      f({ id: `f${i}` }),
+    );
+    expect(toFindingPreviews(many)).toHaveLength(PR_FINDING_PREVIEW_LIMIT);
+  });
+
+  it('drops off-enum severities the list cannot render', () => {
+    const out = toFindingPreviews([f({ id: 'a', severity: 'WEIRD' }), f({ id: 'b' })]);
+    expect(out.map((p) => p.id)).toEqual(['b']);
+  });
+
+  it('maps DB columns to the snake_case contract shape', () => {
+    const [p] = toFindingPreviews([
+      f({ id: 'a', startLine: 45, endLine: 52, rationale: 'The `loop` is **hot**.' }),
+    ]);
+    expect(p).toEqual({
+      id: 'a',
+      severity: 'WARNING',
+      category: 'bug',
+      title: 'title a',
+      file: 'src/a.ts',
+      start_line: 45,
+      end_line: 52,
+      confidence: 0.5,
+      description: 'The loop is hot.',
+    });
   });
 });

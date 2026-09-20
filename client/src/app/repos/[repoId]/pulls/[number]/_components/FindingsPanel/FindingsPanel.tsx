@@ -7,9 +7,10 @@ import { useTranslations } from "next-intl";
 import { Toggle, EmptyState } from "@devdigest/ui";
 import type { FindingRecord } from "@devdigest/shared";
 import { FindingCard } from "../FindingCard";
+import { SeverityFilterBar } from "../SeverityFilterBar";
 import { useFindingAction } from "../../../../../../../lib/hooks/reviews";
 import { KEY_TO_ACTION } from "./constants";
-import { visibleFindings } from "./helpers";
+import { countBySeverity, filterBySeverity, visibleFindings } from "./helpers";
 import { s } from "./styles";
 
 export function FindingsPanel({
@@ -26,9 +27,19 @@ export function FindingsPanel({
   const t = useTranslations("prReview");
   const action = useFindingAction();
   const [hideLow, setHideLow] = React.useState(false);
+  const [severity, setSeverity] = React.useState<string | null>(null);
   const [focusIdx, setFocusIdx] = React.useState(0);
 
-  const shown = React.useMemo(() => visibleFindings(findings, hideLow), [findings, hideLow]);
+  // `visible` is what the counters describe, `shown` is what the severity
+  // filter leaves of it. Counting `visible` (not `findings`) is what keeps each
+  // counter equal to the cards rendered below in every toggle state.
+  const visible = React.useMemo(() => visibleFindings(findings, hideLow), [findings, hideLow]);
+  const counts = React.useMemo(() => countBySeverity(visible), [visible]);
+  const shown = React.useMemo(() => filterBySeverity(visible, severity), [visible, severity]);
+
+  // Filtering re-indexes the list, so a stale focus index would point j/k and
+  // the a/d shortcuts at the wrong card — or past the end of the list.
+  React.useEffect(() => setFocusIdx(0), [severity, hideLow]);
 
   // j/k navigation + a/d shortcuts on the focused finding (keyboard).
   React.useEffect(() => {
@@ -47,6 +58,12 @@ export function FindingsPanel({
 
   return (
     <div>
+      <SeverityFilterBar
+        counts={counts}
+        active={severity}
+        onToggle={(sev) => setSeverity((cur) => (cur === sev ? null : sev))}
+      />
+
       <div style={s.toolbar}>
         <div style={s.toggleGroup}>
           {t("panel.hideLowConfidence")}
