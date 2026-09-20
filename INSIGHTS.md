@@ -21,8 +21,35 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
   cannot sweep up unrelated schema drift. Verify with a diff of the two
   snapshots minus the new column, and keep both files' missing trailing newline.
   (ref: server/src/db/migrations/0010_add_agent_run_cost.sql)
+- 2026-09-20 — The root instruction file named above is now `AGENTS.md`; all five
+  `CLAUDE.md` files were renamed and no `CLAUDE.md` remains in the repo. The
+  `pnpm db:generate` prohibition itself is unchanged — only the file carrying it
+  was renamed. No symlinks were added. (ref: AGENTS.md:1)
 
 ## What Doesn't Work
+
+- 2026-09-20 — Relying on Claude Code's DEFAULT `instructionFiles` mode after the
+  `CLAUDE.md` → `AGENTS.md` rename is a silent-loss trap: the default
+  `claude-md-or-agents-md` drops EVERY `AGENTS.md` in the project the moment the
+  project has a `CLAUDE.md` of its own, and the engine counts
+  `CLAUDE.md`, `.claude/CLAUDE.md` AND `CLAUDE.local.md` as that — so one
+  developer's personal, untracked, gitignored-by-nobody `CLAUDE.local.md` in the
+  repo root silently strips the root + all four package instruction files, with
+  no warning and nothing to debug → do NOT create a `CLAUDE.md` or
+  `CLAUDE.local.md` in this repo; there is currently no setting that prevents
+  this. (ref: AGENTS.md:1)
+  - 2026-09-20 — Measured, not assumed: dropping a `CLAUDE.local.md` into the
+    repo root made all five `AGENTS.md` vanish from context (a canary line in
+    each, queried via `claude -p` with all tools disallowed, returned only the
+    `CLAUDE.local.md` canary). `"instructionFiles": "claude-md-and-agents-md"`
+    in `.claude/settings.json` did NOT prevent it, and neither did the legacy
+    `projectInstructions: "both"`: on 2.1.278 the option is a NO-OP — its
+    strings and the four mode names are in the binary, but nothing reads them
+    yet. The file is checked in anyway so the intent is already right when a
+    later build wires it up. Control: an `env` key added to the same
+    `.claude/settings.json` DID reach the agent's shell, so the file is read —
+    it is this one option that is inert, not the settings file.
+    (ref: .claude/settings.json:2)
 
 - 2026-09-19 — Summing per-run cost with a plain SQL `SUM(cost_usd)` silently
   understates it, because the two layers disagree on what NULL means:

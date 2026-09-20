@@ -10,7 +10,7 @@ Deterministic browser flows driven by agent-browser (CDP, no LLM). How flows wor
 - `npm run typecheck`
 
 ## Must not break
-- `package-lock.json` is off-limits — see root [../CLAUDE.md](../CLAUDE.md).
+- `package-lock.json` is off-limits — see root [../AGENTS.md](../AGENTS.md).
 - `specs/NN-name.flow.json` are the executable specs; `*.md` next to them are written specs.
 - Deterministic locators only (`--url`, `--text`, `find role|text|label`) — never the AI `chat` command.
 - Flows target read-only seeded data (`acme/payments-api`, PR #482) — nothing may trigger a model call.

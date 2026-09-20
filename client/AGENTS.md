@@ -9,7 +9,7 @@ Next.js 15 (App Router) + React 19 + TanStack Query. Overview & route map: [READ
 - `pnpm test` (vitest + jsdom, `fetch` mocked — no API needed)
 
 ## Must not break
-- `pnpm-lock.yaml` is off-limits — see root [../CLAUDE.md](../CLAUDE.md).
+- `pnpm-lock.yaml` is off-limits — see root [../AGENTS.md](../AGENTS.md).
 - Data access only via hooks in `src/lib/hooks/*` → `src/lib/api.ts`; no ad-hoc `fetch` in components.
 - Pages stay thin; feature logic lives in colocated `_components/<Name>/` with its own `*.test.tsx`.
 - UI strings go to `messages/<locale>/*.json` (`next-intl`), not hardcoded.

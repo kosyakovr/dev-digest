@@ -11,7 +11,7 @@ Fastify 5 + Drizzle/Postgres (pgvector). Overview & diagrams: [README.md](README
 - `pnpm db:migrate` applies existing migrations (NOT applied on boot)
 
 ## Must not break
-- Migrations and `pnpm-lock.yaml` are off-limits — see root [../CLAUDE.md](../CLAUDE.md).
+- Migrations and `pnpm-lock.yaml` are off-limits — see root [../AGENTS.md](../AGENTS.md).
 - DB-backed tests (import `test/helpers/pg.ts`) MUST end in `.it.test.ts`.
 - `package.json` is skip-worktree — don't add scripts CI relies on.
 - New module = `src/modules/<name>/` + register in `src/modules/index.ts`.
