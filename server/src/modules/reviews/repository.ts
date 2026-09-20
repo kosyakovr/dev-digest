@@ -144,6 +144,8 @@ export class ReviewRepository {
     prId: string;
     provider: string | null;
     model: string | null;
+    /** Shared batch timestamp; omit to let the DB stamp `now()`. */
+    ranAt?: Date;
   }): Promise<string> {
     return runRepo.createAgentRun(this.db, values);
   }

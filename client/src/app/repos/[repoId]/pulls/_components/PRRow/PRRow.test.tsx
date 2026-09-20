@@ -43,7 +43,7 @@ function finding(o: Partial<PrFindingsRollup["preview"][number]> = {}) {
   };
 }
 
-/** Two criticals + one warning, with one preview withheld by the server cap. */
+/** Two criticals + one warning across the run, one preview withheld by the cap. */
 function rollup(o: Partial<PrFindingsRollup> = {}): PrFindingsRollup {
   return {
     total: 3,
@@ -131,6 +131,64 @@ describe("PRRow — findings column", () => {
     expect(trigger).toHaveTextContent("1");
     // SUGGESTION is 0 here, so it must not get a badge at all.
     expect(trigger.children).toHaveLength(2);
+  });
+
+  it("counts every agent of the run, and lists them all in one popover", () => {
+    vi.useFakeTimers();
+    try {
+      // The shape the server now sends for a 3-agent run: agent A found one
+      // CRITICAL, agent B a CRITICAL and two WARNINGs, agent C nothing. The
+      // cell must read 2 + 2, not whichever single agent finished last.
+      renderRow(
+        pr({
+          latest_findings: {
+            total: 4,
+            by_severity: { CRITICAL: 2, WARNING: 2, SUGGESTION: 0 },
+            preview: [
+              finding({ id: "a-1" }),
+              // Agent B reported the SAME issue as agent A. It is listed twice
+              // on purpose — collapsing it would leave the counter above
+              // saying 2 with one row beneath it.
+              finding({ id: "b-1" }),
+              finding({
+                id: "b-2",
+                severity: "WARNING",
+                category: "perf",
+                title: "N+1 query in user list endpoint",
+                file: "src/api/users.ts",
+                start_line: 45,
+                end_line: 52,
+              }),
+              finding({
+                id: "b-3",
+                severity: "WARNING",
+                category: "perf",
+                title: "Unbounded Redis round-trip",
+                file: "src/cache.ts",
+                start_line: 8,
+                end_line: 8,
+              }),
+            ],
+          },
+        }),
+      );
+
+      const trigger = screen.getByRole("button", { name: /4 findings in the latest run/i });
+      // Two badges, carrying the summed counts — not four badges, one per agent.
+      expect(trigger.children).toHaveLength(2);
+      expect(trigger).toHaveTextContent("2");
+
+      fireEvent.mouseEnter(trigger);
+      expect(screen.getByText("4 FINDINGS IN THIS RUN")).toBeInTheDocument();
+      // Every finding of the run is listed, the duplicate included, and nothing
+      // is withheld — preview.length === total, so no "+N more" footer.
+      expect(screen.getAllByText("Hardcoded Stripe secret key")).toHaveLength(2);
+      expect(screen.getByText("N+1 query in user list endpoint")).toBeInTheDocument();
+      expect(screen.getByText("Unbounded Redis round-trip")).toBeInTheDocument();
+      expect(screen.queryByText(/more on the PR page/)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("renders an em dash and no trigger when the PR has never been reviewed", () => {

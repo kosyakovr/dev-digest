@@ -19,7 +19,8 @@ export interface SeverityCounts {
   suggestion: number;
 }
 
-/** Tally finding severities (CRITICAL / WARNING / SUGGESTION) for one review. */
+/** Tally finding severities (CRITICAL / WARNING / SUGGESTION) over any set of
+ *  findings — one review's, or every review of a multi-agent run. */
 export function rollupSeverities(rows: { severity: string }[]): SeverityCounts {
   const c: SeverityCounts = { critical: 0, warning: 0, suggestion: 0 };
   for (const r of rows) {
@@ -31,12 +32,18 @@ export function rollupSeverities(rows: { severity: string }[]): SeverityCounts {
 }
 
 /**
- * How many findings of the latest review ride along on the PR list, for the
+ * How many findings of the latest RUN ride along on the PR list, for the
  * FINDINGS column's hover popover. The popover shows the worst few; its title
- * shows the true `total`, which is why the cap is not a lie. Keep this small —
- * the list is refetched every 60s by the client.
+ * shows the true `total`, which is why the cap is not a lie.
+ *
+ * Raised from 5 when the rollup became a union over every agent of the run: a
+ * three-agent run routinely clears 5 findings, and a popover that truncated
+ * almost every row would not answer "what did this run find". It is still a
+ * CAP, not a promise to ship everything — the list is refetched every 60s with
+ * one rollup per PR, so this bounds that payload; overflow is reported as
+ * "+N more on the PR page" rather than silently dropped.
  */
-export const PR_FINDING_PREVIEW_LIMIT = 5;
+export const PR_FINDING_PREVIEW_LIMIT = 30;
 
 /** Max characters of a rationale carried to the list. */
 export const PR_FINDING_DESCRIPTION_MAX = 160;
@@ -84,7 +91,8 @@ export interface PreviewableFinding {
 }
 
 /**
- * Worst-first, capped previews of one review's findings.
+ * Worst-first, capped previews of a run's findings (one review's, or the union
+ * over every agent of a run — this is a pure sort + cap either way).
  *
  * Off-enum severities are DROPPED: `findings.severity` is free text in the DB,
  * and the list can only render the three shipped severities. `rollupSeverities`

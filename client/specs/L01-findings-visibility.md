@@ -14,6 +14,12 @@ agreed placement:
   `styles.ts` → `findingsCell`), whose cell is the new
   `_components/FindingsCell/`: one compact `SeverityBadge` per severity present,
   plus a hover popover titled "N FINDINGS IN THIS RUN".
+  **Amended 2026-09-20 (L01-c):** that run is now the whole latest run — every
+  agent of it — rather than the single latest review. The component itself did
+  not change: the server sums the agents' findings into the same
+  `PrFindingsRollup`, so the counters and the popover render it unmodified. What
+  did change is what they mean, plus the popover's cap (5 → 30) and its
+  consequence that "+N more on the PR page" now rarely appears.
 - **New `src/components/finding-preview/`** — the read-only finding rendering
   shared by that popover and the trace drawer. Two constraints are load-bearing:
   it renders **no** interactive element (not even `MonoLink`, which is an
@@ -51,6 +57,13 @@ was the prototype of what is now `PrMeta.latest_findings`.
   the only surface where the counter's text is NOT the assertable string.
 - Not e2e-covered: `server/src/db/seed.ts` inserts no `agent_runs` rows, so a
   freshly-seeded timeline shows commits and no run row at all.
+
+- (L01-c) The popover can list the SAME finding twice, because two agents of
+  one run often report one issue. That is deliberate — deduplicating would make
+  the counter above disagree with the rows below it — so assertions on the
+  popover's contents need `getAllByText`, not `getByText`.
+- (L01-c) The panel was already `maxHeight: 360` + `overflowY: auto`, so the
+  raised cap needed no layout work; it just scrolls further.
 
 - The popover panel is `position: fixed` (the list's `tableCard` is
   `overflow: hidden`, which clips absolute but not fixed descendants), so no

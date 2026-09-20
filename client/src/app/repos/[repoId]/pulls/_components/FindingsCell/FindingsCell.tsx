@@ -1,6 +1,13 @@
 /* FindingsCell — the PR list's FINDINGS column: one compact severity badge per
-   severity present in the latest review run, and a hover popover previewing
-   that run's findings.
+   severity present in the latest run, and a hover popover previewing that
+   run's findings.
+
+   "The latest run" means every agent that ran together, not one of them: the
+   server sums the findings of all the reviews the run produced into a single
+   PrFindingsRollup, so a run of three agents finding one CRITICAL each reads
+   as 3 here. Two agents reporting the SAME issue therefore appear twice in the
+   popover — deduplicating would make the counters disagree with the rows
+   listed beneath them, and the counters are the promise this cell makes.
 
    The popover is READ-ONLY (see FindingPreview): the list is for triage, and
    accepting or dismissing a finding needs the full rationale, which lives on the

@@ -4,6 +4,10 @@
 **Lesson / ticket:** L01-b
 **Packages:** server, client, e2e
 
+**Amended 2026-09-20 (L01-c)** — the PR list's FINDINGS column and its popover
+now describe the whole of the latest run (every agent), not the single latest
+review. See *Per-run aggregation* below; the rest of the spec is unchanged.
+
 ## Goal
 
 Findings already exist end to end, but they are only legible in one place — the
@@ -64,6 +68,47 @@ legitimately differ (off-enum severities are dropped, a deleted review leaves
 none at all), so a run with no usable breakdown falls back to the aggregate
 line rather than rendering an empty or zero counter row.
 
+### Per-run aggregation (L01-c)
+
+**A run is a set of `agent_runs` rows, not one review.** The column originally
+took the single newest `reviews` row, which on a multi-agent run meant "whatever
+the last agent to finish happened to see". It now sums the findings of every
+review the latest run produced: a run of three agents where one found a CRITICAL
+and another a CRITICAL plus two WARNINGs reads `2 CRITICAL · 2 WARNING`.
+
+**The grouping key is an exact `ran_at`, and that had to be made true.**
+`agent_runs.ran_at` defaults to `now()`, which Postgres evaluates per statement,
+and `ReviewService.runReview` queues agents with one INSERT each — so the agents
+of a single review landed milliseconds apart and no equality grouping could ever
+find them. `runReview` now stamps ONE `Date` for the batch and passes it to every
+`createAgentRun`; the column default still applies to any caller that omits it.
+Two consequences worth knowing: for review batches `ran_at` is now the app
+clock rather than the DB clock, and runs recorded before this change keep their
+staggered timestamps, so they group as batches of one until a new review runs.
+
+**The fallback ladder.** Per PR: the latest run's reviews if it produced any,
+else the latest review row, else `null`. The middle rung is what keeps the
+column working on seeded and pre-run data — `seed.ts` inserts a review with
+`run_id = NULL` and no `agent_runs` at all — and it also covers a run whose every
+agent failed, which persists no review. Rendering that batch's empty result as a
+confident `0` would claim the PR is clean when nothing actually looked at it,
+the same "never 0-as-unknown" rule cost and `latest_findings` already follow.
+
+**Duplicates are kept.** Two agents reviewing one diff often report the same
+issue, and the union lists it twice. Deduplicating would make the counters
+disagree with the rows in the popover beneath them, breaking D2 — and the
+counters are the column's whole promise.
+
+**The preview cap moved 5 → 30.** A union over three agents routinely clears 5,
+and a popover that truncated nearly every row would not answer "what did this
+run find". It is still a cap, not a promise to ship everything: the list is
+refetched every 60s with one rollup per PR, and overflow is reported as
+"+N more on the PR page".
+
+**SCORE and FINDINGS now describe different scopes.** `score` remains the latest
+single review's while the counters span the run. Left deliberately — see
+*Open questions*.
+
 **Counters do not follow the severity filter.** While a filter is active the
 counters still show the run's inventory — they are the filter's own targets,
 and zeroing them would hide the very thing the next click should reach.
@@ -90,11 +135,21 @@ plain-text line and truncated — the popover never renders markdown.
 
 ### HTTP
 
-`GET /repos/:id/pulls` gains `latest_findings` per PR. One additional query
-(2 → 3 fixed queries, independent of PR count): the existing latest-review query
-also selects `reviews.id`, and one `inArray` over `findings` keyed on those ids
-is grouped in JS. Score and findings therefore come from the *same* review row
-and can never disagree.
+`GET /repos/:id/pulls` gains `latest_findings` per PR. The rollup's shape is
+unchanged by L01-c — only what fills it changed — so the client needed no
+contract migration.
+
+Query shape (all fixed, none per-PR — no N+1):
+
+1. `agent_runs` for the listed PRs, newest `ran_at` first → each PR's last-run
+   ids, taken as the first row's instant plus every later row equal to it.
+2. `reviews` where `run_id IN (those ids)` and `kind = 'review'` → the batch's
+   review ids per PR.
+3. the existing latest-review query, still the source of `score` and now also
+   the fallback rung.
+4. one `inArray` over `findings` covering both sets of review ids, grouped in JS.
+
+L01-c added (1) and (2); the findings query was widened rather than duplicated.
 
 ### UI component map
 
@@ -130,6 +185,10 @@ message rather than two adjacent spans, so the node's text is literally
 4. Counting and filtering are local — no LLM and no request on open or toggle.
 5. Hovering the PR list's FINDINGS icons opens a popover titled
    "N FINDINGS IN THIS RUN".
+5a. (L01-c) The counters sum every agent of the latest run, and the popover
+   lists those agents' findings together, worst-first, duplicates included.
+5b. (L01-c) A PR with no `agent_runs`, or whose latest run produced no review,
+   still reports its latest review rather than `—` or `0`.
 6. Each preview there is text only: severity, title, category, file:line,
    confidence, description — no buttons.
 7. Accept/Reject live on the PR detail page's expanded run card.
@@ -149,7 +208,8 @@ message rather than two adjacent spans, so the node's text is literally
 | 6 | `client/src/components/finding-preview/FindingPreview.test.tsx` — renders with no i18n provider; zero `button, a, input` |
 | 8 | `client/.../RunTraceDrawer/RunTraceDrawer.test.tsx` — findings with category + confidence; no Accept/Dismiss |
 | 9 | `client/.../RunHistory/RunHistory.test.tsx` — a counter per present severity, severities absent omitted, blockers preserved, aggregate fallback when the breakdown is missing, none on a failed run. **Not e2e-covered:** `server/src/db/seed.ts` inserts no `agent_runs` rows, so a freshly-seeded timeline has commits but no run row to assert against |
-| server | `test/pulls-status.test.ts` (`previewDescription`, `toFindingPreviews`), `test/contracts.test.ts` (three rollup states, off-enum severity rejected), `test/reviews.it.test.ts` (latest run only, cap, zero vs null) |
+| server | `test/pulls-status.test.ts` (`previewDescription`, `toFindingPreviews`; the cap case is written against `PR_FINDING_PREVIEW_LIMIT`, not a literal, so it survived 5 → 30), `test/contracts.test.ts` (three rollup states, off-enum severity rejected), `test/reviews.it.test.ts` (latest run only, zero vs null) |
+| 5a, 5b (L01-c) | `test/reviews.it.test.ts` — a 3-agent batch on one shared `ran_at` sums across agents and ignores the older run; a batch whose agents all failed falls back to the last real review; the pre-existing no-runs case now exercises the fallback rung explicitly. Client: `PRRow.test.tsx` — summed counters, every agent's findings in one popover, the duplicate listed twice |
 | e2e | `02` findings column header; `04` counter pills + filter toggle on/off |
 
 The hover popover is **not** e2e-covered: the runner's command vocabulary has no
@@ -165,3 +225,11 @@ hover verb, and deterministic locators are required. Its coverage is in
 5. PR list: `constants.ts` (GRID + COLUMN_KEYS together) → `FindingsCell` → `PRRow`.
 6. `FindingsPanel` helpers → `SeverityFilterBar` → wiring → `FindingCard` `data-severity`.
 7. Client tests, e2e, docs.
+
+## Open questions
+
+- **(L01-c) SCORE is single-review while FINDINGS is per-run.** On a
+  multi-agent run the list shows one agent's score beside counters covering all
+  of them. Aggregating the score (worst? mean?) is a real decision about what
+  the ring means, so it was deliberately left out of L01-c rather than folded
+  in. Decide before the next change to the list's score column.

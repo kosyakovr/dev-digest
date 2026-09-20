@@ -113,7 +113,17 @@ export async function reapStaleRunningRuns(db: Db): Promise<number> {
 
 // ---- observability: agent_runs + run_traces -------------------------------
 
-/** Create an agent_runs row in `running` state; returns its id (= the runId). */
+/**
+ * Create an agent_runs row in `running` state; returns its id (= the runId).
+ *
+ * `ranAt` is optional and exists to make the agents of ONE review batch share a
+ * single timestamp. The column defaults to `now()`, which Postgres evaluates
+ * per statement — so queueing three agents with three INSERTs stamps them
+ * milliseconds apart, and anything that groups "the runs of the last review"
+ * by `ran_at` would see three runs of one agent each. Callers that queue a
+ * batch pass one Date for all of it; callers creating a lone run omit it and
+ * keep the DB default.
+ */
 export async function createAgentRun(
   db: Db,
   values: {
@@ -122,6 +132,8 @@ export async function createAgentRun(
     prId: string;
     provider: string | null;
     model: string | null;
+    /** Shared batch timestamp; omit to let the DB stamp `now()`. */
+    ranAt?: Date;
   },
 ): Promise<string> {
   const [row] = await db
@@ -132,6 +144,8 @@ export async function createAgentRun(
       prId: values.prId,
       provider: values.provider,
       model: values.model,
+      // Omitted (not null) when absent, so the column default still applies.
+      ...(values.ranAt ? { ranAt: values.ranAt } : {}),
       status: 'running',
       source: 'local',
     })

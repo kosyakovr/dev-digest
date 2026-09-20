@@ -179,7 +179,12 @@ export const PrFindingPreview = z.object({
 export type PrFindingPreview = z.infer<typeof PrFindingPreview>;
 
 /**
- * The latest review RUN's findings, rolled up for the PR list.
+ * The latest RUN's findings, rolled up for the PR list — summed across EVERY
+ * agent of that run, not just one. A run is the set of `agent_runs` rows for
+ * the PR sharing the newest `ran_at`; each contributes the findings of the
+ * `reviews` row it produced. Two agents reporting the same issue therefore
+ * count twice, deliberately: the counters must equal the rows the popover
+ * lists beneath them.
  *
  * `total` counts every finding of that run; `preview` is CAPPED, so
  * `preview.length <= total` and the popover title must use `total`.
@@ -217,11 +222,15 @@ export const PrMeta = z.object({
   // (list endpoint only). null = no run has a known cost; NULL-cost runs are
   // skipped by the sum, so a partial total can understate. Never 0-as-unknown.
   cost_usd: z.number().nullish(),
-  // Latest-review FINDINGS rollup (list endpoint only, like `score` — and read
-  // from the SAME review row, so the two can never disagree). null/absent = this
-  // PR has never been reviewed, which is DISTINCT from a review that found
-  // nothing (`{ total: 0, by_severity: all-zero, preview: [] }`). Never
-  // 0-as-unknown: the list renders "—" for null and a muted "0" for a clean run.
+  // Latest-RUN FINDINGS rollup (list endpoint only), summed over every agent of
+  // that run — so it spans more review rows than `score` above, which stays
+  // single-review. The two can legitimately describe different scopes; see
+  // `PrFindingsRollup`. A PR with no `agent_runs`, or whose last run produced no
+  // review at all (every agent failed), falls back to the latest review row, so
+  // the column never regresses to "—" on seeded or pre-run data.
+  // null/absent = this PR has never been reviewed, which is DISTINCT from a run
+  // that found nothing (`{ total: 0, by_severity: all-zero, preview: [] }`).
+  // Never 0-as-unknown: the list renders "—" for null and a muted "0" for clean.
   latest_findings: PrFindingsRollup.nullish(),
 });
 export type PrMeta = z.infer<typeof PrMeta>;
