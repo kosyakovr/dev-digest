@@ -1,0 +1,11 @@
+diff --git a/server/src/modules/reviews/service.ts b/server/src/modules/reviews/service.ts
+--- a/server/src/modules/reviews/service.ts
++++ b/server/src/modules/reviews/service.ts
+@@ -12,6 +12,7 @@ import type { ReviewRepository } from './repository.js';
+ 
+ export function createReviewService(deps: Deps) {
+   return {
++    listAgentNames: () => deps.agentsRepository.names(deps.workspaceId),
+     async run(workspaceId: string, pullId: string) {
+       return deps.repository.startRun(workspaceId, pullId);
+     },

@@ -32,6 +32,7 @@ require it, stop and ask the user first.
 - Architecture / review flow → [README.md](README.md)
 - Adding or changing tests, CI → [TESTING.md](TESTING.md)
 - Editing reviewer prompts → [docs/agent-prompts/README.md](docs/agent-prompts/README.md)
+- The pre-PR gate (what blocks a push, how to waive) → [docs/pr-self-review.md](docs/pr-self-review.md)
 - Per-package: `<pkg>/README.md`, `<pkg>/docs/`, `<pkg>/specs/`, `<pkg>/INSIGHTS.md`
 
 ## Workflow
@@ -43,6 +44,10 @@ require it, stop and ask the user first.
    of a task that involved debugging, a failing test or a correction — but write
    nothing if nothing new cleared its gate.
 4. Changed behaviour described in README/docs → update them in the same change.
+5. Before `git push` or opening a PR → run `/pr-self-review`. It reviews the
+   committed branch diff against the skills that govern each changed file, and a
+   `PreToolUse` hook denies the push while a CRITICAL finding stands.
+   See [docs/pr-self-review.md](docs/pr-self-review.md).
 
 ## Cross-package invariants
 - `@devdigest/shared` Zod contracts are vendored in BOTH `server/src/vendor/shared`

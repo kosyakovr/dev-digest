@@ -1,0 +1,4 @@
+{ "group": "security",
+  "expect": "none",
+  "rule": "security skill — stack translation preamble",
+  "why": "No Helmet, no express-mongo-sanitize, no Mongoose parameterisation — none of which exist in a Fastify + Drizzle stack. Input is validated by the route schema and the query is scoped. Catches the security skill's Express/Mongo assumptions leaking through as confident, unactionable findings." }

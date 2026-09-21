@@ -1,0 +1,12 @@
+diff --git a/client/src/app/agents/_components/AgentsListView/AgentsListView.tsx b/client/src/app/agents/_components/AgentsListView/AgentsListView.tsx
+--- a/client/src/app/agents/_components/AgentsListView/AgentsListView.tsx
++++ b/client/src/app/agents/_components/AgentsListView/AgentsListView.tsx
+@@ -70,6 +70,9 @@ export function AgentsListView() {
+   const { data, isError, refetch } = useAgents();
+ 
+   return (
++    <>
++      {isError && <ErrorState body={t('list.loadError')} onRetry={() => refetch()} />}
++    </>
+   );
+ }

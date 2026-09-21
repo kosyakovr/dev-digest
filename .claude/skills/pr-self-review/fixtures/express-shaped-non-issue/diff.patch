@@ -1,0 +1,11 @@
+diff --git a/server/src/modules/repos/routes.ts b/server/src/modules/repos/routes.ts
+--- a/server/src/modules/repos/routes.ts
++++ b/server/src/modules/repos/routes.ts
+@@ -18,6 +18,13 @@ export async function repoRoutes(app: FastifyInstance) {
+   });
++
++  app.post('/repos/search', { schema: searchSchema }, async (req) => {
++    const { q } = req.body;
++    return app.container.repos.search(req.workspaceId, q);
++  });
+ }

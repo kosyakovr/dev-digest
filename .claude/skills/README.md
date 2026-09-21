@@ -9,14 +9,17 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 | [fastify-best-practices](fastify-best-practices/SKILL.md) | Backend | Fastify routes, plugins, JSON-schema validation, error handling |
 | [drizzle-orm-patterns](drizzle-orm-patterns/SKILL.md) | Backend | Drizzle schema, queries, relations, transactions, migrations |
 | [postgresql-table-design](postgresql-table-design/SKILL.md) | Backend | Postgres schema design, data types, indexing, constraints |
+| [onion-architecture](onion-architecture/SKILL.md) | Backend | Where server code lives: rings, dependency direction, module anatomy, ports & adapters, keeping Fastify/Drizzle at the edge |
 | [next-best-practices](next-best-practices/SKILL.md) | Frontend | Next.js App Router, RSC boundaries, data fetching, optimization |
 | [react-best-practices](react-best-practices/SKILL.md) | Frontend | React anti-patterns, state management, hooks rules |
+| [frontend-ui-architecture](frontend-ui-architecture/SKILL.md) | Frontend | Where code lives: component placement, splitting, constants, helpers vs lib, business logic, feature boundaries, barrels |
 | [react-testing-library](react-testing-library/SKILL.md) | Frontend | General-purpose React Testing Library guide with Vitest |
 | [zod](zod/SKILL.md) | Full-stack | Zod schema validation, parsing, error handling, type inference |
 | [typescript-expert](typescript-expert/SKILL.md) | Full-stack | Type-level programming, performance, tooling, migrations |
 | [security](security/SKILL.md) | Full-stack | OWASP Top 10:2025, auth, injection, uploads, secrets |
 | [mermaid-diagram](mermaid-diagram/SKILL.md) | Shared | Mermaid diagrams in markdown (flowcharts, sequence, ERD, …) |
 | [engineering-insights](engineering-insights/SKILL.md) | Repo | Reads and appends per-package `INSIGHTS.md` — the cross-session learnings loop |
+| [pr-self-review](pr-self-review/SKILL.md) | Gate | Routes the branch diff at the skills above and blocks `git push` on a CRITICAL finding — see [docs/pr-self-review.md](../../docs/pr-self-review.md) |
 
 ## What Are Skills?
 

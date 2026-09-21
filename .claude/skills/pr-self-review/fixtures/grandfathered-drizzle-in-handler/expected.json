@@ -1,0 +1,4 @@
+{ "group": "backend-architecture",
+  "expect": "none",
+  "rule": "onion-architecture §11 Known exceptions",
+  "why": "pulls/ is one of the four service-less modules §11 explicitly grandfathers, and the file already queries Drizzle from the handler. Catches a reviewer that reports documented exceptions. Note the query IS workspace-scoped — an unscoped one would be a real finding." }

@@ -1,0 +1,4 @@
+{ "group": "backend-architecture",
+  "expect": "WARNING",
+  "rule": "onion-architecture §4 Direction of dependencies",
+  "why": "The same cross-module concern, but in an M-status file where the dependency was already injected. Catches a reviewer that ignores the skill's own 'mandatory for NEW files' scope and inflates everything to CRITICAL." }
