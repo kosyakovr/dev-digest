@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { PrMeta, PrDetail, GitHubClient, PrReviewComment } from '@devdigest/shared';
 import { PrCommentInput } from '@devdigest/shared';
 import * as t from '../../db/schema.js';
@@ -129,6 +129,31 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
       }
     }
 
+    // Lifetime run COST per PR for the list's cost column — every agent_runs
+    // row on the PR, any status, because that money was spent either way. Same
+    // one-IN-query + grouping shape as the score above (no N+1).
+    //
+    // NULL-cost runs (unpriced model, or a failure before the first LLM call)
+    // are SKIPPED by SUM, so a mixed PR yields a partial total that understates
+    // — deliberate: the per-run breakdown on the PR page shows which runs are
+    // unknown. A PR with no runs, or whose runs are all NULL, yields null (not
+    // 0), so the UI can render "—" instead of claiming the PR was free.
+    const costByPr = new Map<string, number>();
+    if (prIds.length > 0) {
+      const costRows = await container.db
+        .select({
+          prId: t.agentRuns.prId,
+          cost: sql<number | string | null>`sum(${t.agentRuns.costUsd})`,
+        })
+        .from(t.agentRuns)
+        .where(and(eq(t.agentRuns.workspaceId, workspaceId), inArray(t.agentRuns.prId, prIds)))
+        .groupBy(t.agentRuns.prId);
+      for (const c of costRows) {
+        // SUM over an all-NULL group is NULL, not 0 — keep it out of the map.
+        if (c.prId != null && c.cost != null) costByPr.set(c.prId, Number(c.cost));
+      }
+    }
+
     const now = Date.now();
     return rows.map((r) => {
       const review = latestReviewByPr.get(r.id);
@@ -153,6 +178,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         opened_at: r.openedAt?.toISOString() ?? null,
         updated_at: r.updatedAt?.toISOString() ?? null,
         score: review ? review.score : null,
+        cost_usd: costByPr.get(r.id) ?? null,
       };
     });
   });
