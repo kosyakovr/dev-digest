@@ -25,8 +25,29 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## Tool & Library Notes
 
+- 2026-09-19 — `agent-browser` is an external, globally-installed binary, NOT a
+  dependency in `package.json`, so on a machine without it `./scripts/e2e.sh`
+  brings the whole stack up, prints `0/7 flows passed` with every step failing
+  `spawn agent-browser ENOENT`, and still **exits 0** — which reads exactly like
+  "I broke all seven flows" → check `command -v agent-browser` before believing
+  a mass failure (the script only `warn`s about it, near the top of its output,
+  far from the summary); install once with `npm i -g agent-browser &&
+  agent-browser install`, and meanwhile verify flow edits with `npm run
+  typecheck` plus a JSON parse. (ref: scripts/e2e.sh:51)
+
+- 2026-09-19 — The command vocabulary has no HOVER verb (`open`, `wait
+  --url|--text|--load`, `find role|text|label … click`), and no negative text
+  assertion either → a hover-only surface such as the PR list's findings popover
+  cannot be covered here at all; assert its trigger's neighbouring column header
+  instead and keep the behaviour in a vitest test, and say so in the flow's
+  `label` so the gap is visible to the next reader. (ref: e2e/README.md)
+
 ## Recurring Errors & Fixes
 
 ## Session Notes
+
+- 2026-09-19 — L01-b findings visibility: extended flows 02 (findings column
+  header) and 04 (severity counter pills + filter toggle); both unexecuted here
+  because `agent-browser` is not installed on this machine.
 
 ## Open Questions

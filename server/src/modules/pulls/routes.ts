@@ -4,10 +4,11 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { PrMeta, PrDetail, GitHubClient, PrReviewComment } from '@devdigest/shared';
 import { PrCommentInput } from '@devdigest/shared';
 import * as t from '../../db/schema.js';
+import type { FindingRow } from '../../db/rows.js';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { AppError, NotFoundError } from '../../platform/errors.js';
-import { deriveReviewStatus } from './status.js';
+import { deriveReviewStatus, rollupSeverities, toFindingPreviews } from './status.js';
 
 /**
  * F1 — pulls module. PR import via Octokit (list + per-PR detail).
@@ -113,19 +114,100 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
 
     // Latest-review SCORE per PR for the list's score ring. Computed on read
     // from reviews (no FK denorm); the list is small, so one IN-query + JS
-    // grouping is cheap. (The per-severity FINDINGS breakdown is intentionally
-    // not surfaced on the list — findings live on the PR detail page.)
+    // grouping is cheap.
+    //
+    // SCORE is ONE review's; the FINDINGS rollup below spans every agent of the
+    // last run. They therefore describe different scopes, and on a multi-agent
+    // run the score is the last-finishing agent's while the counters cover all
+    // of them — deliberate for now (see the spec's open question), not a bug.
+    // The review's `id` still comes along: it is the fallback the rollup uses
+    // when a PR has no runs.
     const prIds = rows.map((r) => r.id);
-    const latestReviewByPr = new Map<string, { score: number | null }>();
+    const latestReviewByPr = new Map<string, { id: string; score: number | null }>();
     if (prIds.length > 0) {
       const reviewRows = await container.db
-        .select({ prId: t.reviews.prId, score: t.reviews.score })
+        .select({ id: t.reviews.id, prId: t.reviews.prId, score: t.reviews.score })
         .from(t.reviews)
         .where(and(inArray(t.reviews.prId, prIds), eq(t.reviews.kind, 'review')))
         .orderBy(desc(t.reviews.createdAt));
       // Rows are newest-first → first seen per PR is the latest review.
       for (const rv of reviewRows) {
-        if (!latestReviewByPr.has(rv.prId)) latestReviewByPr.set(rv.prId, { score: rv.score });
+        if (!latestReviewByPr.has(rv.prId)) {
+          latestReviewByPr.set(rv.prId, { id: rv.id, score: rv.score });
+        }
+      }
+    }
+
+    // The LAST RUN per PR — every agent_runs row sharing the PR's newest
+    // `ran_at`. A review batch stamps one timestamp across all its agents
+    // (see ReviewService.runReview), so exact equality is the grouping key;
+    // runs predating that change, and single-agent runs, simply form a batch
+    // of one. One IN-query for the whole list, grouped in JS — no N+1.
+    const lastRunIdsByPr = new Map<string, string[]>();
+    if (prIds.length > 0) {
+      const runRows = await container.db
+        .select({ id: t.agentRuns.id, prId: t.agentRuns.prId, ranAt: t.agentRuns.ranAt })
+        .from(t.agentRuns)
+        .where(and(eq(t.agentRuns.workspaceId, workspaceId), inArray(t.agentRuns.prId, prIds)))
+        .orderBy(desc(t.agentRuns.ranAt));
+      // Newest-first ⇒ the first row seen for a PR carries its newest instant;
+      // every later row at that SAME instant is a sibling agent of that run.
+      const newestByPr = new Map<string, number>();
+      for (const run of runRows) {
+        if (run.prId == null || run.ranAt == null) continue;
+        const ts = run.ranAt.getTime();
+        const newest = newestByPr.get(run.prId);
+        if (newest == null) {
+          newestByPr.set(run.prId, ts);
+          lastRunIdsByPr.set(run.prId, [run.id]);
+        } else if (ts === newest) {
+          lastRunIdsByPr.get(run.prId)!.push(run.id);
+        }
+      }
+    }
+
+    // The reviews that last run produced — one per agent that got far enough to
+    // persist one. `reviews.run_id` has no FK to `agent_runs`, so this is the
+    // only link between the two. Failed agents contribute no row and are simply
+    // absent, which is why a batch can legitimately yield fewer reviews than it
+    // has runs — or none at all.
+    const batchReviewIdsByPr = new Map<string, string[]>();
+    const allLastRunIds = [...lastRunIdsByPr.values()].flat();
+    if (allLastRunIds.length > 0) {
+      const batchReviews = await container.db
+        .select({ id: t.reviews.id, prId: t.reviews.prId })
+        .from(t.reviews)
+        .where(and(inArray(t.reviews.runId, allLastRunIds), eq(t.reviews.kind, 'review')));
+      for (const rv of batchReviews) {
+        const list = batchReviewIdsByPr.get(rv.prId);
+        if (list) list.push(rv.id);
+        else batchReviewIdsByPr.set(rv.prId, [rv.id]);
+      }
+    }
+
+    // FINDINGS per PR, for the list's FINDINGS column and its hover popover.
+    // ONE IN-query over every review the rollup below might read — the last
+    // run's reviews plus the latest-review fallback — then grouped in JS,
+    // exactly like the score above. Not one query per PR: no N+1.
+    //
+    // The full findings are NOT shipped to the list: only a severity tally plus
+    // a capped, read-only preview. The whole list, the markdown rationale and
+    // the acting UI (accept / dismiss) stay on the PR detail page. The column
+    // describes the LATEST RUN — every agent of it — which is what the popover
+    // title, "N FINDINGS IN THIS RUN", promises.
+    const findingsByReview = new Map<string, FindingRow[]>();
+    const reviewIdsToLoad = new Set<string>();
+    for (const rv of latestReviewByPr.values()) reviewIdsToLoad.add(rv.id);
+    for (const ids of batchReviewIdsByPr.values()) for (const id of ids) reviewIdsToLoad.add(id);
+    if (reviewIdsToLoad.size > 0) {
+      const findingRows = await container.db
+        .select()
+        .from(t.findings)
+        .where(inArray(t.findings.reviewId, [...reviewIdsToLoad]));
+      for (const f of findingRows) {
+        const list = findingsByReview.get(f.reviewId);
+        if (list) list.push(f);
+        else findingsByReview.set(f.reviewId, [f]);
       }
     }
 
@@ -157,6 +239,18 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
     const now = Date.now();
     return rows.map((r) => {
       const review = latestReviewByPr.get(r.id);
+      // Prefer the last RUN's reviews — that is the whole point of the column:
+      // three agents finding one CRITICAL each must read as 3, not as whichever
+      // agent happened to finish last. Fall back to the latest review row when
+      // the PR has no agent_runs at all (seeded / pre-run data) or when the last
+      // run produced no review because every agent failed: showing that run's
+      // empty result as a confident 0 would claim the PR is clean when nothing
+      // actually looked at it.
+      const batchReviewIds = batchReviewIdsByPr.get(r.id);
+      const rollupReviewIds =
+        batchReviewIds && batchReviewIds.length > 0 ? batchReviewIds : review ? [review.id] : [];
+      const runFindings = rollupReviewIds.flatMap((id) => findingsByReview.get(id) ?? []);
+      const sev = rollupSeverities(runFindings);
       return {
         id: r.id,
         number: r.number,
@@ -179,6 +273,20 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         updated_at: r.updatedAt?.toISOString() ?? null,
         score: review ? review.score : null,
         cost_usd: costByPr.get(r.id) ?? null,
+        // No review at all ⇒ null (the cell renders "—"). A run that found
+        // nothing ⇒ an all-zero rollup, which is a different fact and renders 0.
+        latest_findings:
+          rollupReviewIds.length > 0
+            ? {
+                total: runFindings.length,
+                by_severity: {
+                  CRITICAL: sev.critical,
+                  WARNING: sev.warning,
+                  SUGGESTION: sev.suggestion,
+                },
+                preview: toFindingPreviews(runFindings),
+              }
+            : null,
       };
     });
   });

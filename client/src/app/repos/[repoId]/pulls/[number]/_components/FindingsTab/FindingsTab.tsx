@@ -5,6 +5,7 @@ import { Icon, Badge, Button, SectionLabel, EmptyState } from "@devdigest/ui";
 import { RunStatus } from "../RunStatus";
 import { RunHistory } from "../RunHistory/RunHistory";
 import { ReviewRunAccordion } from "../ReviewRunAccordion";
+import { countBySeverity } from "../FindingsPanel/helpers";
 import { s } from "./styles";
 import type { FindingRecord, ReviewRecord, RunSummary, PrCommit } from "@devdigest/shared";
 import type { UseMutationResult } from "@tanstack/react-query";
@@ -62,6 +63,26 @@ export function FindingsTab({
     },
     [onDelete],
   );
+
+  // Per-severity counters for the timeline. The breakdown is not on
+  // RunSummary (agent_runs denormalizes only the aggregate findings_count),
+  // but this page already holds every review with its findings — so tally them
+  // here, keyed by run_id, rather than paying a server round-trip for numbers
+  // that are in memory. A run with no review row simply has no entry, and the
+  // timeline falls back to its aggregate count.
+  const severityCounts = React.useMemo(() => {
+    const byRun: Record<string, Record<string, number>> = {};
+    for (const review of runs) {
+      if (!review.run_id) continue;
+      // One run can persist more than one review row, so merge rather than
+      // overwrite — otherwise the last one silently wins.
+      const acc = (byRun[review.run_id] ??= {});
+      for (const [sev, n] of Object.entries(countBySeverity(review.findings))) {
+        acc[sev] = (acc[sev] ?? 0) + n;
+      }
+    }
+    return byRun;
+  }, [runs]);
 
   // Timeline → Review-runs navigation: clicking an agent name in the timeline
   // opens + scrolls to that run's accordion below. The nonce re-triggers the
@@ -131,6 +152,7 @@ export function FindingsTab({
           <RunHistory
             runs={prRuns ?? []}
             commits={prCommits}
+            severityCounts={severityCounts}
             onOpenTrace={handleOpenTrace}
             onGoToReview={handleGoToReview}
             onDelete={handleDelete}

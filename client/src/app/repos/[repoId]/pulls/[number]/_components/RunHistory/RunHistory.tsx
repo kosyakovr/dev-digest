@@ -2,9 +2,13 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Badge, Icon, CircularScore, type IconName } from "@devdigest/ui";
+import { Badge, Icon, CircularScore, SeverityBadge, type IconName, type Severity } from "@devdigest/ui";
 import type { RunSummary, PrCommit } from "@devdigest/shared";
 import { formatCost, formatTokensTotal } from "@/lib/format";
+// Same three severities and the same one-message-per-counter labels as the run
+// card's filter bar, imported rather than re-declared so the two surfaces can
+// never drift apart in order, spelling or casing.
+import { FILTERABLE_SEVERITIES, SEVERITY_COUNT_KEY } from "../SeverityFilterBar/constants";
 
 /**
  * PR timeline — every agent run interleaved with the PR's commits, newest-first
@@ -16,6 +20,9 @@ import { formatCost, formatTokensTotal } from "@/lib/format";
  * run that found blockers reads "rejected" (red), never a green "done". Outcome
  * is derived from the denormalized blocker/finding counts on the run row, so it
  * matches the CI gate (deterministic) rather than the model's verdict.
+ *
+ * A settled run reports its findings as one counter PER SEVERITY rather than a
+ * single total — see RunFindings below for where those numbers come from.
  */
 
 type Outcome = { key: string; color: string; bg: string; icon: IconName };
@@ -74,6 +81,56 @@ const commitRowStyle: React.CSSProperties = {
   background: "transparent",
 };
 
+const findingsLineStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  fontSize: 12,
+  color: "var(--text-muted)",
+};
+
+/**
+ * The findings line of a settled run: one compact severity badge per severity
+ * present, then the blocker count — so the timeline says *what kind* of
+ * findings a run produced without expanding it.
+ *
+ * The breakdown is NOT on `RunSummary`: `agent_runs` stores only the aggregate
+ * `findings_count`. The caller tallies it from the reviews the PR page already
+ * holds, so this costs no request. When it cannot (a run whose review was
+ * deleted, or one whose findings all carry an off-enum severity) we fall back
+ * to that aggregate rather than claiming the run found nothing.
+ */
+function RunFindings({ run, counts }: { run: RunSummary; counts?: Record<string, number> }) {
+  const t = useTranslations("prReview");
+  const present = counts ? FILTERABLE_SEVERITIES.filter((sev) => (counts[sev] ?? 0) > 0) : [];
+  const blockers = run.blockers ?? 0;
+
+  return (
+    <div style={findingsLineStyle}>
+      {present.length > 0 ? (
+        <span role="group" aria-label={t("timeline.severityCounts")} style={{ display: "inline-flex", gap: 6 }}>
+          {present.map((sev) => (
+            // role="img" + the count-and-word label: the badge renders an icon
+            // and a bare digit, so without it the row announces "2" and no
+            // locator can tell the three counters apart.
+            <span
+              key={sev}
+              role="img"
+              aria-label={t(SEVERITY_COUNT_KEY[sev]!, { count: counts![sev]! })}
+              style={{ display: "inline-flex" }}
+            >
+              <SeverityBadge severity={sev as Severity} count={counts![sev]!} compact />
+            </span>
+          ))}
+        </span>
+      ) : (
+        t("runStatus.findings", { count: run.findings_count ?? 0 })
+      )}
+      {blockers > 0 ? t("runStatus.blockers", { count: blockers }) : ""}
+    </div>
+  );
+}
+
 type TimelineItem =
   | { kind: "run"; ts: number; run: RunSummary }
   | { kind: "commit"; ts: number; commit: PrCommit };
@@ -88,12 +145,15 @@ function tsOf(s: string | null | undefined): number {
 export function RunHistory({
   runs,
   commits = [],
+  severityCounts,
   onOpenTrace,
   onGoToReview,
   onDelete,
 }: {
   runs: RunSummary[];
   commits?: PrCommit[];
+  /** run_id → severity → count, tallied by the caller from the PR's reviews. */
+  severityCounts?: Record<string, Record<string, number>>;
   /** Open the trace + log drawer for a run (the logs icon). */
   onOpenTrace: (runId: string) => void;
   /** Jump to this run's inline review accordion below (clicking the agent name). */
@@ -194,12 +254,7 @@ export function RunHistory({
                   {r.error}
                 </div>
               )}
-              {settled && (
-                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  {t("runStatus.findings", { count: r.findings_count ?? 0 })}
-                  {(r.blockers ?? 0) > 0 ? t("runStatus.blockers", { count: r.blockers ?? 0 }) : ""}
-                </div>
-              )}
+              {settled && <RunFindings run={r} counts={severityCounts?.[r.run_id]} />}
             </div>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>
               {r.ran_at && <span>{new Date(r.ran_at).toLocaleTimeString()}</span>}

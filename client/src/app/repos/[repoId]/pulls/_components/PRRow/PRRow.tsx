@@ -9,6 +9,7 @@ import type { PrMeta } from "@/lib/types";
 import { formatCost } from "@/lib/format";
 import { SIZE_COLOR, STATUS_META } from "../../constants";
 import { relativeTime, sizeOf } from "../../helpers";
+import { FindingsCell } from "../FindingsCell";
 import { s } from "../../styles";
 
 export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
@@ -54,6 +55,9 @@ export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
         ) : (
           <span style={s.muted}>—</span>
         )}
+      </div>
+      <div style={s.findingsCell}>
+        <FindingsCell rollup={pr.latest_findings} />
       </div>
       <div className="tnum" style={s.costCell}>
         {cost ?? <span style={s.muted}>—</span>}

@@ -15,6 +15,8 @@ import {
   Settings,
   Repo,
   PrDetail,
+  PrMeta,
+  PrFindingPreview,
 } from '@devdigest/shared';
 
 /**
@@ -206,5 +208,85 @@ describe('platform DTOs', () => {
         commits: [],
       }),
     ).not.toThrow();
+  });
+
+  it('PrMeta.latest_findings distinguishes "never reviewed" from "found nothing"', () => {
+    const base = {
+      number: 482,
+      title: 't',
+      author: 'a',
+      branch: 'b',
+      base: 'main',
+      head_sha: 'sha',
+      additions: 1,
+      deletions: 0,
+      files_count: 1,
+      status: 'open' as const,
+    };
+    // Absent and null both mean "this PR has never been reviewed".
+    expect(PrMeta.parse(base).latest_findings).toBeUndefined();
+    expect(PrMeta.parse({ ...base, latest_findings: null }).latest_findings).toBeNull();
+
+    // A review that found nothing is a DIFFERENT fact: a real, all-zero rollup.
+    const clean = PrMeta.parse({
+      ...base,
+      latest_findings: {
+        total: 0,
+        by_severity: { CRITICAL: 0, WARNING: 0, SUGGESTION: 0 },
+        preview: [],
+      },
+    });
+    expect(clean.latest_findings).toEqual({
+      total: 0,
+      by_severity: { CRITICAL: 0, WARNING: 0, SUGGESTION: 0 },
+      preview: [],
+    });
+
+    // `preview` is capped, so it may be shorter than `total` — the popover
+    // title must use `total`.
+    const full = PrMeta.parse({
+      ...base,
+      latest_findings: {
+        total: 9,
+        by_severity: { CRITICAL: 2, WARNING: 4, SUGGESTION: 3 },
+        preview: [
+          {
+            id: 'f1',
+            severity: 'CRITICAL',
+            category: 'security',
+            title: 'Hardcoded key',
+            file: 'src/a.ts',
+            start_line: 4,
+            end_line: 4,
+            confidence: 0.95,
+            description: 'A secret is committed in plain text.',
+          },
+        ],
+      },
+    });
+    expect(full.latest_findings!.preview).toHaveLength(1);
+    expect(full.latest_findings!.total).toBe(9);
+  });
+
+  it('PrFindingPreview carries only the three shipped severities, and no action state', () => {
+    const preview = {
+      id: 'f1',
+      severity: 'CRITICAL',
+      category: 'security',
+      title: 'Hardcoded key',
+      file: 'src/a.ts',
+      start_line: 4,
+      end_line: 4,
+      confidence: 0.95,
+      description: 'A secret is committed in plain text.',
+    };
+    expect(() => PrFindingPreview.parse(preview)).not.toThrow();
+    // INFO exists in the UI kit but not in the Severity contract — the list
+    // must never be handed one.
+    expect(() => PrFindingPreview.parse({ ...preview, severity: 'INFO' })).toThrow();
+    // Read-only by construction: accept/dismiss state is not part of the shape.
+    const parsed = PrFindingPreview.parse({ ...preview, accepted_at: 'now', dismissed_at: null });
+    expect(parsed).not.toHaveProperty('accepted_at');
+    expect(parsed).not.toHaveProperty('dismissed_at');
   });
 });

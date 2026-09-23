@@ -114,6 +114,13 @@ export class ReviewService {
     // Create the agent_run rows up front so a runId is available IMMEDIATELY —
     // the client persists these in global state and subscribes to the SSE
     // stream. The actual (slow) review runs in the background below.
+    //
+    // ONE timestamp for the whole batch, stamped here rather than left to the
+    // column's `now()` default: the default is evaluated per statement, so the
+    // loop below would stamp each agent milliseconds apart and "the runs of the
+    // last review" would no longer be groupable by `ran_at`. The PR list's
+    // FINDINGS column sums findings across exactly that group.
+    const ranAt = new Date();
     const runs: { run_id: string; agent_id: string; agent_name: string }[] = [];
     const jobs: { agent: AgentRow; runId: string }[] = [];
     for (const agent of targets) {
@@ -123,6 +130,7 @@ export class ReviewService {
         prId,
         provider: agent.provider,
         model: agent.model,
+        ranAt,
       });
       runs.push({ run_id: runId, agent_id: agent.id, agent_name: agent.name });
       jobs.push({ agent, runId });

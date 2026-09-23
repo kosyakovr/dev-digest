@@ -23,6 +23,8 @@ export type {
   RepoInput,
   PrMeta,
   PrDetail,
+  PrFindingsRollup,
+  PrFindingPreview,
   PrFile,
   PrCommit,
   PrReviewComment,
@@ -34,15 +36,6 @@ export type {
 export type { Review, Finding, Severity, Verdict } from "@devdigest/shared";
 export type { PrBrief, SmartDiff } from "@devdigest/shared";
 
-/** UI-only view model for a PR list row (derives display fields from PrMeta). */
-export interface PrRowView {
-  number: number;
-  title: string;
-  author: string;
-  size: "S" | "M" | "L";
-  sizeLines: string;
-  score: number;
-  findings: { CRITICAL: number; WARNING: number; SUGGESTION: number };
-  status: "needs_review" | "reviewed" | "stale";
-  updated: string;
-}
+// `PrRowView` used to live here: an unused prototype view model whose `findings`
+// field is now `PrMeta.latest_findings` in the contract. Removed rather than
+// left beside it, because two shapes for one thing invite drift.

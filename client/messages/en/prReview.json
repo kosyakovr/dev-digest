@@ -29,7 +29,19 @@
   "panel": {
     "hideLowConfidence": "Hide low confidence",
     "noMatchTitle": "No findings match",
-    "noMatchBody": "Adjust the filters above, or run a review to generate findings."
+    "noMatchBody": "Adjust the filters above, or run a review to generate findings.",
+    "severityCounts": "Severity counts",
+    "filterBySeverity": "Filter by severity",
+    "severity": {
+      "critical": "Critical",
+      "warning": "Warning",
+      "suggestion": "Suggestion"
+    },
+    "severityCount": {
+      "critical": "{count} CRITICAL",
+      "warning": "{count} WARNING",
+      "suggestion": "{count} SUGGESTION"
+    }
   },
   "runReview": {
     "runAll": "Run all enabled agents",
@@ -91,10 +103,14 @@
       "author": "Author",
       "size": "Size",
       "score": "Score",
+      "findings": "Findings",
       "cost": "Cost",
       "status": "Status",
       "updated": "Updated"
     },
+    "findingsInRun": "{count} FINDINGS IN THIS RUN",
+    "findingsMore": "+{count} more on the PR page",
+    "findingsAria": "{count} findings in the latest run — show preview",
     "filesCount": "{count} files",
     "errorTitle": "Couldn’t load pull requests",
     "errorBody": "The engine returned an error.",
@@ -104,6 +120,7 @@
   },
   "timeline": {
     "goToReview": "Jump to this run’s findings below",
+    "severityCounts": "Findings by severity",
     "openTrace": "Open run trace & logs",
     "deleteRun": "Delete run"
   }

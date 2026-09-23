@@ -23,8 +23,13 @@ export const SIZE_COLOR: Record<string, string> = {
   L: "var(--crit)",
 };
 
-/** Grid template for both the header row and PR rows. */
-export const GRID = "1fr 132px 92px 60px 84px 118px 78px";
+/**
+ * Grid template for both the header row and PR rows.
+ *
+ * Must stay the same length as COLUMN_KEYS — PRRow.test.tsx asserts it, because
+ * the grid is positional and a mismatch silently shifts every cell right.
+ */
+export const GRID = "1fr 132px 92px 60px 124px 84px 118px 78px";
 
 /** Line-count thresholds for the S/M/L size bucket. */
 export const SIZE_SMALL_MAX = 100;
@@ -44,10 +49,19 @@ export const COLUMN_KEYS: string[] = [
   "author",
   "size",
   "score",
+  // Findings sits next to the score it explains, ahead of cost.
+  "findings",
   "cost",
   "status",
   "updated",
 ];
+
+/** Severity display order wherever findings are tallied for the list. */
+export const SEVERITY_ORDER = ["CRITICAL", "WARNING", "SUGGESTION"] as const;
+
+/** Milliseconds the findings popover stays open after the pointer leaves, so
+ *  the pointer can travel the gap from the trigger into the panel. */
+export const POPOVER_CLOSE_DELAY_MS = 140;
 
 /** Number of skeleton rows shown while loading. */
 export const SKELETON_ROWS = 4;

@@ -1,4 +1,4 @@
-import type { PrStatus } from '@devdigest/shared';
+import type { PrStatus, PrFindingPreview } from '@devdigest/shared';
 
 /**
  * PR-list rollup helpers (pure — no DB / `this`, so they unit-test cleanly).
@@ -19,7 +19,8 @@ export interface SeverityCounts {
   suggestion: number;
 }
 
-/** Tally finding severities (CRITICAL / WARNING / SUGGESTION) for one review. */
+/** Tally finding severities (CRITICAL / WARNING / SUGGESTION) over any set of
+ *  findings — one review's, or every review of a multi-agent run. */
 export function rollupSeverities(rows: { severity: string }[]): SeverityCounts {
   const c: SeverityCounts = { critical: 0, warning: 0, suggestion: 0 };
   for (const r of rows) {
@@ -28,6 +29,98 @@ export function rollupSeverities(rows: { severity: string }[]): SeverityCounts {
     else if (r.severity === 'SUGGESTION') c.suggestion += 1;
   }
   return c;
+}
+
+/**
+ * How many findings of the latest RUN ride along on the PR list, for the
+ * FINDINGS column's hover popover. The popover shows the worst few; its title
+ * shows the true `total`, which is why the cap is not a lie.
+ *
+ * Raised from 5 when the rollup became a union over every agent of the run: a
+ * three-agent run routinely clears 5 findings, and a popover that truncated
+ * almost every row would not answer "what did this run find". It is still a
+ * CAP, not a promise to ship everything — the list is refetched every 60s with
+ * one rollup per PR, so this bounds that payload; overflow is reported as
+ * "+N more on the PR page" rather than silently dropped.
+ */
+export const PR_FINDING_PREVIEW_LIMIT = 30;
+
+/** Max characters of a rationale carried to the list. */
+export const PR_FINDING_DESCRIPTION_MAX = 160;
+
+/** Severity rank for "worst first" preview ordering. */
+const SEVERITY_RANK: Record<string, number> = { CRITICAL: 0, WARNING: 1, SUGGESTION: 2 };
+
+/**
+ * Flatten a markdown rationale to one truncated plain-text line. The popover is
+ * a preview, not a reader: no markdown is rendered there, so strip the syntax
+ * here rather than shipping bytes the UI will never use.
+ *
+ * Strips block markers only at the START of a line, and never strips `_`, `>`
+ * or `#` globally: this is a CODE review tool, so rationales are full of
+ * snake_case identifiers, `=>` and `#482`, and a global strip silently mangles
+ * them (`sk_live_` → `sklive`).
+ */
+export function previewDescription(rationale: string): string {
+  const flat = rationale
+    .replace(/```[\s\S]*?```/g, ' ') // fenced code blocks carry no summary value
+    .replace(/^\s*(?:#{1,6}\s+|>\s*|[-+*]\s+)/gm, '') // LEADING block markers only
+    .replace(/\*\*?/g, '') // bold / italic asterisks
+    .replace(/`/g, '') // inline code fences
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (flat.length <= PR_FINDING_DESCRIPTION_MAX) return flat;
+  const cut = flat.slice(0, PR_FINDING_DESCRIPTION_MAX);
+  const lastSpace = cut.lastIndexOf(' ');
+  // Cut on a word boundary, but never throw away most of the line to find one.
+  const body = lastSpace > PR_FINDING_DESCRIPTION_MAX * 0.6 ? cut.slice(0, lastSpace) : cut;
+  return `${body.trimEnd()}…`;
+}
+
+/** A findings row as this module needs it (a structural subset of FindingRow). */
+export interface PreviewableFinding {
+  id: string;
+  severity: string;
+  category: string;
+  title: string;
+  file: string;
+  startLine: number;
+  endLine: number;
+  rationale: string;
+  confidence: number;
+}
+
+/**
+ * Worst-first, capped previews of a run's findings (one review's, or the union
+ * over every agent of a run — this is a pure sort + cap either way).
+ *
+ * Off-enum severities are DROPPED: `findings.severity` is free text in the DB,
+ * and the list can only render the three shipped severities. `rollupSeverities`
+ * ignores them too, so `sum(by_severity) <= total` by design.
+ */
+export function toFindingPreviews(rows: PreviewableFinding[]): PrFindingPreview[] {
+  return rows
+    .filter((r) => SEVERITY_RANK[r.severity] != null)
+    .sort(
+      (a, b) =>
+        SEVERITY_RANK[a.severity]! - SEVERITY_RANK[b.severity]! ||
+        b.confidence - a.confidence ||
+        // Stable tiebreak — without it the preview order is whatever the DB
+        // happened to return, which makes the integration test flaky.
+        a.id.localeCompare(b.id),
+    )
+    .slice(0, PR_FINDING_PREVIEW_LIMIT)
+    .map((r) => ({
+      id: r.id,
+      severity: r.severity as PrFindingPreview['severity'],
+      category: r.category as PrFindingPreview['category'],
+      title: r.title,
+      file: r.file,
+      start_line: r.startLine,
+      end_line: r.endLine,
+      confidence: r.confidence,
+      description: previewDescription(r.rationale),
+    }));
 }
 
 /**

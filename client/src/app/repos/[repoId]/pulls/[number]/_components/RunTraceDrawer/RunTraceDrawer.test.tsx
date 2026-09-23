@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import type { RunTrace } from "@devdigest/shared";
+import type { RunTrace, FindingRecord } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/runs.json"; // apps/web/messages/en/runs.json
 
 // Mock the trace hooks so the drawer renders without a query client / SSE.
@@ -18,6 +18,40 @@ const TRACE: RunTrace = {
     { t: "00.90", kind: "result", msg: "Citation grounding: 2/2 passed" },
   ],
 };
+
+/** The persisted findings of this run — the drawer receives them as a prop. */
+const FINDINGS: FindingRecord[] = [
+  {
+    id: "f-1",
+    review_id: "rv-1",
+    severity: "CRITICAL",
+    category: "security",
+    title: "Hardcoded Stripe secret key",
+    file: "src/config.ts",
+    start_line: 11,
+    end_line: 11,
+    rationale: "A live secret is committed in plain text.",
+    suggestion: "Move it to an env var.",
+    confidence: 0.95,
+    accepted_at: null,
+    dismissed_at: null,
+  },
+  {
+    id: "f-2",
+    review_id: "rv-1",
+    severity: "SUGGESTION",
+    category: "perf",
+    title: "N+1 query in user list endpoint",
+    file: "src/api/users.ts",
+    start_line: 45,
+    end_line: 52,
+    rationale: "The loop calls findMany once per user.",
+    suggestion: null,
+    confidence: 0.86,
+    accepted_at: null,
+    dismissed_at: null,
+  },
+];
 
 vi.mock("../../../../../../../lib/hooks/trace", () => ({
   useRunTrace: () => ({ data: TRACE, isLoading: false }),
@@ -51,6 +85,29 @@ describe("A5 Run Trace drawer (smoke)", () => {
     renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
     expect(screen.getByText("COST")).toBeInTheDocument();
     expect(screen.getByText("$0.06")).toBeInTheDocument();
+  });
+
+  it("shows the run's findings, not just cost/stats", () => {
+    renderWithIntl(
+      <RunTraceDrawer runId="r1" agentName="Security" prNumber={482} findings={FINDINGS} onClose={() => {}} />,
+    );
+    expect(screen.getByText("Findings")).toBeInTheDocument();
+    expect(screen.getByText("Hardcoded Stripe secret key")).toBeInTheDocument();
+    expect(screen.getByText("N+1 query in user list endpoint")).toBeInTheDocument();
+    expect(screen.getByText("src/config.ts:11")).toBeInTheDocument();
+    // Category and confidence are what the old hand-rolled card could not show;
+    // they arrive with the shared FindingPreview.
+    expect(screen.getByText("security")).toBeInTheDocument();
+    expect(screen.getByText("95% conf")).toBeInTheDocument();
+    expect(screen.getByText("86% conf")).toBeInTheDocument();
+  });
+
+  it("keeps the findings section read-only — acting on a finding stays on the PR page", () => {
+    renderWithIntl(
+      <RunTraceDrawer runId="r1" agentName="Security" prNumber={482} findings={FINDINGS} onClose={() => {}} />,
+    );
+    expect(screen.queryByRole("button", { name: /accept/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /dismiss/i })).not.toBeInTheDocument();
   });
 
   it("switches to the live log tab", () => {

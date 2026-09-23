@@ -11,7 +11,36 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## What Works
 
+- 2026-09-19 — `overflow: hidden` clips absolutely-positioned descendants but
+  NOT `position: fixed` ones, so a hover popover inside the PR list's
+  `s.tableCard` (which is `overflow: hidden`) needs no portal — `createPortal`
+  appears nowhere in this codebase, and `kit/Modal.tsx` is the fixed-position
+  precedent → position such a panel `fixed` from `getBoundingClientRect()` in a
+  `useLayoutEffect`, after checking no ancestor creates a containing block
+  (`transform`/`filter`/`will-change`/`contain` — `AppFrame`, `AppShell`,
+  `layout.tsx` and `globals.css` currently do not). The cost is that it does not
+  follow the scroll container, so close it on `scroll` (capture) and `resize`.
+  (ref: client/src/app/repos/[repoId]/pulls/_components/FindingsCell/FindingsCell.tsx)
+
 ## What Doesn't Work
+
+- 2026-09-19 — Rendering a number and its label as two adjacent JSX elements
+  (`<span>{count}</span>{label}`) yields a `textContent` of "2Critical" with NO
+  space — flex `gap` fakes the space visually, so it looks right and is still
+  unmatchable by `getByText("2 CRITICAL")` or agent-browser's `wait --text` →
+  when a string must be assertable, put the number and its word in ONE i18n
+  message (`"{count} CRITICAL"`) and make the casing part of the message, not a
+  `textTransform`. (ref: client/src/app/repos/[repoId]/pulls/[number]/_components/SeverityFilterBar/constants.ts)
+
+- 2026-09-20 — That one-message trick has no purchase where the design shows no
+  word at all: `SeverityBadge` with `compact` renders an icon and a bare digit
+  (`{compact ? null : s.label}`, Badge.tsx:80), so the timeline's counters are
+  three sibling nodes whose whole text is "2", "1", "3" — `getByText` cannot
+  tell them apart and there is nothing for `wait --text` to match → wrap each in
+  a `role="img"` span carrying the SAME `"{count} CRITICAL"` message as its
+  `aria-label` (role="img" makes AT read the label instead of the digit), and
+  assert with `getByLabelText` / agent-browser `find label`.
+  (ref: client/src/app/repos/[repoId]/pulls/[number]/_components/RunHistory/RunHistory.tsx:104)
 
 - 2026-09-19 — `toFixed(2)` is NOT decimal rounding and quietly shows money a
   cent short: it rounds the binary value, so `(1.005).toFixed(2)` is "1.00",
@@ -35,5 +64,13 @@ Non-obvious findings a future session needs. **Read this before working here.**
 ## Recurring Errors & Fixes
 
 ## Session Notes
+
+- 2026-09-20 — Timeline severity counters: the Agent-runs timeline row now
+  reports findings per severity instead of one total, tallied from the reviews
+  the page already holds (spec: client/specs/L01-findings-visibility.md).
+
+- 2026-09-19 — L01-b findings visibility: severity counters + filter in the run
+  card, a hover popover on the PR list, and a shared read-only `FindingPreview`
+  reused by the trace drawer (spec: client/specs/L01-findings-visibility.md).
 
 ## Open Questions

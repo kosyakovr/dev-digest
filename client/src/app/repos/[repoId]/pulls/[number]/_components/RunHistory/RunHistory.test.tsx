@@ -35,10 +35,13 @@ function run(o: Partial<RunSummary>): RunSummary {
   };
 }
 
-function renderRuns(runs: RunSummary[]) {
+function renderRuns(
+  runs: RunSummary[],
+  severityCounts?: Record<string, Record<string, number>>,
+) {
   return render(
     <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
-      <RunHistory runs={runs} onOpenTrace={() => {}} />
+      <RunHistory runs={runs} severityCounts={severityCounts} onOpenTrace={() => {}} />
     </NextIntlClientProvider>,
   );
 }
@@ -91,5 +94,76 @@ describe("RunHistory — spend line", () => {
     renderRuns([run({ status: "running", tokens_in: 9000, tokens_out: 119, cost_usd: 0.0013 })]);
     expect(screen.queryByText(/tok/)).not.toBeInTheDocument();
     expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The timeline reports findings per severity, not as one total. The numbers do
+ * not come from RunSummary (agent_runs has no per-severity column) — the PR
+ * page tallies them from the reviews it already holds and passes them in, so
+ * these cases pin both the counters and the fallback for when it cannot.
+ */
+describe("RunHistory — severity counters", () => {
+  it("shows one counter per severity present, not a single total", () => {
+    renderRuns([run({ status: "done", findings_count: 6, blockers: 0, score: 40 })], {
+      "run-1": { CRITICAL: 2, WARNING: 1, SUGGESTION: 3 },
+    });
+    expect(screen.getByLabelText("2 CRITICAL")).toBeInTheDocument();
+    expect(screen.getByLabelText("1 WARNING")).toBeInTheDocument();
+    expect(screen.getByLabelText("3 SUGGESTION")).toBeInTheDocument();
+    expect(screen.queryByText(/finding\(s\)/)).not.toBeInTheDocument();
+  });
+
+  it("omits the severities this run did not produce", () => {
+    renderRuns([run({ status: "done", findings_count: 2, blockers: 2, score: 0 })], {
+      "run-1": { CRITICAL: 2, WARNING: 0 },
+    });
+    expect(screen.getByLabelText("2 CRITICAL")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/WARNING/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/SUGGESTION/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the blocker count beside the counters", () => {
+    renderRuns([run({ status: "done", findings_count: 3, blockers: 2, score: 0 })], {
+      "run-1": { CRITICAL: 2, WARNING: 1 },
+    });
+    expect(screen.getByText(/2 blockers/)).toBeInTheDocument();
+  });
+
+  it("the counters sum to the run's own findings_count", () => {
+    const counts = { CRITICAL: 2, WARNING: 1, SUGGESTION: 3 };
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    renderRuns([run({ status: "done", findings_count: total, blockers: 2, score: 12 })], {
+      "run-1": counts,
+    });
+    for (const [sev, n] of Object.entries(counts)) {
+      expect(screen.getByLabelText(`${n} ${sev}`)).toBeInTheDocument();
+    }
+    expect(total).toBe(6);
+  });
+
+  it("falls back to the aggregate when the breakdown is unknown — never a silent zero", () => {
+    // A run whose review row was deleted: the page has no findings to tally,
+    // but agent_runs still remembers how many there were.
+    renderRuns([run({ status: "done", findings_count: 4, blockers: 0, score: 55 })], {
+      "other-run": { CRITICAL: 1 },
+    });
+    expect(screen.getByText(/4 finding\(s\)/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/CRITICAL/)).not.toBeInTheDocument();
+  });
+
+  it("a clean run still reads '0 finding(s)', not an empty line", () => {
+    renderRuns([run({ status: "done", findings_count: 0, blockers: 0, score: 95 })], {
+      "run-1": {},
+    });
+    expect(screen.getByText(/0 finding\(s\)/)).toBeInTheDocument();
+  });
+
+  it("a failed run shows its error and no counters", () => {
+    renderRuns([run({ status: "failed", error: "boom", score: null, blockers: null })], {
+      "run-1": { CRITICAL: 2 },
+    });
+    expect(screen.getByText("boom")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/CRITICAL/)).not.toBeInTheDocument();
   });
 });
