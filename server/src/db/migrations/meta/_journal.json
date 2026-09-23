@@ -78,6 +78,20 @@
       "when": 1789766521715,
       "tag": "0010_add_agent_run_cost",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789852921715,
+      "tag": "0011_add_skill_types",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789939321715,
+      "tag": "0012_add_convention_triage",
+      "breakpoints": true
     }
   ]
 }

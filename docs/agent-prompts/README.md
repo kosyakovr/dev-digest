@@ -50,6 +50,24 @@ Sections with no content are omitted. Everything repo- or author-derived is wrap
 in `<untrusted source="…">…</untrusted>` so the model can tell instructions
 (system) from data (user).
 
+## Skill ordering
+
+`## Skills / rules` is the bodies of the skills attached to the agent, joined
+with a blank line **in link order** — `agent_skills.order`, which the Agent
+editor's Skills tab sets by drag or the ↑/↓ buttons. Order is editorial, not
+cosmetic: earlier blocks frame how the model reads later ones, so put the
+general rubric before the narrow rules.
+
+A skill reaches the prompt only when **both** switches are on — the link's own
+`enabled` (this agent wants it) and the skill's `enabled` (the workspace wants
+it at all). An agent with no enabled skills produces a prompt byte-identical to
+one from before skills existed, because the section is omitted entirely.
+
+Skill bodies are **not** `<untrusted>`-wrapped: they are workspace-authored
+instructions, like the system prompt. Anything imported from outside is data,
+not instruction — the import path accepts Markdown text only, executes nothing,
+and stores the file verbatim for a human to read before enabling it.
+
 ## The output schema is NOT in the prompt
 
 This is the most common source of confusion. The structure of the response — the

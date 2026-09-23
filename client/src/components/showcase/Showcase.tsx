@@ -32,6 +32,7 @@ import {
   FormField,
   TextInput,
   SelectInput,
+  SearchableSelect,
   Textarea,
   Checkbox,
   Sparkline,
@@ -57,6 +58,8 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 
 export function Gallery() {
   const [toggle, setToggle] = React.useState(true);
+  const [searchable, setSearchable] = React.useState("gpt-4.1");
+  const [skillType, setSkillType] = React.useState("rubric");
   const [check, setCheck] = React.useState(true);
   const [tab, setTab] = React.useState("a");
   const [text, setText] = React.useState("");
@@ -165,6 +168,27 @@ export function Gallery() {
         <div style={s.w280}>
           <FormField label="Notes">
             <Textarea value={text} onChange={setText} placeholder="Free text…" rows={3} />
+          </FormField>
+        </div>
+        <div style={s.w280}>
+          <FormField label="Model" hint="Filterable — for long option lists.">
+            <SearchableSelect
+              value={searchable}
+              onChange={setSearchable}
+              options={[...MODEL_OPTIONS]}
+            />
+          </FormField>
+        </div>
+        <div style={s.w280}>
+          {/* `creatable` lets the user pick a value that is not in `options`
+              (the skill-type catalogue); plain SearchableSelect cannot. */}
+          <FormField label="Skill type" hint="Creatable — type a new name to add it.">
+            <SearchableSelect
+              value={skillType}
+              onChange={setSkillType}
+              options={["rubric", "convention", "security", "custom"]}
+              creatable
+            />
           </FormField>
         </div>
         <Checkbox checked={check} onChange={setCheck} label="On new PR" />

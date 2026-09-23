@@ -57,9 +57,10 @@ flowchart LR
 - Modules are registered statically in `src/modules/index.ts` (one import + one
   `app.register` each); the engine reaps orphaned `running` runs on boot.
 
-## API map (starter)
+## API map
 
-Each module owns its routes (`modules/<name>/routes.ts`). Grouped by domain:
+Each module owns its routes (`modules/<name>/routes.ts`). Grouped by domain;
+the Skills Lab group is what the L02 lesson added on top of the starter set.
 
 ```mermaid
 flowchart TB
@@ -73,6 +74,11 @@ flowchart TB
   end
   subgraph Agents["Agents"]
     agents["agents<br/>/agents · /agents/:id"]
+  end
+  subgraph SkillsLab["Skills Lab (L02)"]
+    skills["skills<br/>/skills · /skills/:id/versions · /skill-types"]
+    conventions["conventions<br/>/repos/:id/conventions(/extract|/skill)<br/>/conventions/:id"]
+    conventions -->|"draft → POST /skills"| skills
   end
   subgraph Intel["Repo intelligence"]
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]

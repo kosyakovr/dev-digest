@@ -15,12 +15,64 @@
       "body": "Scan the repo to surface house-rules — naming, error handling, structure — each backed by evidence you can turn into a Skill.",
       "cta": "Run extraction"
     },
-    "candidateCount": "{count, plural, one {# candidate} other {# candidates}} · grounded against sampled files"
+    "candidateCount": "{count, plural, one {# candidate} other {# candidates}} · grounded against sampled files",
+    "noRepo": "Add a repository first — conventions are extracted from a cloned repo."
+  },
+  "summary": {
+    "heading": "Last scan",
+    "proposed": "{count} proposed",
+    "droppedUngrounded": "{count} dropped by the evidence gate",
+    "droppedDuplicate": "{count} already known",
+    "sampled": "{count, plural, one {# file sampled} other {# files sampled}}",
+    "cost": "{model} · ${cost}",
+    "costUnknown": "{model}"
+  },
+  "filters": {
+    "all": "All {count}",
+    "pending": "Pending {count}",
+    "accepted": "Accepted {count}",
+    "rejected": "Rejected {count}",
+    "emptyForFilter": "No conventions with this status."
+  },
+  "selection": {
+    "count": "{count, plural, one {# selected} other {# selected}}",
+    "createSkill": "Create skill",
+    "selectAccepted": "Select all accepted"
   },
   "card": {
     "confidence": "Confidence",
+    "confidencePct": "{pct}%",
+    "confidenceLabel": "{pct}% confidence",
     "accepted": "Accepted",
-    "accepting": "Accepting…",
-    "acceptAsSkill": "Accept as Skill"
+    "rejected": "Rejected",
+    "pending": "Pending",
+    "accept": "Accept",
+    "reject": "Reject",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "cancel": "Cancel",
+    "rule": "Rule",
+    "rationale": "Rationale",
+    "rationalePlaceholder": "What a reviewer should flag…",
+    "evidenceAt": "{path}:{line}",
+    "viewOnGitHub": "View on GitHub",
+    "copyEvidence": "Copy the evidence snippet",
+    "select": "Select {rule}",
+    "deleteConfirm": "Delete this convention? The next scan may propose it again."
+  },
+  "modal": {
+    "title": "Create skill from conventions",
+    "subtitle": "{count, plural, one {# convention} other {# conventions}} · edit anything before saving",
+    "name": "Name",
+    "description": "Description",
+    "type": "Type",
+    "body": "Body",
+    "loading": "Assembling draft…",
+    "draftFailed": "Could not build the draft.",
+    "create": "Create skill",
+    "creating": "Creating…",
+    "cancel": "Cancel",
+    "created": "Skill created from {count, plural, one {# convention} other {# conventions}}."
   }
 }

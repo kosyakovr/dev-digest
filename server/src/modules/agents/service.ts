@@ -8,8 +8,9 @@ import type {
   Provider,
   ReviewStrategy,
 } from '@devdigest/shared';
-import { AgentsRepository } from './repository.js';
+import { AgentsRepository, type SkillLinkInput } from './repository.js';
 import { toAgentDto, toAgentVersionDto } from './helpers.js';
+import { ValidationError } from '../../platform/errors.js';
 
 /**
  * A2 — agents service. Business logic for the Agents tab + Agent Editor.
@@ -138,21 +139,33 @@ export class AgentsService {
   /** Linked skills for an agent as AgentSkillLink[] (ordered). */
   async skillLinks(agentId: string): Promise<AgentSkillLink[]> {
     const links = await this.repo.linkedSkills(agentId);
-    return links.map((l) => ({ agent_id: agentId, skill_id: l.skill.id, order: l.order }));
+    return links.map((l) => ({
+      agent_id: agentId,
+      skill_id: l.skill.id,
+      order: l.order,
+      enabled: l.enabled,
+    }));
   }
 
   /**
-   * Set / reorder the agent's linked skills. If `skillIds` is provided, replaces
-   * the whole set in that order. Returns the resulting ordered links.
+   * Set / reorder / toggle the agent's linked skills — replaces the whole set in
+   * the given order. Returns the resulting ordered links, or undefined when the
+   * agent isn't in this workspace (the route maps that to 404).
+   *
+   * Throws `ValidationError` on a skill id from another workspace:
+   * `agent_skills.skill_id` is only a foreign key, so the database would happily
+   * link a foreign tenant's skill and its text would then land in this
+   * workspace's prompts.
    */
   async setSkills(
     workspaceId: string,
     agentId: string,
-    skillIds: string[],
+    links: SkillLinkInput[],
   ): Promise<AgentSkillLink[] | undefined> {
     const agent = await this.repo.getById(workspaceId, agentId);
     if (!agent) return undefined;
-    await this.repo.setSkills(agentId, skillIds);
+    await this.assertSkillsOwned(workspaceId, links.map((l) => l.skillId));
+    await this.repo.setSkills(agentId, links);
     return this.skillLinks(agentId);
   }
 
@@ -162,13 +175,37 @@ export class AgentsService {
     agentId: string,
     skillId: string,
     order?: number,
+    enabled = true,
   ): Promise<AgentSkillLink[] | undefined> {
     const agent = await this.repo.getById(workspaceId, agentId);
     if (!agent) return undefined;
+    await this.assertSkillsOwned(workspaceId, [skillId]);
     const existing = await this.repo.linkedSkills(agentId);
     const resolvedOrder = order ?? existing.length;
-    await this.repo.linkSkill(agentId, skillId, resolvedOrder);
+    await this.repo.linkSkill(agentId, skillId, resolvedOrder, enabled);
     return this.skillLinks(agentId);
+  }
+
+  /** Detach one skill. Undefined when the agent isn't in this workspace. */
+  async unlinkSkill(
+    workspaceId: string,
+    agentId: string,
+    skillId: string,
+  ): Promise<AgentSkillLink[] | undefined> {
+    const agent = await this.repo.getById(workspaceId, agentId);
+    if (!agent) return undefined;
+    await this.repo.unlinkSkill(agentId, skillId);
+    return this.skillLinks(agentId);
+  }
+
+  /** Reject any skill id that is not a skill of `workspaceId`. */
+  private async assertSkillsOwned(workspaceId: string, skillIds: string[]): Promise<void> {
+    if (skillIds.length === 0) return;
+    const owned = await this.container.skillsRepo.existingIds(workspaceId, skillIds);
+    const foreign = skillIds.filter((id) => !owned.has(id));
+    if (foreign.length > 0) {
+      throw new ValidationError(`Unknown skill(s): ${foreign.join(', ')}`);
+    }
   }
 
   /**

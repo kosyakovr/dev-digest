@@ -1,0 +1,7 @@
+import { SkillsListView } from "./_components/SkillsListView";
+
+/* Route: /skills (Skills list). Thin route entry — the view, its create/import
+   modals, styles and constants are colocated under _components/SkillsListView. */
+export default function SkillsPage() {
+  return <SkillsListView />;
+}

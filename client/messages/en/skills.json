@@ -3,10 +3,12 @@
     "crumbLab": "Skills Lab",
     "crumbSkills": "Skills",
     "heading": "Skills",
+    "subtitle": "Reusable markdown blocks. Attach them to agents — the order decides where each block lands in the prompt.",
     "addSkill": "Add Skill",
     "searchPlaceholder": "Search skills…",
     "loadError": "Could not load skills.",
     "menu": {
+      "create": "Create from scratch",
       "fromFile": "Import from file",
       "fromUrl": "Import from URL",
       "community": "Search community skills…"
@@ -97,5 +99,68 @@
     "bodyLabel": "Skill body (Markdown)",
     "bodyHint": "Saving a changed body creates a new immutable version.",
     "version": "v{version}"
+  },
+  "card": {
+    "noDescription": "No description",
+    "deleteTitle": "Delete skill",
+    "deleteConfirm": "Delete skill \"{name}\"? This also deletes its version history and detaches it from every agent. This cannot be undone."
+  },
+  "editor": {
+    "tabs": {
+      "config": "Config",
+      "preview": "Preview",
+      "versions": "Versions"
+    }
+  },
+  "config": {
+    "title": "Configuration",
+    "enabled": "Enabled",
+    "nameLabel": "Name",
+    "namePlaceholder": "pr-quality-rubric",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "What this skill makes the reviewer do.",
+    "typeLabel": "Type",
+    "typeHint": "Pick a type or type a new one — it joins the list when you save.",
+    "typePlaceholder": "Search or create a type…",
+    "bodyLabel": "Body (Markdown)",
+    "bodyHint": "Appended to the agent\u2019s prompt as one block. Saving a changed body creates a new version.",
+    "save": "Save skill",
+    "saving": "Saving…",
+    "savedToast": "Skill saved (v{version})",
+    "nameRequired": "A name is required.",
+    "typeRequired": "A type is required.",
+    "bodyRequired": "A body is required."
+  },
+  "versions": {
+    "title": "Versions",
+    "hint": "Every change to the body is snapshotted. Restoring discards newer versions.",
+    "label": "Version {version}",
+    "current": "current",
+    "initial": "Initial version — nothing to compare against.",
+    "diff": "Diff",
+    "hideDiff": "Hide diff",
+    "diffCaption": "Changes from v{from} to v{to}",
+    "noChanges": "No changes in the body.",
+    "restore": "Restore",
+    "restoring": "Restoring…",
+    "restoreConfirm": "Restore version {version}? Every newer version will be permanently deleted.",
+    "restoredToast": "Restored to v{version}",
+    "loadError": "Could not load version history.",
+    "empty": "No versions yet."
+  },
+  "import": {
+    "title": "Import a skill",
+    "subtitle": "Pick a Markdown file. Its text becomes the skill body — nothing in it is executed.",
+    "choose": "Choose a .md file",
+    "chooseHint": "Markdown only (.md, .markdown).",
+    "notMarkdown": "That is not a Markdown file. Pick a .md or .markdown file.",
+    "parsing": "Reading…",
+    "previewTitle": "Preview",
+    "previewHint": "Nothing is saved until you confirm.",
+    "confirm": "Create skill",
+    "creating": "Creating…",
+    "cancel": "Cancel",
+    "failed": "Could not read that file.",
+    "createdToast": "Imported \"{name}\""
   }
 }
