@@ -1,0 +1,15 @@
+diff --git a/server/src/modules/reviews/repository/digest.repo.ts b/server/src/modules/reviews/repository/digest.repo.ts
+new file mode 100644
+--- /dev/null
++++ b/server/src/modules/reviews/repository/digest.repo.ts
+@@ -0,0 +1,11 @@
++import { eq } from 'drizzle-orm';
++import { db } from '../../../db/client.js';
++import { agentRuns } from '../../../db/schema/runs.js';
++
++export class DigestRepo {
++  /** Recent runs for the digest widget. */
++  async recent(limit = 20) {
++    return db.select().from(agentRuns).orderBy(agentRuns.createdAt).limit(limit);
++  }
++}

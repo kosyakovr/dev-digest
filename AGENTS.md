@@ -5,10 +5,10 @@ lockfile. Run commands from inside the package, never from root.
 
 | Package | PM | Guide |
 |---|---|---|
-| server/ | pnpm | [server/CLAUDE.md](server/CLAUDE.md) |
-| client/ | pnpm | [client/CLAUDE.md](client/CLAUDE.md) |
-| reviewer-core/ | npm | [reviewer-core/CLAUDE.md](reviewer-core/CLAUDE.md) |
-| e2e/ | npm | [e2e/CLAUDE.md](e2e/CLAUDE.md) |
+| server/ | pnpm | [server/AGENTS.md](server/AGENTS.md) |
+| client/ | pnpm | [client/AGENTS.md](client/AGENTS.md) |
+| reviewer-core/ | npm | [reviewer-core/AGENTS.md](reviewer-core/AGENTS.md) |
+| e2e/ | npm | [e2e/AGENTS.md](e2e/AGENTS.md) |
 
 Cross-package lessons learned (per-package ones live in `<pkg>/INSIGHTS.md`):
 @INSIGHTS.md
@@ -32,6 +32,7 @@ require it, stop and ask the user first.
 - Architecture / review flow → [README.md](README.md)
 - Adding or changing tests, CI → [TESTING.md](TESTING.md)
 - Editing reviewer prompts → [docs/agent-prompts/README.md](docs/agent-prompts/README.md)
+- The pre-PR gate (what blocks a push, how to waive) → [docs/pr-self-review.md](docs/pr-self-review.md)
 - Per-package: `<pkg>/README.md`, `<pkg>/docs/`, `<pkg>/specs/`, `<pkg>/INSIGHTS.md`
 
 ## Workflow
@@ -43,6 +44,10 @@ require it, stop and ask the user first.
    of a task that involved debugging, a failing test or a correction — but write
    nothing if nothing new cleared its gate.
 4. Changed behaviour described in README/docs → update them in the same change.
+5. Before `git push` or opening a PR → run `/pr-self-review`. It reviews the
+   committed branch diff against the skills that govern each changed file, and a
+   `PreToolUse` hook denies the push while a CRITICAL finding stands.
+   See [docs/pr-self-review.md](docs/pr-self-review.md).
 
 ## Cross-package invariants
 - `@devdigest/shared` Zod contracts are vendored in BOTH `server/src/vendor/shared`

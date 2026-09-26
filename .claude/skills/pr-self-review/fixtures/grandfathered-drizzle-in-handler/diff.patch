@@ -1,0 +1,14 @@
+diff --git a/server/src/modules/pulls/routes.ts b/server/src/modules/pulls/routes.ts
+--- a/server/src/modules/pulls/routes.ts
++++ b/server/src/modules/pulls/routes.ts
+@@ -40,6 +40,12 @@ export async function pullRoutes(app: FastifyInstance) {
+     const rows = await db.select().from(pulls).where(eq(pulls.workspaceId, ws));
+     return rows.map(toPullDto);
+   });
++
++  app.get('/pulls/count', { schema: countSchema }, async (req) => {
++    const ws = req.workspaceId;
++    const rows = await db.select().from(pulls).where(eq(pulls.workspaceId, ws));
++    return { count: rows.length };
++  });
+ }

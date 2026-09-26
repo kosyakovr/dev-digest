@@ -1,0 +1,4 @@
+{ "group": "backend-data",
+  "expect": "CRITICAL",
+  "rule": "onion-architecture §7 / §10 — every query scoped by workspaceId",
+  "why": "A new repository query with no workspaceId filter returns other tenants' runs. The skill calls this a tenancy guard, not a filter: 'a query without it is a security bug'. New file, unambiguous, and the one security bug this repo's own docs name directly." }

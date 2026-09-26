@@ -9,7 +9,7 @@ Pure review engine: diff → prompt → LLM → grounded findings. Pipeline: [RE
 - `npm run typecheck` (doubles as the build — the package never emits JS)
 
 ## Must not break
-- `package-lock.json` is off-limits — see root [../CLAUDE.md](../CLAUDE.md).
+- `package-lock.json` is off-limits — see root [../AGENTS.md](../AGENTS.md).
 - No DB, GitHub or filesystem access; the only side effect is the injected `LLMProvider`.
 - Consumed as source by `server/` via tsconfig alias — keep `src/index.ts` exports stable
   and run server typecheck/tests after changing them.

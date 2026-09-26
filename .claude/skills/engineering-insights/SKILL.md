@@ -46,7 +46,7 @@ below, write it — by the end of a long session the detail is gone.
 
 1. **Would a future session behave differently knowing this?** No → don't write.
 2. **Could anyone reading the code have worked it out?** Yes → don't write.
-3. **Is it already in CLAUDE.md, a README, `docs/` or `specs/`?** Yes → don't write.
+3. **Is it already in AGENTS.md, a README, `docs/` or `specs/`?** Yes → don't write.
 4. **Is it already in this INSIGHTS.md?** Yes, and it is still accurate → write
    nothing. Yes, but you learned more → add a new dated line directly beneath it,
    leaving the original line byte-for-byte untouched. Never merge your finding
@@ -153,8 +153,8 @@ so it needs the same approval.
 ## Scope
 
 This skill captures engineering knowledge. It does not review code, write
-documentation or specs, run tests, or edit CLAUDE.md. Migrations and lock files
-are off-limits — see the root [CLAUDE.md](../../../CLAUDE.md).
+documentation or specs, run tests, or edit AGENTS.md. Migrations and lock files
+are off-limits — see the root [AGENTS.md](../../../AGENTS.md).
 
 ## Known limitation (L01)
 

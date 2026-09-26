@@ -1,0 +1,4 @@
+{ "group": "frontend-architecture",
+  "expect": "none",
+  "rule": "frontend-ui-architecture §15 fetch-in-UI",
+  "why": "refetch() is a TanStack Query retry handler, not a network call in a component. The shipped §15 grep used to match it — four false positives in client/ — and was corrected to [^a-zA-Z.]fetch\\(. Catches a regression of that fix." }

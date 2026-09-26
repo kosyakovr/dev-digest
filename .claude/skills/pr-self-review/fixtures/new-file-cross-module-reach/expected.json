@@ -1,0 +1,4 @@
+{ "group": "backend-architecture",
+  "expect": "CRITICAL",
+  "rule": "onion-architecture §4 Direction of dependencies",
+  "why": "A new service imports another module's repository directly and constructs it itself, bypassing the composition root. New file, so the rule is mandatory. If this stops being CRITICAL the gate has gone blind." }
