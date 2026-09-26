@@ -31,6 +31,8 @@
       "descriptionPlaceholder": "What this agent reviews",
       "provider": "Provider",
       "model": "Model",
+      "modelSearch": "Search models…",
+      "modelEmptyHint": "No models loaded — set the {provider} API key in Settings → API Keys.",
       "systemPrompt": "System prompt"
     }
   },
@@ -91,7 +93,19 @@
     "title": "Skills",
     "enabledCount": "{linked} of {total} enabled",
     "filterPlaceholder": "Filter skills…",
-    "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Toggle to attach."
+    "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Toggle to attach.",
+    "reorderLockedHint": "Clear the filter to reorder.",
+    "noMatches": "No skills match that filter.",
+    "noSkills": "No skills yet. Create one on the Skills page, then attach it here.",
+    "loadError": "Could not load skills.",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "mutedTitle": "Attached but muted — its text is left out of the prompt",
+    "moveUp": "Move {name} up",
+    "moveDown": "Move {name} down",
+    "save": "Save skills",
+    "saving": "Saving…",
+    "savedToast": "Skills updated for {name}"
   },
   "mount": {
     "body": "Mount point for {owner}. The Agent Editor shell + tab routing are wired by A2 — {owner} renders this tab."

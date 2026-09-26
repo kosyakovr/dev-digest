@@ -37,6 +37,11 @@
   --failed: #ef4444;
   --stale: #6b7280;
 
+  /* Two extra hues so a score can be graded on four steps: --ok (green),
+     --yellow, --orange, --crit (red). --warn is amber and already taken. */
+  --yellow: #eab308;
+  --orange: #f97316;
+
   --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
   --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.45);
   --code-add: rgba(16, 185, 129, 0.1);
@@ -75,6 +80,10 @@
   --pending: #d97706;
   --failed: #dc2626;
   --stale: #9ca3af;
+
+  /* Darker pair for light backgrounds, as every hue above does. */
+  --yellow: #ca8a04;
+  --orange: #ea580c;
 
   --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.18);
   --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.12);

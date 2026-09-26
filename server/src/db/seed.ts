@@ -7,6 +7,7 @@ import {
   SECURITY_REVIEWER_PROMPT,
   PERFORMANCE_REVIEWER_PROMPT,
 } from './seed-prompts.js';
+import { BUILTIN_TYPE_NAMES, SEED_SKILLS } from './seed-skills.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -21,8 +22,11 @@ const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
  * with a few findings, and the three built-in agents (General + Security +
  * Performance), all on the default openrouter/deepseek-v4-flash provider+model.
  *
- * Course lessons populate the other tables (skills, conventions, memory, eval,
- * …) once their features are built — they start empty here.
+ * L02 adds the skill-type catalogue and a few starter skills (unattached — the
+ * agent editor's Skills tab is where you link them).
+ *
+ * Course lessons populate the remaining tables (conventions, memory, eval, …)
+ * once their features are built — they start empty here.
  */
 
 export const DEFAULT_WORKSPACE_NAME = 'default';
@@ -218,6 +222,37 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       .from(t.agents)
       .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, a.name)));
     if (!existing) await db.insert(t.agents).values(a);
+  }
+
+  // ---- skill types + starter skills (L02) ----
+  // The type catalogue backs the Skill editor's dropdown; without it the very
+  // first skill would have to be typed blind.
+  for (const name of BUILTIN_TYPE_NAMES) {
+    await db
+      .insert(t.skillTypes)
+      .values({ workspaceId, name })
+      .onConflictDoNothing();
+  }
+
+  // Skills are seeded UNATTACHED: linking them would silently change every
+  // seeded agent's prompt, and picking the order is the point of the Skills tab.
+  for (const sk of SEED_SKILLS) {
+    const [existing] = await db
+      .select()
+      .from(t.skills)
+      .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.name, sk.name)));
+    if (existing) continue;
+
+    const [row] = await db
+      .insert(t.skills)
+      .values({ workspaceId, ...sk, enabled: true, version: 1 })
+      .returning();
+    // Version 1 must exist from the start, or the Versions tab is empty until
+    // the first edit and a restore has nothing to roll back to.
+    await db
+      .insert(t.skillVersions)
+      .values({ skillId: row!.id, version: 1, body: row!.body })
+      .onConflictDoNothing();
   }
 
   return { workspaceId, userId };

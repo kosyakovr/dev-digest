@@ -9,6 +9,11 @@ const optLabel = (o: SelectOption) => (typeof o === "string" ? o : o.label);
  * Searchable single-select — same options API as SelectInput, but with a filter
  * box + keyboard nav, for long lists (e.g. the 300+ OpenRouter models). Filters
  * by value and label; Enter selects, ↑/↓ move, Esc closes.
+ *
+ * With `creatable`, a query matching no option exactly offers a "Create <query>"
+ * row that selects the typed text verbatim — for fields whose options are a
+ * catalogue the user extends rather than a closed set (e.g. a skill's type).
+ * Default off, so an ordinary picker still cannot produce an unlisted value.
  */
 export function SearchableSelect({
   value,
@@ -17,6 +22,8 @@ export function SearchableSelect({
   placeholder = "Search…",
   mono = true,
   maxHeight = 280,
+  creatable = false,
+  createLabel = (q: string) => `Create "${q}"`,
 }: {
   value: string;
   onChange?: (v: string) => void;
@@ -24,6 +31,10 @@ export function SearchableSelect({
   placeholder?: string;
   mono?: boolean;
   maxHeight?: number;
+  /** Allow selecting a value that is not in `options` (see above). */
+  creatable?: boolean;
+  /** Label for the create row. */
+  createLabel?: (query: string) => string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -56,8 +67,18 @@ export function SearchableSelect({
   const current = options.find((o) => optValue(o) === value);
   const currentLabel = current ? optLabel(current) : value || placeholder;
 
+  // Offer creation only for a query that is not already an option — otherwise
+  // the list would show "Create rubric" directly above the real `rubric` row.
+  const canCreate =
+    creatable && q.length > 0 && !options.some((o) => optValue(o).toLowerCase() === q);
+  const createValue = query.trim();
+
   const pick = (o: SelectOption) => {
     onChange?.(optValue(o));
+    setOpen(false);
+  };
+  const create = () => {
+    onChange?.(createValue);
     setOpen(false);
   };
   const onKey = (e: React.KeyboardEvent) => {
@@ -71,6 +92,9 @@ export function SearchableSelect({
       e.preventDefault();
       const o = filtered[hi];
       if (o) pick(o);
+      // Enter on a query with no match creates it, so typing a new type name and
+      // pressing Enter works without reaching for the mouse.
+      else if (canCreate) create();
     } else if (e.key === "Escape") {
       e.preventDefault();
       setOpen(false);
@@ -97,7 +121,7 @@ export function SearchableSelect({
           style={{
             flex: 1,
             fontSize: 14,
-            color: current ? "var(--text-primary)" : "var(--text-muted)",
+            color: current || value ? "var(--text-primary)" : "var(--text-muted)",
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -154,10 +178,36 @@ export function SearchableSelect({
             />
           </div>
           <div style={{ maxHeight, overflowY: "auto", padding: 6 }}>
-            {filtered.length === 0 && (
+            {filtered.length === 0 && !canCreate && (
               <div style={{ padding: "8px 10px", fontSize: 13, color: "var(--text-muted)" }}>
                 No matches
               </div>
+            )}
+            {canCreate && (
+              <button
+                type="button"
+                onClick={create}
+                className={mono ? "mono" : undefined}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  width: "100%",
+                  padding: "8px 10px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "transparent",
+                  color: "var(--accent-text)",
+                  fontSize: 13,
+                  textAlign: "left",
+                  cursor: "pointer",
+                }}
+              >
+                <Icon.Plus size={13} style={{ flexShrink: 0 }} />
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {createLabel(createValue)}
+                </span>
+              </button>
             )}
             {filtered.map((o, i) => {
               const v = optValue(o);

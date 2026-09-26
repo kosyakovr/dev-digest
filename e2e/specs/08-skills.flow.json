@@ -1,0 +1,199 @@
+{
+  "name": "Skills list, editor tabs, and the agent editor's Skills tab",
+  "description": "Loads /skills and confirms the seeded skills render as cards, opens one and walks Config \u2192 Preview \u2192 Versions, then opens an agent's Skills tab. Exercises the L02 routes, their API fetches and the ?tab= routing.",
+  "steps": [
+    {
+      "cmd": [
+        "open",
+        "{BASE}/skills"
+      ],
+      "label": "load the skills page"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "/skills"
+      ],
+      "label": "skills route reached"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--load",
+        "networkidle"
+      ],
+      "label": "skills fetch settles"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "pr-quality-rubric"
+      ],
+      "label": "seeded skill card is visible"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "secret-leakage-gate"
+      ],
+      "label": "a second seeded skill is visible"
+    },
+    {
+      "cmd": [
+        "find",
+        "text",
+        "pr-quality-rubric",
+        "click"
+      ],
+      "label": "open the skill editor"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--load",
+        "networkidle"
+      ],
+      "label": "skill fetch settles"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Configuration"
+      ],
+      "label": "Config tab renders by default"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "Preview"
+      ],
+      "label": "switch to Preview"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "tab=preview"
+      ],
+      "label": "tab state lands in the URL"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "PR Quality Rubric"
+      ],
+      "label": "body renders as markdown"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "Versions"
+      ],
+      "label": "switch to Versions"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "tab=versions"
+      ],
+      "label": "versions tab in the URL"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--load",
+        "networkidle"
+      ],
+      "label": "version history settles"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Version 1"
+      ],
+      "label": "the initial version is listed"
+    },
+    {
+      "cmd": [
+        "open",
+        "{BASE}/agents"
+      ],
+      "label": "go to the agents page"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--load",
+        "networkidle"
+      ],
+      "label": "agents fetch settles"
+    },
+    {
+      "cmd": [
+        "find",
+        "text",
+        "General Reviewer",
+        "click"
+      ],
+      "label": "open an agent"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Configuration"
+      ],
+      "label": "agent editor is up"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "Skills"
+      ],
+      "label": "switch to the agent's Skills tab"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "tab=skills"
+      ],
+      "label": "skills tab in the URL"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--load",
+        "networkidle"
+      ],
+      "label": "links + skills settle"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Order matters"
+      ],
+      "label": "the ordering hint is shown"
+    }
+  ]
+}

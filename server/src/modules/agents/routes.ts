@@ -25,7 +25,8 @@ const VersionParams = z.object({
  *   GET    /agents/:id/versions     → config history (newest first)
  *   GET    /agents/:id/versions/:version → one config snapshot
  *   GET    /agents/:id/skills       → linked skills (ordered)
- *   POST   /agents/:id/skills       → set/reorder linked skills OR link one
+ *   POST   /agents/:id/skills       → set/reorder/toggle linked skills OR link one
+ *   DELETE /agents/:id/skills/:skillId → unlink one
  *   GET    /agents/:id/models       → dynamic model list for the agent's provider
  *   GET    /providers/:id/models    → dynamic model list for a provider (editor)
  */
@@ -56,16 +57,34 @@ const UpdateAgentBody = z.object({
   enabled: z.boolean().optional(),
 });
 
-/** Either set the whole ordered set (`skill_ids`) or link one (`skill_id`). */
+/**
+ * Either set the whole ordered set — as `skills` (per-link `enabled`) or the
+ * older `skill_ids` (all enabled) — or link one (`skill_id`).
+ *
+ * `skills` is what the agent editor's Skills tab submits: array order IS the
+ * prompt order, and `enabled` mutes a skill without detaching it (which would
+ * lose its place). `skill_ids` is kept so existing callers keep working.
+ */
 const SetSkillsBody = z
   .object({
+    skills: z
+      .array(z.object({ skill_id: z.string().uuid(), enabled: z.boolean().optional() }))
+      .optional(),
     skill_ids: z.array(z.string().uuid()).optional(),
     skill_id: z.string().uuid().optional(),
     order: z.number().int().optional(),
+    enabled: z.boolean().optional(),
   })
-  .refine((b) => b.skill_ids !== undefined || b.skill_id !== undefined, {
-    message: 'Provide skill_ids (set/reorder) or skill_id (link one)',
-  });
+  .refine(
+    (b) => b.skills !== undefined || b.skill_ids !== undefined || b.skill_id !== undefined,
+    { message: 'Provide skills / skill_ids (set/reorder) or skill_id (link one)' },
+  );
+
+/** `/agents/:id/skills/:skillId` — both uuids. */
+const AgentSkillParams = z.object({
+  id: z.string().uuid(),
+  skillId: z.string().uuid(),
+});
 
 export default async function agentsRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
@@ -155,10 +174,41 @@ export default async function agentsRoutes(appBase: FastifyInstance) {
     async (req) => {
       const { workspaceId } = await getContext(app.container, req);
       const body = req.body;
-      const links =
-        body.skill_ids !== undefined
-          ? await service.setSkills(workspaceId, req.params.id, body.skill_ids)
-          : await service.linkSkill(workspaceId, req.params.id, body.skill_id!, body.order);
+
+      let links;
+      if (body.skills !== undefined) {
+        links = await service.setSkills(
+          workspaceId,
+          req.params.id,
+          body.skills.map((s) => ({ skillId: s.skill_id, enabled: s.enabled ?? true })),
+        );
+      } else if (body.skill_ids !== undefined) {
+        links = await service.setSkills(
+          workspaceId,
+          req.params.id,
+          body.skill_ids.map((skillId) => ({ skillId, enabled: true })),
+        );
+      } else {
+        links = await service.linkSkill(
+          workspaceId,
+          req.params.id,
+          body.skill_id!,
+          body.order,
+          body.enabled ?? true,
+        );
+      }
+
+      if (!links) throw new NotFoundError('Agent not found');
+      return links;
+    },
+  );
+
+  app.delete(
+    '/agents/:id/skills/:skillId',
+    { schema: { params: AgentSkillParams } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const links = await service.unlinkSkill(workspaceId, req.params.id, req.params.skillId);
       if (!links) throw new NotFoundError('Agent not found');
       return links;
     },

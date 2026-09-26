@@ -112,8 +112,21 @@ export const MemoryItem = z.object({
 export type MemoryItem = z.infer<typeof MemoryItem>;
 
 // ---- Skills ----
-export const SkillType = z.enum(['rubric', 'convention', 'security', 'custom']);
+// A skill's type is a user-editable LABEL, not a closed set: the editor's
+// dropdown is backed by the `skill_types` table and saving an unknown name adds
+// it there. These four are only the seeded defaults (they also drive the type
+// chip colours in the UI) — never validate a submitted type against them.
+export const BUILTIN_SKILL_TYPES = ['rubric', 'convention', 'security', 'custom'] as const;
+
+export const SkillType = z.string().min(1);
 export type SkillType = z.infer<typeof SkillType>;
+
+/** A row of the type catalogue behind that dropdown. */
+export const SkillTypeItem = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+export type SkillTypeItem = z.infer<typeof SkillTypeItem>;
 
 export const SkillSource = z.enum(['manual', 'imported_url', 'extracted', 'community']);
 export type SkillSource = z.infer<typeof SkillSource>;
@@ -131,6 +144,28 @@ export const Skill = z.object({
 });
 export type Skill = z.infer<typeof Skill>;
 
+// An immutable body snapshot, one per version of a skill. Body ONLY by design:
+// renaming a skill or changing its type is not a version-worthy edit, so those
+// fields have no history and a diff always compares markdown to markdown.
+export const SkillVersion = z.object({
+  skill_id: z.string(),
+  version: z.number().int(),
+  body: z.string(),
+  created_at: z.string(),
+});
+export type SkillVersion = z.infer<typeof SkillVersion>;
+
+// The parsed result of POST /skills/import/preview. Nothing is persisted until
+// the user confirms, so this describes a PROPOSED skill, not a stored one.
+export const SkillImportPreview = z.object({
+  name: z.string(),
+  description: z.string(),
+  type: SkillType,
+  source: SkillSource,
+  body: z.string(),
+});
+export type SkillImportPreview = z.infer<typeof SkillImportPreview>;
+
 export const CommunitySkill = z.object({
   name: z.string(),
   repo: z.string(),
@@ -141,15 +176,69 @@ export const CommunitySkill = z.object({
 export type CommunitySkill = z.infer<typeof CommunitySkill>;
 
 // ---- Conventions ----
+// A house rule the extractor found in a repo, with the code that proves it.
+// The model PROPOSES these; code verifies every one against the sampled files
+// before it is stored, so `evidence_snippet` is always sliced from the file at
+// `evidence_line`, never taken from the model's reply.
+export const ConventionCategory = z.enum([
+  'naming',
+  'structure',
+  'errors',
+  'testing',
+  'imports',
+  'typing',
+  'api',
+  'general',
+]);
+export type ConventionCategory = z.infer<typeof ConventionCategory>;
+
+// Triage is three-state, not a boolean: a re-scan replaces only `pending` rows,
+// so a rule the user has already decided on is never re-litigated.
+export const ConventionStatus = z.enum(['pending', 'accepted', 'rejected']);
+export type ConventionStatus = z.infer<typeof ConventionStatus>;
+
 export const ConventionCandidate = z.object({
   id: z.string(),
+  repo_id: z.string().nullish(),
   rule: z.string(),
+  rationale: z.string().nullish(),
+  category: ConventionCategory,
   evidence_path: z.string(),
+  evidence_line: z.number().int().positive(),
   evidence_snippet: z.string(),
   confidence: z.number().min(0).max(1),
-  accepted: z.boolean(),
+  status: ConventionStatus,
+  created_at: z.string(),
 });
 export type ConventionCandidate = z.infer<typeof ConventionCandidate>;
+
+// The outcome of one scan. The counters matter as much as the candidates:
+// "3 kept of 12 proposed" reads as the evidence gate working, where a bare list
+// of 3 reads as a broken feature.
+export const ConventionExtractResult = z.object({
+  candidates: z.array(ConventionCandidate),
+  proposed: z.number().int(),
+  dropped_ungrounded: z.number().int(),
+  dropped_duplicate: z.number().int(),
+  sampled_files: z.number().int(),
+  model: z.string(),
+  cost_usd: z.number().nullish(),
+});
+export type ConventionExtractResult = z.infer<typeof ConventionExtractResult>;
+
+// A skill assembled from the selected candidates but NOT persisted — the user
+// edits it first and `POST /skills` stores it, the same preview-then-confirm
+// flow as skill import.
+export const ConventionSkillDraft = z.object({
+  name: z.string(),
+  description: z.string(),
+  type: SkillType,
+  body: z.string(),
+  evidence_files: z.array(z.string()),
+  /** The candidates this draft was assembled from, echoed back for the UI. */
+  convention_ids: z.array(z.string()),
+});
+export type ConventionSkillDraft = z.infer<typeof ConventionSkillDraft>;
 
 // ---- Agents ----
 // 'openrouter' routes through the OpenAI-compatible API (OpenAIProvider with a
@@ -195,6 +284,10 @@ export const AgentSkillLink = z.object({
   agent_id: z.string(),
   skill_id: z.string(),
   order: z.number().int(),
+  // Per-link toggle, independent of `Skill.enabled`. Lets one agent mute a
+  // skill without detaching it (which would lose its place in `order`). A skill
+  // reaches the assembled prompt only when BOTH flags are true.
+  enabled: z.boolean(),
 });
 export type AgentSkillLink = z.infer<typeof AgentSkillLink>;
 

@@ -58,6 +58,10 @@ export const agentSkills = pgTable(
       .notNull()
       .references(() => skills.id, { onDelete: 'cascade' }),
     order: integer('order').notNull().default(0),
+    // Per-link toggle, independent of `skills.enabled`. Lets one agent mute a
+    // skill without detaching it (which would lose its place in `order`). A
+    // skill reaches the prompt only when BOTH flags are on.
+    enabled: boolean('enabled').notNull().default(true),
   },
   (t) => ({ pk: primaryKey({ columns: [t.agentId, t.skillId] }) }),
 );
