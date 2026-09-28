@@ -23,7 +23,7 @@
 # Expected output at 916ddb4, `scripts/secret-greps.sh HEAD~1 HEAD`: every row
 # "pass", before → after 0 → 0 except postgres-url-creds 9 → 9 and
 # generic-assignment 19 → 19; "No new hits."; exit 0. `--self-test`:
-# "18 passed, 0 failed"; exit 0.
+# "18 passed, 0 failed"; exit 0. The same under macOS /bin/bash 3.2 and bash 5.
 # Read-only: writes nothing.
 set -uo pipefail
 
@@ -31,7 +31,9 @@ ROOT=$(git rev-parse --show-toplevel)
 cd "$ROOT"
 
 # id|ERE — POSIX classes only, no backreferences (ugrep, root INSIGHTS.md 2026-09-20).
-PATTERNS=$(cat <<'EOF'
+# `read -d ''`, not `$(cat <<'EOF' …)`: macOS /bin/bash 3.2 parses a heredoc body
+# inside $(…) for quotes, and the unpaired ' and " below abort the whole script.
+IFS= read -r -d '' PATTERNS <<'EOF' || true
 aws-access-key|AKIA[0-9A-Z]{16}
 google-api-key|AIza[0-9A-Za-z_-]{35}
 anthropic-key|sk-ant-[A-Za-z0-9_-]{20,}
@@ -42,7 +44,6 @@ private-key|-----BEGIN [A-Z ]*PRIVATE KEY-----
 postgres-url-creds|postgres(ql)?://[^:/[:space:]]+:[^@[:space:]]+@
 generic-assignment|(secret|key|token|password)[[:space:]]*[:=][[:space:]]*["'][^"']{8,}
 EOF
-)
 
 # Lock files hold integrity hashes, not secrets (and are off-limits: root AGENTS.md).
 PATHSPEC=(. ':(exclude,glob)**/pnpm-lock.yaml' ':(exclude,glob)**/package-lock.json' ':(exclude)skills-lock.json')

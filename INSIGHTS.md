@@ -13,8 +13,7 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 
 > **Consolidated 2026-09-22, -23, -24, -26 and -28** with the user's approval; settled
 > knowledge moved to docs and the `.claude/*/README.md` files, no finding dropped.
-> Prior text: `git show 438513f:INSIGHTS.md` (to -24), `git show 79836e0:INSIGHTS.md` (to -26),
-> `git show 916ddb4:INSIGHTS.md` (to -28; that pass also merged the -28 pattern entry).
+> Prior text, incl. old Session Notes: `git show <sha>:INSIGHTS.md` — 438513f, 79836e0, 916ddb4.
 
 ## What Works
 
@@ -97,6 +96,5 @@ See also — settled recipes, one line each:
 
 - 2026-09-28 — L04 lab: brainstormer + security-reviewer agents (plan, research
   sources, G9 probes: .claude/agents/README.md § Where the rules come from).
-  Earlier sessions: `git show 916ddb4:INSIGHTS.md` § Session Notes.
 
 ## Open Questions
