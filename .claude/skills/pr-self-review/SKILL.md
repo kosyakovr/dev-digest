@@ -81,6 +81,11 @@ Also specified in [routing.md](routing.md):
   requires them to change together. A one-sided edit is a synthetic **CRITICAL**
   (`source_skill: "AGENTS.md"`, `source_rule: "Cross-package invariants"`).
 - **The greps** — [greps.md](greps.md), run at two revisions and subtracted.
+- **Secret greps** — `scripts/secret-greps.sh "$MB" HEAD`: the secret-shaped
+  literals the branch adds, masked. Each file with a new hit joins group E
+  (the content trigger in routing.md), and the hits go to the E reviewer as
+  leads. Exit 1 (`INCOMPLETE`) means a pattern did not run — report it, do not
+  treat the run as clean.
 
 ## 4. Spawn reviewers
 

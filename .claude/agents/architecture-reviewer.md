@@ -181,5 +181,5 @@ Excluded: <paths and why> · Not in my scope: <paths → group B/D/E/F>
 - <candidate> — <why dropped> (or "none")
 
 ## Not checked
-- Security (E), data modelling (B), React practices (D), tests, docs — run `/pr-self-review` on the committed branch for those.
+- Security (E) → `security-reviewer` on this uncommitted change; data modelling (B), React practices (D), tests, docs — run `/pr-self-review` on the committed branch for those.
 ```

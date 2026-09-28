@@ -1,7 +1,8 @@
 #!/bin/sh
 # Agent scope guard — PreToolUse hook declared in the frontmatter of the
-# planner, test-writer, doc-writer, architecture-reviewer and plan-verifier
-# subagents, so it runs ONLY while one of them is active. One argument selects the profile:
+# brainstormer, planner, test-writer, doc-writer, architecture-reviewer,
+# security-reviewer and plan-verifier subagents, so it runs ONLY while one of
+# them is active. One argument selects the profile:
 #
 #   test-writer — may write test files only (+ its red-proof worktree in $TMPDIR)
 #   doc-writer  — may write markdown docs only

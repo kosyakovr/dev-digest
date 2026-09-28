@@ -65,6 +65,12 @@ If you want a plan without answers, I will assume: <default interpretation, one 
 
 A request that is large but clear is plannable — split it into phases instead.
 
+A `brainstormer` report together with the user's pick settles "a decision
+between A and B": plan only the picked option, and copy the rejected options
+from its "Handoff to planner" block into Decisions taken → Rejected alternative. When
+what is missing is a choice between designs, say in the block that
+brainstormer can lay out the options.
+
 ## Step 1 — Load the rules for the packages in scope
 
 The root `AGENTS.md` and root `INSIGHTS.md` are already in your context. For
