@@ -11,9 +11,10 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 - Settled knowledge moves to [docs/](docs/); this file is the draft, not the doc.
 - Captured by the `engineering-insights` skill.
 
-> **Consolidated 2026-09-22, -23, -24 and -26** with the user's approval; settled
+> **Consolidated 2026-09-22, -23, -24, -26 and -28** with the user's approval; settled
 > knowledge moved to docs and the `.claude/*/README.md` files, no finding dropped.
-> Prior text: `git show 438513f:INSIGHTS.md` (to -24), `git show 79836e0:INSIGHTS.md` (to -26).
+> Prior text: `git show 438513f:INSIGHTS.md` (to -24), `git show 79836e0:INSIGHTS.md` (to -26),
+> `git show 916ddb4:INSIGHTS.md` (to -28; that pass also merged the -28 pattern entry).
 
 ## What Works
 
@@ -24,10 +25,6 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
   and `docs/specs/*.md` name the traps. It will not cherry-pick (different base).
   Tell the user when you use it: it is someone else's homework.
 
-- 2026-09-19 — A drizzle migration can be added WITHOUT `pnpm db:generate`, and
-  hand-writing it is safer (no unrelated schema drift) → follow
-  [docs/hand-written-migrations.md](docs/hand-written-migrations.md) (proven on 0011, 0012).
-
 ## What Doesn't Work
 
 - 2026-09-26 — `main` is frozen at the revert `c6af1e4`, so a `lessons/*` branch
@@ -37,18 +34,11 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
   and that cost BEFORE fanning out, and offer a narrower base. (ref:
   .claude/skills/pr-self-review/SKILL.md § 4 Cost)
 
-- 2026-09-26 — Group E's content trigger (`process.env`, `exec(` in added lines)
-  also matches skill/docs `.md` prose and `server/test` env setup; routed to E
-  alone and then skipped as noise, 14 files went unreviewed until caught →
-  a content-only E match must ALSO keep its F route. (ref:
-  .claude/skills/pr-self-review/routing.md:32)
-
 - 2026-09-26 — A VALUE import from `@devdigest/shared` in `client/` breaks the
-  Next.js build while typecheck and vitest stay green: the vendored `index.ts`
-  re-exports `./contracts/*.js`, which webpack cannot resolve to `.ts`. In
-  `next dev` every page compiled after it then 500s, which looks like cache
-  corruption → in `client/` use `import type` only and keep runtime constants
-  local; the server may import values. (ref: client/src/vendor/shared/index.ts:17)
+  Next.js build (webpack cannot resolve its `./contracts/*.js` re-exports; `next
+  dev` then 500s like cache corruption) while typecheck and vitest stay green →
+  `client/` uses `import type` only, runtime constants stay local (the server may
+  import values). (ref: client/src/vendor/shared/index.ts:17)
 
 - 2026-09-24 — Writing a markdown file through a Bash heredoc (or `python3 - <<EOF`)
   gets DENIED by the pr-self-review gate whenever the prose merely mentions a
@@ -57,32 +47,18 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
   a stale report instead of the real cause → write file content with the
   Write/Edit tools; keep Bash for commands. (ref: .claude/hooks/pr-self-review-gate.mjs)
 
-- 2026-09-21 — A `PreToolUse` hook that exits non-zero FAILS OPEN → every hook answers
-  what it cannot handle with `{"permissionDecision":"ask"}` + exit 0
-  (`.claude/hooks/README.md` § The `node` resolution problem).
+- 2026-09-20 — Do NOT create a `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md`:
+  any one of them (even untracked) silently drops EVERY `AGENTS.md` — root and
+  all four packages — under the default `instructionFiles` mode; the settings
+  meant to keep both were NO-OPs on 2.1.278 (unverified since; now 2.1.283).
+  (ref: .claude/settings.json:2)
 
-- 2026-09-20 — Do NOT create a `CLAUDE.md` or `CLAUDE.local.md` here: the default
-  `instructionFiles` mode (`claude-md-or-agents-md`) drops EVERY `AGENTS.md` the
-  moment the project has a `CLAUDE.md` of its own, and the engine counts
-  `CLAUDE.md`, `.claude/CLAUDE.md` AND `CLAUDE.local.md` as that — so one
-  developer's untracked `CLAUDE.local.md` silently strips the root plus all four
-  package instruction files, with no warning. The settings meant to keep both
-  are NO-OPs on 2.1.278. (ref: .claude/settings.json:2)
-
-- 2026-09-19 — A Zod schema in `*/src/vendor/shared/contracts/` does NOT imply a
-  route serves it: `AgentColumn.cost_usd`, `MultiAgentRun.total_cost_usd` and
-  `AgentStats` (contracts/observability.ts:46,82,108) plus `AgentPerfRow` /
-  `AgentPerf.summary` (contracts/productionize.ts:152,177) have no server
-  implementation at all — grepping their names hits only the contract file →
-  before building UI or estimating work against a shared contract, confirm a
-  registered route in `server/src/modules/` actually returns it.
-  (ref: server/src/vendor/shared/contracts/observability.ts:46)
+- 2026-09-19 — A shared Zod contract does NOT imply a route serves it (rule in
+  `.claude/agents/planner.md` Step 2) — unserved today: `AgentColumn.cost_usd`,
+  `MultiAgentRun.total_cost_usd`, `AgentStats` (contracts/observability.ts:46,82,108),
+  `AgentPerfRow` / `AgentPerf.summary` (contracts/productionize.ts:152,177).
 
 ## Codebase Patterns
-
-- 2026-09-19 / 2026-09-22 — Cost: read the stored `agent_runs.cost_usd` (never
-  re-derive it), and NULL means "unknown", not 0 — a plain `SUM(cost_usd)`
-  understates → `server/specs/L01-run-cost.md` (§ Null semantics, why it is stored).
 
 ## Tool & Library Notes
 
@@ -91,43 +67,36 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
   `guard.sh read-only`, gets no output, and a hook comparison read every case as
   "allow" → run such loops under `bash -c '…'`, or quote each argument separately.
 
-- 2026-09-20 — `grep` here is **ugrep**: a BRE backreference dies with a non-zero
-  exit that reads like a passing check → no backreferences
-  (`.claude/skills/pr-self-review/greps.md`).
-
 See also — settled recipes, one line each:
+- Cost is the stored `agent_runs.cost_usd`, NULL = unknown (not 0) → `server/specs/L01-run-cost.md` § Null semantics.
+- A migration without `pnpm db:generate` → `docs/hand-written-migrations.md` (proven on 0011, 0012).
+- A hook exiting non-zero FAILS OPEN; answer `ask` + exit 0 → `.claude/hooks/README.md` § The `node` resolution problem.
+- Group E's content trigger must keep a file's F route → `.claude/skills/pr-self-review/routing.md` § Group E's content trigger.
 - Testing a hook end to end → `.claude/hooks/README.md` § Testing a hook end to end.
 - A FRESH headless session (`"$CLAUDE_CODE_EXECPATH" -p`) → `.claude/agents/README.md` § Changing an agent.
 - Authoring a skill (PyYAML, `skills-lock.json`) → `.claude/skills/README.md` § Authoring a skill in this repo.
 
 ## Recurring Errors & Fixes
 
-- 2026-09-26 — Hook tests that could NOT fail, three in one day: `test-gate.sh`
-  cases 1–4 asserted silence against a PASSING report (silent either way), and
-  its `run()` builds JSON with `printf '%s'`, so a command holding `"` becomes
-  unparseable input the hook answers with silence — an `expect_silent` case passes
-  vacuously → assert silence only against a FAILING report, write `"` as `\"` in
-  `run '…'` (or build the JSON in a quoted heredoc), and prove each new case red
-  against `git show HEAD:<hook>` before trusting it. (ref: .claude/hooks/test-gate.sh:72)
+- 2026-09-26 — Hook tests that could NOT fail: silence asserted against a PASSING
+  report, and a `"` in `run '…'` making the JSON unparseable (the hook is silent
+  either way) → assert silence only against a FAILING report, write `"` as `\"`,
+  and prove each new case red against `git show HEAD:<hook>` before trusting it.
+  (ref: .claude/hooks/test-gate.sh:72)
 
-- 2026-09-21 — A pattern shipped without being RUN, three times: the ugrep
-  backreference (2026-09-20), `frontend-ui-architecture` §15's `fetch(` matching
-  `refetch()`, and an e2e flow command form that does not exist (`e2e/INSIGHTS.md`
-  2026-09-22) → treat every §-numbered "Enforcement" section and new flow as
-  untested code: run it, and ship its EXPECTED output beside it (known benign
-  hits: `.claude/skills/pr-self-review/greps.md` § The patterns).
+- 2026-09-20 / -21 / -28 — Patterns shipped unrun, or run so a failure read as a
+  pass: a BRE backreference in `grep` (here **ugrep**) dies non-zero; §15's
+  `fetch(` matched `refetch()`; an e2e flow command that does not exist
+  (`e2e/INSIGHTS.md` 2026-09-22); `git grep -nE "$pat" | wc -l` counted
+  `-----BEGIN …` — read as an option, exit 129 — as "0 hits" → treat every
+  pattern and flow as untested code: run it, pass it with `-e`, no
+  backreferences, exit ≥2 = broken, prove each 0 with a planted positive, and
+  ship its EXPECTED output beside it (`greps.md` § The patterns, `scripts/secret-greps.sh`).
 
 ## Session Notes
 
-- 2026-09-26 — First full `/pr-self-review` of l03-homework (1 CRITICAL, 32 W,
-  24 S) and fixes for batches 1–4, incl. gate bypasses and guard false denials.
-- 2026-09-26 — L03 Smart Order: `GET /pulls/:id/smart-diff` + 5-role grouping and
-  inline finding markers on Files changed (spec: server/specs/L03-smart-diff.md).
-- 2026-09-24 — L02 subagents: test-writer, plan-verifier, architecture-reviewer,
-  doc-writer + `agent-scope-guard.sh`; tests moved from implementer to test-writer
-  (design and sources: .claude/agents/README.md).
-- 2026-09-19 → 23 — L01 run-cost, L02 skills + conventions (specs:
-  `server/specs/L0{1,2}-*.md`) and the `pr-self-review` / `frontend-ui-architecture`
-  skills (design: each skill's `README.md`, `docs/pr-self-review.md`).
+- 2026-09-28 — L04 lab: brainstormer + security-reviewer agents (plan, research
+  sources, G9 probes: .claude/agents/README.md § Where the rules come from).
+  Earlier sessions: `git show 916ddb4:INSIGHTS.md` § Session Notes.
 
 ## Open Questions

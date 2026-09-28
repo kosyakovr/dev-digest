@@ -202,6 +202,14 @@ ro deny  "curl"                        "$(bash_ 'curl https://example.com')"
 ro deny  "db:migrate"                  "$(bash_ 'pnpm db:migrate')"
 ro deny  "drizzle-kit push"            "$(bash_ 'pnpm exec drizzle-kit push')"
 ro deny  "docker compose down"         "$(bash_ 'docker compose down -v')"
+# ---- what brainstormer and security-reviewer depend on
+ro allow "change manifest range"       "$(bash_ 'scripts/change-manifest.sh HEAD~1 HEAD')"
+ro allow "fitness greps"               "$(bash_ 'scripts/fitness-greps.sh')"
+ro allow "secret greps range"          "$(bash_ 'scripts/secret-greps.sh HEAD~1 HEAD')"
+ro allow "secret scan on added lines"  "$(bash_ "git diff -U0 HEAD | grep -nE 'AKIA[0-9A-Z]{16}'")"
+ro allow "log all grep"                "$(bash_ "git log --all --oneline -i --grep 'smart order'")"
+ro deny  "gh api"                      "$(bash_ 'gh api repos/o/r/contents/x')"
+ro deny  "wget"                        "$(bash_ 'wget https://example.com/x')"
 
 # ================================================================ fail safe
 run_case ""          ask  "missing profile"         "$(edit Edit "$ROOT/server/test/a.test.ts")"

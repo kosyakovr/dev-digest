@@ -141,7 +141,7 @@ don't fail the whole derive), classifies with the feature model, upserts
 ## Null-cost semantics
 
 `pr_intent.cost_usd` is `NULL` when the provider didn't report a price —
-never `0`. Same rule as `agent_runs.cost_usd` (root INSIGHTS 2026-09-19):
+never `0`. Same rule as `agent_runs.cost_usd` (`server/specs/L01-run-cost.md` § Null semantics):
 `NULL` must never be read as free.
 
 ## Reviewer prompt

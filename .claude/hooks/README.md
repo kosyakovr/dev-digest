@@ -130,19 +130,19 @@ until the folder is trusted, and a `claude -p` session never counts as trusted.
 
 ## `agent-scope-guard`
 
-One `PreToolUse` hook, three profiles, declared in the frontmatter of five
+One `PreToolUse` hook, three profiles, declared in the frontmatter of seven
 agents — it runs **only while one of them is active**:
 
 | Agent | Hook command |
 |---|---|
 | [`test-writer`](../agents/test-writer.md) | `agent-scope-guard.sh test-writer` |
 | [`doc-writer`](../agents/doc-writer.md) | `agent-scope-guard.sh doc-writer` |
-| [`planner`](../agents/planner.md), [`plan-verifier`](../agents/plan-verifier.md), [`architecture-reviewer`](../agents/architecture-reviewer.md) | `agent-scope-guard.sh read-only` |
+| [`brainstormer`](../agents/brainstormer.md), [`planner`](../agents/planner.md), [`plan-verifier`](../agents/plan-verifier.md), [`architecture-reviewer`](../agents/architecture-reviewer.md), [`security-reviewer`](../agents/security-reviewer.md) | `agent-scope-guard.sh read-only` |
 
 | File | Role |
 |---|---|
 | `agent-scope-guard.sh` | The guard. POSIX `sh`, no `node`; `jq` when present, `sed` fallback otherwise — the same parser as `implementer-guard.sh`. |
-| `test-agent-scope-guard.sh` | 256 offline checks (126 cases × jq/sed, plus 4 outside that loop: no `CLAUDE_PROJECT_DIR`, three under `env -i`). |
+| `test-agent-scope-guard.sh` | 282 offline checks (139 cases × jq/sed, plus 4 outside that loop: no `CLAUDE_PROJECT_DIR`, three under `env -i`). |
 
 One script rather than four: the Bash rules are identical, and separate copies
 would drift. `implementer-guard.sh` stays separate because it is already
