@@ -4,7 +4,7 @@
  * truncation, and ordering (before the diff).
  */
 import { describe, it, expect } from 'vitest';
-import { assemblePrompt } from '../src/prompt.js';
+import { assemblePrompt, DIFF_LINE_NUMBER_RULE } from '../src/prompt.js';
 
 function userOf(parts: Parameters<typeof assemblePrompt>[0]): string {
   const { messages } = assemblePrompt(parts);
@@ -136,5 +136,51 @@ describe('assemblePrompt — L03 section metadata', () => {
     for (const s of sections) {
       expect(s.fingerprint).toBe(`h${s.chars}`);
     }
+  });
+});
+
+/**
+ * L03 — the trusted line-number rule on `## Diff to review`. Per spec
+ * (L03-numbered-diff.md § Contract "Prompt"): a trusted instruction, OUTSIDE
+ * the untrusted wrapper, telling the model to cite the printed gutter numbers
+ * instead of counting from the `@@` header. `assemblePrompt` never numbers
+ * `parts.diff` itself (that is `run.ts`'s job) — this only checks the rule text
+ * and its placement.
+ */
+describe('assemblePrompt — ## Diff to review line-number rule', () => {
+  it('AC-10: the user message ends with exactly "## Diff to review" + the rule + the untrusted wrapper', () => {
+    const user = assemblePrompt({ system: 'S', diff: 'D' }).messages[1]!.content;
+    expect(
+      user.endsWith(
+        '## Diff to review\n' + DIFF_LINE_NUMBER_RULE + '\n<untrusted source="diff">\nD\n</untrusted>',
+      ),
+    ).toBe(true);
+  });
+
+  it('states: cite the printed gutter number, never count from the @@ header, cite deleted code by a printed number', () => {
+    const user = assemblePrompt({ system: 'S', diff: 'D' }).messages[1]!.content;
+    const headerIdx = user.indexOf('## Diff to review');
+    const wrapperIdx = user.indexOf('<untrusted source="diff">');
+    expect(headerIdx).toBeGreaterThan(-1);
+    expect(wrapperIdx).toBeGreaterThan(headerIdx);
+
+    for (const phrase of [
+      'its line number in the new file',
+      'Never count lines from the @@ hunk header',
+      'cite the nearest printed number in the same hunk',
+      'prints its number on its @@ line (0 when the whole file was deleted)',
+    ]) {
+      const idx = user.indexOf(phrase);
+      expect(idx).toBeGreaterThan(headerIdx);
+      expect(idx).toBeLessThan(wrapperIdx);
+    }
+  });
+
+  it('AC-10: the rule appears exactly once in the user message, and never in the system message', () => {
+    const { messages } = assemblePrompt({ system: 'S', diff: 'D' });
+    const [system, user] = [messages[0]!.content, messages[1]!.content];
+    const occurrences = user.split(DIFF_LINE_NUMBER_RULE).length - 1;
+    expect(occurrences).toBe(1);
+    expect(system).not.toContain(DIFF_LINE_NUMBER_RULE);
   });
 });

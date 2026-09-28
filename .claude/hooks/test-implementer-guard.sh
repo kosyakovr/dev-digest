@@ -113,6 +113,15 @@ run_case allow "read migrations"           "$(bash_ 'ls server/src/db/migrations
 run_case allow "diff vendored contracts"   "$(bash_ 'diff -r server/src/vendor/shared client/src/vendor/shared')"
 run_case allow "docker check"              "$(bash_ 'docker info >/dev/null 2>&1 && echo up')"
 run_case allow "vitest update flag"        "$(bash_ 'pnpm exec vitest run --update')"
+run_case allow "quoted test name with up"  "$(bash_ "pnpm exec vitest run -t 'rolls up costs'")"
+run_case allow "git grep for db:generate"  "$(bash_ "git grep -n 'db:generate' -- docs")"
+run_case deny  "unquoted pnpm up still"    "$(bash_ 'pnpm up zod')"
+# An apostrophe inside double quotes must not hide a later dependency change.
+APOS_ADD=$(cat <<'JSON'
+{"tool_name":"Bash","tool_input":{"command":"grep -n \"isn't\" a.md && pnpm add zod && echo 'x'","description":"x"}}
+JSON
+)
+run_case deny  "apostrophe then pnpm add"  "$APOS_ADD"
 run_case allow "unknown tool"              '{"tool_name":"Read","tool_input":{"file_path":"/repo/server/pnpm-lock.yaml"}}'
 
 # ---- Fail safe

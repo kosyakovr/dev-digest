@@ -44,7 +44,7 @@ delimiter-wrapped (`prompt.ts:104-122`):
 ## Repo skeleton         (untrusted, repo-derived)
 ## Project context       (untrusted spec chunks)
 ## Callers of changed symbols  (untrusted, repo-derived)
-## Diff to review        (untrusted)
+## Diff to review        (trusted line-number rule + untrusted numbered diff)
 ```
 
 Sections with no content are omitted. Everything repo- or author-derived is wrapped
@@ -59,6 +59,48 @@ line per prompt with each section's name, source, role, untrusted flag, char
 count and a 12-hex fingerprint — never the section text itself. Comparing
 fingerprints across runs is the fastest way to spot prompt drift (a section
 that changed shape without a code change).
+
+## Numbered diff (line-number gutter)
+
+The model never has to count down from a `@@ -a,b +c,d @@` hunk header — it
+miscounts, and grounding then keeps the model's wrong line (context lines are
+part of the hunk too). Before the diff reaches `assemblePrompt`, `run.ts` runs
+it through `numberDiff` (`reviewer-core/src/review/numbered-diff.ts`), which
+prints every line's own new-file line number in a 6-column, right-aligned
+gutter plus one space (`"   446 "`); a line with no new-file number — a
+`diff --git`/`---`/`+++` header, a `@@` header itself, a deleted `-` line, or a
+`\ No newline at end of file` marker — gets a blank gutter (7 spaces) instead.
+The counter restarts at each `@@` header, from that hunk's new-file start. One
+exception: a hunk that only deletes lines has nothing numbered in its body, so
+its `@@` line prints the hunk's new-file start (`     9 @@ -10,2 +9,0 @@`, `0`
+for a deleted file) — the number to cite for that removed code, and the one
+line grounding accepts for such a hunk.
+Example (PR #5, `events-map.component.ts`):
+
+```
+@@ -443,6 +443,8 @@ export class EventsMapComponent
+   443      */
+   444      private eventNamesMapping: EventNamesMap | null = null;
+   445 
+   446 +    private gmapApiKey = '…'; // test issue 1
+   447 +
+   448      get eventsSearchControl() {
+```
+
+`## Diff to review` therefore carries two things: a **trusted** instruction
+(`DIFF_LINE_NUMBER_RULE`, pushed by `assemblePrompt` itself, outside the
+`<untrusted>` wrapper — the model can never be told by diff content to ignore
+it) telling the model to read `start_line`/`end_line` off the printed gutter,
+never the hunk header, and to cite deleted code by the nearest printed number
+in its hunk (the `@@` anchor when the hunk only deletes); followed by the
+**untrusted**, numbered diff. `numberDiff` and `parseUnifiedDiff`'s
+`newLineNumbers` — the exact set citation grounding checks — are both derived
+from one parse (`reviewer-core/src/diff/parse.ts`'s `parseDiff`), so they
+cannot disagree with each other by construction, and a number the model copies
+verbatim always survives grounding. A `+++`/`--- ` line inside a hunk is
+content, not a file header — it is classified as a plain addition/deletion
+like any other `+`/`-` line, only real `--- `/`+++ ` headers (outside a hunk)
+are exempt.
 
 ## Skill ordering
 
@@ -138,7 +180,8 @@ numbers and gates from what the model returns:
   findings list. The model's self-reported score is ignored.
 - **Findings are citation-grounded**: a finding whose line range doesn't intersect a
   real diff hunk is dropped (`grounding.ts`). Cite real `file:line` from the diff or
-  the finding disappears.
+  the finding disappears — the cited line must be the number printed in the
+  diff's gutter (see § Numbered diff), never a line counted from the `@@` header.
 - **`verdict` is currently passed through from the model** (`run.ts:208`). That is
   why a wrong verdict reaches the UI unchanged — and why the verdict convention
   above is load-bearing until/unless the verdict is also derived deterministically.

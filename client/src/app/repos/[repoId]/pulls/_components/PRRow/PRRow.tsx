@@ -51,7 +51,17 @@ export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
       </div>
       <div style={s.scoreCell}>
         {reviewed ? (
-          <CircularScore score={pr.score!} size={34} stroke={3} />
+          <div style={s.scoreStack}>
+            <CircularScore score={pr.score!} size={34} stroke={3} />
+            {pr.score_partial && (
+              <span style={s.scorePartial} title={t("list.scorePartialHint")}>
+                {t("list.scorePartial")}
+                {/* The reason as text, not only `title`, so keyboard, touch and
+                    screen-reader users get it too. */}
+                <span style={s.srOnly}> — {t("list.scorePartialHint")}</span>
+              </span>
+            )}
+          </div>
         ) : (
           <span style={s.muted}>—</span>
         )}

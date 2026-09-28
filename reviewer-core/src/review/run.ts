@@ -14,6 +14,8 @@ import {
   type PromptSection,
 } from '../prompt.js';
 import { groundFindings, groundingSummary } from '../grounding.js';
+import { parseDiff } from '../diff/parse.js';
+import { numberDiff, renderNumberedLines } from './numbered-diff.js';
 import { reduceReviews, scoreFromFindings, sliceDiff } from './reduce.js';
 
 /**
@@ -234,14 +236,35 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
       ? { fingerprint: input.promptTelemetry.fingerprint }
       : undefined;
 
+  // Every diff that reaches the LLM is numbered (L03 — grounding citations
+  // must match a real line, never a hunk-header-counted guess). Parsed ONCE;
+  // the whole-diff text and every map-reduce chunk's text are rendered from
+  // this one parse rather than re-parsed per chunk. For any path this is
+  // byte-identical to `numberDiff(sliceDiff(input.diff, path))` (see
+  // numbered-diff.ts's `renderNumberedLines`) — `numberDiffForPath` below
+  // falls back to that slower, always-correct form if a path from
+  // `input.diff.files` somehow isn't one of THIS parse's files (e.g. a diff
+  // hand-built for a test rather than produced from `raw`).
+  const parsedDiff = parseDiff(input.diff.raw);
+  const numberedWhole = renderNumberedLines(parsedDiff.lines);
+  const numberDiffForPath = (path: string): string => {
+    const pf = parsedDiff.files.find((f) => f.path === path);
+    return pf
+      ? renderNumberedLines(parsedDiff.lines.slice(pf.start, pf.end))
+      : numberDiff(sliceDiff(input.diff, path));
+  };
+
   // Whole-diff assembly is the trace default; overwritten below for single-pass.
-  const wholeDiffAssembled = assemblePrompt({ ...promptParts, diff: input.diff.raw }, fingerprintOpts);
+  const wholeDiffAssembled = assemblePrompt({ ...promptParts, diff: numberedWhole }, fingerprintOpts);
   let assembly: PromptAssembly = wholeDiffAssembled.assembly;
 
+  // Every file gets a chunk, deleted and deletions-only ones included: removed
+  // code can be the defect, and a hunk with no new-side lines still grounds
+  // against its declared range (grounding.ts buildLineIndex).
   const chunks =
     mode === 'map-reduce'
-      ? input.diff.files.map((f) => ({ label: f.path, diffText: sliceDiff(input.diff, f.path) }))
-      : [{ label: 'all files', diffText: input.diff.raw }];
+      ? input.diff.files.map((f) => ({ label: f.path, diffText: numberDiffForPath(f.path) }))
+      : [{ label: 'all files', diffText: numberedWhole }];
 
   emit(
     'info',
@@ -264,7 +287,7 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
             ? {
                 diffFiles: input.diff.files.map((f) => ({
                   path: f.path,
-                  chars: sliceDiff(input.diff, f.path).length,
+                  chars: numberDiffForPath(f.path).length,
                 })),
               }
             : {}),

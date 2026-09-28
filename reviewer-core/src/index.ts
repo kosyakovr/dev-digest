@@ -36,8 +36,24 @@ export {
   type ParseResult,
 } from './llm/structured.js';
 
+// Unified-diff parsing — the single count-driven parse `numberDiff`, `sliceDiff`
+// and the engine's map-reduce chunking are all derived from (L03).
+export {
+  parseDiff,
+  parseUnifiedDiff,
+  type DiffLineKind,
+  type ParsedDiffLine,
+  type ParsedHunk,
+  type ParsedFile,
+  type ParsedDiff,
+} from './diff/parse.js';
+
 // Map-reduce helpers (reduce partials, slice a file's diff).
-export { reduceReviews, sliceDiff } from './review/reduce.js';
+export { reduceReviews, scoreFromFindings, sliceDiff } from './review/reduce.js';
+
+// Print each diff line's new-file line number in a gutter (L03 — grounding
+// citations must match a real line, not a hunk-header-counted guess).
+export { numberDiff } from './review/numbered-diff.js';
 
 // The engine entry point: given (diff + resolved agent inputs + LLM) → grounded Review.
 export {

@@ -1,4 +1,5 @@
 import type { Finding, Review, UnifiedDiff } from '@devdigest/shared';
+import { parseDiff } from '../diff/parse.js';
 
 /**
  * Reduce + slice helpers for map-reduce reviews. Pure (no DB / `this`), so they
@@ -23,9 +24,22 @@ const SEVERITY_PENALTY: Record<Finding['severity'], number> = {
  * This mirrors how the review *event* is already computed from severities in
  * `to-review.ts`, so the number on screen can never contradict the findings
  * beneath it.
+ *
+ * Takes anything with a `severity`, so the server's PR list can score stored
+ * finding rows (free-text severity) with this same formula; an unknown
+ * severity costs nothing, as it counts in no severity bucket either.
  */
-export function scoreFromFindings(findings: Finding[]): number {
-  const penalty = findings.reduce((sum, f) => sum + (SEVERITY_PENALTY[f.severity] ?? 0), 0);
+export function scoreFromFindings(findings: { severity: string }[]): number {
+  // `Object.hasOwn`, not `?? 0`: a free-text severity such as 'constructor'
+  // would otherwise read an inherited Object.prototype function (→ NaN).
+  const penalty = findings.reduce(
+    (sum, f) =>
+      sum +
+      (Object.hasOwn(SEVERITY_PENALTY, f.severity)
+        ? SEVERITY_PENALTY[f.severity as Finding['severity']]
+        : 0),
+    0,
+  );
   return Math.max(0, Math.min(100, 100 - penalty));
 }
 
@@ -54,18 +68,31 @@ export function reduceReviews(partials: Review[]): Review {
   return { verdict, score, summary, findings };
 }
 
-/** Extract the slice of the unified diff for a single file (for map chunks). */
+/**
+ * Extract the slice of the unified diff for a single file (for map chunks).
+ * Matches the parsed file whose path is EXACTLY `path` — not a substring, so
+ * `x.ts` never also pulls in `sub/b/x.ts` the way matching on `b/${path}`
+ * used to (L03).
+ */
 export function sliceDiff(diff: UnifiedDiff, path: string): string {
-  const lines = diff.raw.split('\n');
-  const out: string[] = [];
-  let capture = false;
-  for (const line of lines) {
-    if (line.startsWith('diff --git'))
-      capture = line.includes(`b/${path}`) || line.includes(` ${path}`);
-    if (capture) out.push(line);
+  const parsed = parseDiff(diff.raw);
+  const file = parsed.files.find((f) => f.path === path);
+  if (file) {
+    const blockLines = parsed.lines.slice(file.start, file.end);
+    const text = blockLines.map((l) => l.text).join('\n');
+    // When the block's own last physical line is itself an empty string (a
+    // real blank context/other line — not the last file in `diff.raw`), that
+    // is otherwise indistinguishable, once re-split by `parseDiff`, from text
+    // that merely ENDS in `\n`: `parseDiff` (parse.ts) deliberately drops that
+    // as the whole-string trailing-newline artifact, silently eating the real
+    // empty line underneath (F3). Appending one more `\n` restores the round
+    // trip — `parseDiff` then drops ITS (correct) artifact instead and
+    // recovers the real one. A non-empty last line is unaffected: `text`
+    // already doesn't end in `\n`, so nothing changes for it.
+    return blockLines.length > 0 && blockLines[blockLines.length - 1]!.text === '' ? text + '\n' : text;
   }
-  if (out.length > 0) return out.join('\n');
-  // fallback: synthesize from the file's hunks
+  // fallback: synthesize from the file's hunks (no matching block in `raw` —
+  // e.g. a hand-built UnifiedDiff in a test)
   const f = diff.files.find((x) => x.path === path);
   if (!f) return diff.raw;
   return `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}`;
