@@ -29,6 +29,11 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## Tool & Library Notes
 
+- 2026-09-29 — vitest fake timers: `await vi.advanceTimersByTimeAsync(N)` settles a
+  rejection BEFORE a later `await expect(p).rejects…` attaches — the test reports
+  "passed" but a `PromiseRejectionHandledWarning` makes the run exit non-zero →
+  create `const assertion = expect(p).rejects.toThrow(…)` first, advance the
+  timers, then `await assertion`. (ref: mcp/test/use-cases/run-review.test.ts:172,196)
 - 2026-09-29 — `@modelcontextprotocol/sdk` 1.31.0: a `registerTool` handler must
   return something assignable to its `z.infer`'d `CallToolResult`, which carries
   an index signature — a hand-written result interface fails with a deep nested

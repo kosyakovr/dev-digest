@@ -41,7 +41,27 @@ Three reasons this beats a hand-maintained baseline table:
 - **`git grep` uses git's own regex engine**, so patterns behave identically in a
   Bash tool call (where `grep` is ugrep here), in the hook's plain shell (BSD
   grep), and in CI (GNU grep). This sidesteps the ugrep backreference trap
-  recorded in the root `INSIGHTS.md` entirely.
+  (§ Before you trust a pattern) entirely.
+
+## Before you trust a pattern
+
+A pattern is untested code. Each of these read a failure as "0 hits" at least once
+(moved here from the root `INSIGHTS.md`, 2026-09-20 / -21 / -28 / -29):
+
+- **A BRE backreference dies non-zero** in `grep`, which is **ugrep** in the Bash
+  tool — use none; `git grep -E` avoids it.
+- **`fetch(` matched `refetch()`** — anchor the token (`[^a-zA-Z.]fetch\(`).
+- **A pattern starting with `-` is read as an option**: `-----BEGIN …` made
+  `git grep -nE "$pat" | wc -l` exit 129 and count "0 hits" → always pass it with `-e`.
+- **Exit codes:** `git grep` 1 = no match, **≥ 2 = a broken pattern**, never "clean".
+- **Plain `git grep` skips untracked files**, so every check over a new, uncommitted
+  package (`mcp/`) was silent → `--untracked` on a working tree
+  (`scripts/fitness-greps.sh` `hits()` already passes it).
+- **Prove each 0 with a planted positive** and ship the EXPECTED output beside the
+  pattern (§ The patterns, `scripts/secret-greps.sh --self-test`).
+
+The same holds for e2e flows: a flow command that does not exist ran "green"
+(`e2e/INSIGHTS.md` 2026-09-22).
 
 ## Scoping a new hit
 

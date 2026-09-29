@@ -143,5 +143,84 @@ describe('runReview (use case, no SDK)', () => {
 
       expect(fake.calls.filter((c) => c.method === 'startReview')).toHaveLength(1);
     });
+
+    // generic-1-6 — the StaleIdError retry re-resolves through the SAME
+    // resolveUnderBudget helper used before the first POST (spec Tool 2 §
+    // Timing, § Resolver § cache invalidation), so a deadline abort or an
+    // exhausted budget during re-resolution surfaces E19 with no second
+    // startReview, and a caller abort during re-resolution still returns
+    // null — never a bare "Cancelled." escaping the E19 mapping.
+    it('a deadline abort during the retry re-resolution surfaces E19 and makes no second startReview call (generic-1-6)', async () => {
+      vi.useFakeTimers();
+      const fake = makeFake();
+      fake.script('startReview', { error: new StaleIdError(PR_ID, `/pulls/${PR_ID}/review`) });
+      // First resolveUnderBudget (before the failing POST) resolves fast;
+      // the retry's re-resolution (after invalidate()) is still in flight
+      // when the 1 s deadline fires.
+      fake.script('listRepos', { delayMs: 0 });
+      fake.script('listRepos', { delayMs: 5_000 });
+
+      const resultPromise = runReview({ api: fake, resolver: new Resolver(fake) }, input, {
+        signal: new AbortController().signal,
+        deadlineMs: 1_000,
+        confirmTimeoutMs: 100,
+      });
+      // Attach the rejection assertion BEFORE advancing timers, so it settles
+      // the promise the instant it rejects — otherwise fake-timer advancement
+      // can reject `resultPromise` in the same tick Node checks for unhandled
+      // rejections, before the `await expect(...).rejects` line below runs.
+      const assertion = expect(resultPromise).rejects.toThrow(
+        'Resolving acme/payments-api#482 took longer than the 1 s budget allows (GitHub sync). No review was started; retry.',
+      );
+      await vi.advanceTimersByTimeAsync(1_500);
+      await assertion;
+
+      expect(fake.calls.filter((c) => c.method === 'startReview')).toHaveLength(1);
+    });
+
+    it('a retry re-resolution finishing with less than confirmTimeoutMs left surfaces E19 and makes no second startReview call (generic-1-6)', async () => {
+      vi.useFakeTimers();
+      const fake = makeFake();
+      fake.script('startReview', { error: new StaleIdError(PR_ID, `/pulls/${PR_ID}/review`) });
+      // The retry's re-resolution finishes at ~1.75 s — inside the 2 s
+      // deadline (no abort), but past the 1.7 s budget threshold (2 s
+      // deadline - 300 ms confirmTimeoutMs).
+      fake.script('listRepos', { delayMs: 0 });
+      fake.script('listRepos', { delayMs: 1_750 });
+
+      const resultPromise = runReview({ api: fake, resolver: new Resolver(fake) }, input, {
+        signal: new AbortController().signal,
+        deadlineMs: 2_000,
+        confirmTimeoutMs: 300,
+      });
+      const assertion = expect(resultPromise).rejects.toThrow(
+        'Resolving acme/payments-api#482 took longer than the 2 s budget allows (GitHub sync). No review was started; retry.',
+      );
+      await vi.advanceTimersByTimeAsync(1_900);
+      await assertion;
+
+      expect(fake.calls.filter((c) => c.method === 'startReview')).toHaveLength(1);
+    });
+
+    it('returns null and makes no further port call when the caller aborts during the retry re-resolution (generic-1-6)', async () => {
+      const fake = makeFake();
+      fake.script('startReview', { error: new StaleIdError(PR_ID, `/pulls/${PR_ID}/review`) });
+      fake.script('listRepos', { delayMs: 0 });
+      fake.script('listRepos', { delayMs: 500 });
+
+      const controller = new AbortController();
+      const resultPromise = runReview({ api: fake, resolver: new Resolver(fake) }, input, {
+        signal: controller.signal,
+      });
+      await waitFor(() => fake.calls.filter((c) => c.method === 'listRepos').length === 2);
+      controller.abort();
+
+      const result = await resultPromise;
+
+      expect(result).toBeNull();
+      expect(fake.calls.filter((c) => c.method === 'startReview')).toHaveLength(1);
+      expect(fake.calls.filter((c) => c.method === 'listPulls')).toHaveLength(1);
+      expect(fake.calls.filter((c) => c.method === 'listAgents')).toHaveLength(1);
+    }, 10_000);
   });
 });

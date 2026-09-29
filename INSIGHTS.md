@@ -78,6 +78,7 @@ See also — settled recipes, one line each:
 - Testing a hook end to end → `.claude/hooks/README.md` § Testing a hook end to end.
 - A FRESH headless session (`"$CLAUDE_CODE_EXECPATH" -p`) → `.claude/agents/README.md` § Changing an agent.
 - Authoring a skill (PyYAML, `skills-lock.json`) → `.claude/skills/README.md` § Authoring a skill in this repo.
+- A grep pattern or e2e flow that "found nothing" (ugrep backreference, `refetch()`, `-e`, exit ≥2, `--untracked`, planted positive; 2026-09-20…-29) → `.claude/skills/pr-self-review/greps.md` § Before you trust a pattern.
 - A Zod contract ≠ a served route → `.claude/agents/planner.md` Step 2; unserved (2026-09-19): `AgentColumn.cost_usd`, `MultiAgentRun.total_cost_usd`, `AgentStats` (contracts/observability.ts:46,82,108), `AgentPerfRow` / `AgentPerf.summary` (contracts/productionize.ts:152,177).
 
 ## Recurring Errors & Fixes
@@ -87,19 +88,6 @@ See also — settled recipes, one line each:
   either way) → assert silence only against a FAILING report, write `"` as `\"`,
   and prove each new case red against `git show HEAD:<hook>` before trusting it.
   (ref: .claude/hooks/test-gate.sh:72)
-
-- 2026-09-20 / -21 / -28 / -29 — Patterns shipped unrun, or run so a failure read as a
-  pass: a BRE backreference in `grep` (here **ugrep**) dies non-zero; §15's
-  `fetch(` matched `refetch()`; an e2e flow command that does not exist
-  (`e2e/INSIGHTS.md` 2026-09-22); `git grep -nE "$pat" | wc -l` counted
-  `-----BEGIN …` — read as an option, exit 129 — as "0 hits"; plain `git grep`
-  skips UNTRACKED files, so every check over the uncommitted `mcp/` was silent →
-  treat every pattern and flow as untested code: run it, pass it with `-e`, no
-  backreferences, exit ≥2 = broken, `--untracked` on an uncommitted tree
-  (`fitness-greps.sh:44` does), prove each 0 with a planted positive, and
-  ship its EXPECTED output beside it (`greps.md` § The patterns, `scripts/secret-greps.sh`).
-- 2026-09-29 — Correction to the line above: `--untracked` is in `fitness-greps.sh`
-  `hits()` (:46, not :44), and it predates the mcp/ change. (pr-self-review generic-2-4)
 
 ## Session Notes
 

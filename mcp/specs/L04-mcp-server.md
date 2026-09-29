@@ -145,11 +145,20 @@ Every `src/**/*.ts` opens with a `/**` docblock naming its ring (`Contracts` |
 - **Description:** `Run one DevDigest reviewer agent on a pull request (code review) and wait up to ~100 s for findings; if still running, returns run_id for devdigest_get_findings. Paid LLM calls; one agent per call.`
 - **Input:** `pr`, `agent`, `limit` (1-50, default 10).
 - **Annotations:** `readOnlyHint:false, destructiveHint:false, idempotentHint:false, openWorldHint:true`.
-- **Timing** (from handler start `t0`; worst case 116 s < 120 s):
+- **Timing** (from handler start `t0`; worst case
+  `RUN_DEADLINE_MS + 2 × CONFIRM_TIMEOUT_MS` = 116 s < 120 s):
   1. Resolve `pr` then `agent` under a combined signal with deadline
      `t0 + RUN_DEADLINE_MS` (100 s). If the deadline fired, or fewer than
-     `CONFIRM_TIMEOUT_MS` (8 s) remain, return E19 without POSTing.
-  2. `POST /pulls/:id/review {agentId}` capped at 8 s.
+     `CONFIRM_TIMEOUT_MS` (8 s) remain, return E19 without POSTing. This
+     resolve-then-budget-check is one helper (`resolveUnderBudget` in
+     `src/use-cases/run-review.ts`); a caller abort during it returns `null`,
+     a deadline abort or an exhausted budget returns E19.
+  2. `POST /pulls/:id/review {agentId}` capped at 8 s. On a `StaleIdError`
+     (cached `pr`/`agent` id gone — see Resolver § cache invalidation), the
+     use case invalidates the resolver cache and calls the SAME
+     `resolveUnderBudget` helper again before the single retry POST, so the
+     retry never starts with less than `CONFIRM_TIMEOUT_MS` left before the
+     deadline; at most one retry, and only before any POST has succeeded.
   3. `GET /runs/:run_id/events` until the stream closes or the deadline passes.
   4. `GET /pulls/:id/runs` (8 s cap).
   5. On `done`: `GET /pulls/:id/reviews` (8 s cap).
@@ -213,10 +222,16 @@ Every `src/**/*.ts` opens with a `/**` docblock naming its ring (`Contracts` |
   a second failure surfaces the E10 text. This is safe for
   `devdigest_run_review` because a `StaleIdError` from `POST
   /pulls/:id/review` means no run was started — the retry only ever runs
-  before a successful POST, never after. The same pattern applies to a
-  `StaleRepoIdError` from `listPulls` (PR resolution by `owner/repo#N`, inside
-  `prByRef`) and from `listConventions` (`devdigest_get_conventions`) — both
-  read-only, so a safe retry.
+  before a successful POST, never after. In `run-review.ts` the re-resolve is
+  not a bare resolver call: it goes through the same `resolveUnderBudget`
+  helper used before the first POST (Tool 2 § Timing), so the retry POST is
+  budget-guarded exactly like the first one — a deadline abort during
+  re-resolution surfaces E19 (not a plain caller-abort `null`), a caller abort
+  still returns `null`, and a retry never starts with less than
+  `CONFIRM_TIMEOUT_MS` left. The same pattern applies to a `StaleRepoIdError`
+  from `listPulls` (PR resolution by `owner/repo#N`, inside `prByRef`) and
+  from `listConventions` (`devdigest_get_conventions`) — both read-only, so a
+  safe retry; these two have no run-deadline budget to guard.
 
 ### Config and constants
 - `DEVDIGEST_API_BASE`, default `http://localhost:3001`, trailing `/` stripped.

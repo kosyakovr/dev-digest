@@ -16,8 +16,8 @@
 # read the line yourself, and never print the whole match.
 #
 # Every pattern goes through `-e`: `-----BEGIN …` is otherwise read as an
-# option, and a `| wc -l` turns that error into "0 hits" (root INSIGHTS.md
-# 2026-09-28). git grep exit 1 = no match; ≥2 = a broken pattern, reported as
+# option, and a `| wc -l` turns that error into "0 hits" (greps.md § Before
+# you trust a pattern). git grep exit 1 = no match; ≥2 = a broken pattern, reported as
 # ERROR — the script then exits 1 so the gap cannot pass for a clean result.
 #
 # Expected output at 916ddb4, `scripts/secret-greps.sh HEAD~1 HEAD`: every row
@@ -30,7 +30,7 @@ set -uo pipefail
 ROOT=$(git rev-parse --show-toplevel)
 cd "$ROOT"
 
-# id|ERE — POSIX classes only, no backreferences (ugrep, root INSIGHTS.md 2026-09-20).
+# id|ERE — POSIX classes only, no backreferences (ugrep; greps.md § Before you trust a pattern).
 # `read -d ''`, not `$(cat <<'EOF' …)`: macOS /bin/bash 3.2 parses a heredoc body
 # inside $(…) for quotes, and the unpaired ' and " below abort the whole script.
 IFS= read -r -d '' PATTERNS <<'EOF' || true

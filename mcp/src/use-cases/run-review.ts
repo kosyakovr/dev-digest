@@ -53,7 +53,14 @@ export async function runReview(
   const deadlineTimer = setTimeout(() => deadlineController.abort(), deadlineMs);
   const combined = AbortSignal.any([ctx.signal, deadlineController.signal]);
 
-  try {
+  /** Resolves `pr`/`agent` under the combined signal, then re-checks the
+   * budget (elapsed > deadlineMs - confirmTimeoutMs, or the deadline already
+   * fired): returns `null` on a caller abort (before or after resolving),
+   * throws E19 if the budget is gone, otherwise returns the resolved refs.
+   * Called before the first `startReview` POST, and again — after
+   * `invalidate()` — before the `StaleIdError` retry POST, so a retry never
+   * starts with less than `confirmTimeoutMs` left before the deadline. */
+  async function resolveUnderBudget(): Promise<{ pr: PrRef; agentRef: AgentRef } | null> {
     let pr: PrRef;
     let agentRef: AgentRef;
     try {
@@ -68,10 +75,18 @@ export async function runReview(
     }
 
     if (ctx.signal.aborted) return null;
-    const elapsedAfterResolve = Date.now() - t0;
-    if (deadlineController.signal.aborted || elapsedAfterResolve > deadlineMs - confirmTimeoutMs) {
+    const elapsed = Date.now() - t0;
+    if (deadlineController.signal.aborted || elapsed > deadlineMs - confirmTimeoutMs) {
       throw resolutionBudgetExceeded(input.pr, Math.round(deadlineMs / 1000));
     }
+    return { pr, agentRef };
+  }
+
+  try {
+    const resolved = await resolveUnderBudget();
+    if (resolved === null) return null;
+    let pr = resolved.pr;
+    let agentRef = resolved.agentRef;
 
     const startWithCurrentIds = (): ReturnType<DevDigestApi['startReview']> =>
       deps.api.startReview(pr.id, agentRef.id, { signal: ctx.signal, timeoutMs: confirmTimeoutMs });
@@ -83,11 +98,14 @@ export async function runReview(
       if (!(err instanceof StaleIdError)) throw err;
       // The cached pr/agent id no longer exists (e.g. the repo was deleted
       // and re-added in the web app). No run was started — safe to
-      // invalidate, re-resolve, and retry once; a second failure surfaces
-      // the proper E-text (never retried again after this).
+      // invalidate, re-resolve under the same budget check, and retry once;
+      // a second failure surfaces the proper E-text (never retried again
+      // after this).
       deps.resolver.invalidate();
-      pr = await deps.resolver.pr(input.pr, combined);
-      agentRef = await deps.resolver.agent(input.agent, combined);
+      const reResolved = await resolveUnderBudget();
+      if (reResolved === null) return null;
+      pr = reResolved.pr;
+      agentRef = reResolved.agentRef;
       target = await startWithCurrentIds();
     }
 

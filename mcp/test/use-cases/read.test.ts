@@ -13,7 +13,7 @@ import { getFindings } from '../../src/use-cases/get-findings.js';
 import { getConventions } from '../../src/use-cases/get-conventions.js';
 import { StaleIdError, StaleRepoIdError } from '../../src/errors.js';
 import { ListAgentsOutput, GetFindingsOutput, GetConventionsOutput } from '../../src/contracts.js';
-import { GR_ID, GR_NAME, PR_ID, PR_LABEL, PR_TITLE, REPO_FULL_NAME, REPO_ID, RUN_ID, makeFake } from '../helpers/fixtures.js';
+import { GR_ID, GR_NAME, PR_ID, PR_LABEL, PR_NUMBER, PR_TITLE, REPO_FULL_NAME, REPO_ID, RUN_ID, makeFake } from '../helpers/fixtures.js';
 
 describe('use cases run without the SDK, fetch or an McpServer', () => {
   it('listAgents returns the projected agents list', async () => {
@@ -84,11 +84,19 @@ describe('use cases run without the SDK, fetch or an McpServer', () => {
   // retry once; a second failure surfaces the E10 text (spec § Resolver §
   // cache invalidation).
   describe('getFindings recovers from a stale cached PR id (generic-1-2)', () => {
-    it('invalidates, re-resolves, and retries once on a StaleIdError from listReviews', async () => {
+    it('invalidates, re-resolves, and retries once on a StaleIdError from listReviews, resolving under the PR\'s new id', async () => {
       const fake = makeFake();
-      fake.script('listReviews', { error: new StaleIdError(PR_ID, `/pulls/${PR_ID}/reviews`) });
-      fake.reviews[PR_ID] = [];
       const resolver = new Resolver(fake);
+      // Warm the resolver's PR cache under the OLD id, as it would be after
+      // an earlier call in the same process — the stale id (generic-2-6)
+      // must come from a real cache/refetch mismatch, not just a differently
+      // shaped fixture the fallback happens to already match.
+      await resolver.pr('acme/payments-api#482');
+
+      const NEW_PR_ID = 'aabbccdd-1111-4aaa-8aaa-aabbccddeeff';
+      fake.script('listReviews', { error: new StaleIdError(PR_ID, `/pulls/${PR_ID}/reviews`) });
+      fake.pulls = { [REPO_ID]: [{ id: NEW_PR_ID, number: PR_NUMBER, title: PR_TITLE }] };
+      fake.reviews[NEW_PR_ID] = [];
 
       const out = await getFindings(
         { api: fake, resolver },
@@ -97,7 +105,9 @@ describe('use cases run without the SDK, fetch or an McpServer', () => {
       );
 
       expect(out).toMatchObject({ pr: PR_LABEL, reviews: [], findings: [], total: 0 });
-      expect(fake.calls.filter((c) => c.method === 'listReviews')).toHaveLength(2);
+      const listReviewsCalls = fake.calls.filter((c) => c.method === 'listReviews');
+      expect(listReviewsCalls.map((c) => c.args)).toEqual([[PR_ID], [NEW_PR_ID]]);
+      expect(fake.calls.filter((c) => c.method === 'listRepos')).toHaveLength(2);
     });
 
     it('surfaces the E10 text on a second consecutive StaleIdError from listReviews', async () => {
@@ -115,14 +125,25 @@ describe('use cases run without the SDK, fetch or an McpServer', () => {
       ).rejects.toThrow(`No DevDigest PR with id ${PR_ID}. Use owner/repo#123 instead.`);
     });
 
-    it('invalidates, re-resolves, and retries once on a StaleIdError from the run_id-miss listRuns fallback', async () => {
+    it('invalidates, re-resolves, and retries once on a StaleIdError from the run_id-miss listRuns fallback, resolving under the PR\'s new id', async () => {
       const fake = makeFake();
       fake.reviews[PR_ID] = [];
+      const resolver = new Resolver(fake);
+      await resolver.pr('acme/payments-api#482'); // warm the cache under the OLD PR id
+
+      const NEW_PR_ID = 'aabbccdd-2222-4aaa-8aaa-aabbccddeeff';
       fake.script('listRuns', { error: new StaleIdError(PR_ID, `/pulls/${PR_ID}/runs`) });
-      fake.runs[PR_ID] = [
+      // Keep PR_ID "known" via `prs` (only listRuns is under test here — the
+      // resolveAndListReviews call ahead of it must resolve PR_ID from the
+      // warm cache and its own unscripted listReviews(PR_ID) call must not
+      // itself go stale) while the PR list under the repo only has the new
+      // id, so the resolver's post-invalidate refetch picks up NEW_PR_ID.
+      fake.prs[PR_ID] = { id: PR_ID, number: PR_NUMBER, title: PR_TITLE };
+      fake.pulls = { [REPO_ID]: [{ id: NEW_PR_ID, number: PR_NUMBER, title: PR_TITLE }] };
+      fake.reviews[NEW_PR_ID] = [];
+      fake.runs[NEW_PR_ID] = [
         { run_id: RUN_ID, agent_id: GR_ID, agent_name: GR_NAME, status: 'running', error: null, duration_ms: null, cost_usd: null, findings_count: null },
       ];
-      const resolver = new Resolver(fake);
 
       const out = await getFindings(
         { api: fake, resolver },
@@ -131,17 +152,24 @@ describe('use cases run without the SDK, fetch or an McpServer', () => {
       );
 
       expect(out).toMatchObject({ status: 'running', run_id: RUN_ID });
+      const listRunsCalls = fake.calls.filter((c) => c.method === 'listRuns');
+      expect(listRunsCalls.map((c) => c.args)).toEqual([[PR_ID], [NEW_PR_ID]]);
+      expect(fake.calls.filter((c) => c.method === 'listRepos')).toHaveLength(2);
     });
   });
 
   // generic-1-2 (repo) — getConventions recovers from a StaleRepoIdError
   // (cached repo id gone) via invalidate + re-resolve + retry once.
   describe('getConventions recovers from a stale cached repo id (generic-1-2 repo)', () => {
-    it('invalidates, re-resolves, and retries once on a StaleRepoIdError from listConventions', async () => {
+    it('invalidates, re-resolves, and retries once on a StaleRepoIdError from listConventions, resolving under the repo\'s new id', async () => {
       const fake = makeFake();
-      fake.script('listConventions', { error: new StaleRepoIdError(REPO_ID, `/repos/${REPO_ID}/conventions`) });
-      fake.conventions[REPO_ID] = [];
       const resolver = new Resolver(fake);
+      await resolver.repo('acme/payments-api'); // warm the cache under the OLD repo id
+
+      const NEW_REPO_ID = '99999999-9999-4999-8999-999999999999';
+      fake.script('listConventions', { error: new StaleRepoIdError(REPO_ID, `/repos/${REPO_ID}/conventions`) });
+      fake.repos = [{ id: NEW_REPO_ID, full_name: REPO_FULL_NAME }];
+      fake.conventions[NEW_REPO_ID] = [];
 
       const out = await getConventions(
         { api: fake, resolver },
@@ -150,7 +178,9 @@ describe('use cases run without the SDK, fetch or an McpServer', () => {
       );
 
       expect(out).toMatchObject({ repo: REPO_FULL_NAME, conventions: [], total: 0 });
-      expect(fake.calls.filter((c) => c.method === 'listConventions')).toHaveLength(2);
+      const listConventionsCalls = fake.calls.filter((c) => c.method === 'listConventions');
+      expect(listConventionsCalls.map((c) => c.args)).toEqual([[REPO_ID], [NEW_REPO_ID]]);
+      expect(fake.calls.filter((c) => c.method === 'listRepos')).toHaveLength(2);
     });
 
     it('surfaces the id-only repo text on a second consecutive StaleRepoIdError', async () => {

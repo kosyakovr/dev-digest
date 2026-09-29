@@ -15,7 +15,7 @@ import type {
   RunEventWire,
   RunSummaryWire,
 } from '../contracts.js';
-import { NotFoundError } from '../errors.js';
+import { NotFoundError, StaleIdError, StaleRepoIdError } from '../errors.js';
 import type { CallOpts, DevDigestApi, StreamEnd } from '../ports.js';
 
 export interface ScriptedOutcome {
@@ -87,6 +87,35 @@ export class FakeDevDigestApi implements DevDigestApi {
     });
   }
 
+  /** PR ids the fake considers real — a `getPull` fixture (`prs`) or any id
+   * that appeared in a `listPulls` result (`pulls`). Backs the default (no
+   * `script()`) behaviour of `startReview`/`listRuns`/`listReviews`: an id
+   * outside this set is "stale" (ports.ts § error contract), same as the
+   * real adapter's 404 mapping — unless a test scripted an outcome, which
+   * `apply` honours before ever reaching the fallback below. */
+  private knownPrIds(): Set<string> {
+    const ids = new Set(Object.keys(this.prs));
+    for (const list of Object.values(this.pulls)) {
+      for (const p of list) {
+        if (p.id) ids.add(p.id);
+      }
+    }
+    return ids;
+  }
+
+  /** Repo ids the fake considers real (`repos`) — backs the default
+   * behaviour of `listPulls`/`listConventions` the same way `knownPrIds`
+   * backs the PR-id endpoints. */
+  private knownRepoIds(): Set<string> {
+    return new Set(this.repos.map((r) => r.id));
+  }
+
+  /** Agent ids the fake considers real (`agents`) — `startReview`'s default
+   * behaviour also stales on an unknown agent id, same as the real server. */
+  private knownAgentIds(): Set<string> {
+    return new Set(this.agents.map((a) => a.id));
+  }
+
   private async apply<T>(
     method: string,
     args: unknown[],
@@ -113,7 +142,12 @@ export class FakeDevDigestApi implements DevDigestApi {
   }
 
   listPulls(repoId: string, opts?: CallOpts): Promise<PullListItemWire[]> {
-    return this.apply('listPulls', [repoId], opts, () => this.pulls[repoId] ?? []);
+    return this.apply('listPulls', [repoId], opts, () => {
+      if (!this.knownRepoIds().has(repoId)) {
+        throw new StaleRepoIdError(repoId, `/repos/${repoId}/pulls`);
+      }
+      return this.pulls[repoId] ?? [];
+    });
   }
 
   getPull(prId: string, opts?: CallOpts): Promise<PullDetailWire> {
@@ -128,11 +162,20 @@ export class FakeDevDigestApi implements DevDigestApi {
    * script a `{run_id, agent_id, agent_name}` value for a specific case; the
    * fallback below is a de-facto default only (Handoff to test-writer). */
   startReview(prId: string, agentId: string, opts?: CallOpts): Promise<ReviewRunTargetWire> {
-    return this.apply('startReview', [prId, agentId], opts, () => ({
-      run_id: `${prId}-run`,
-      agent_id: agentId,
-      agent_name: agentId,
-    }));
+    return this.apply('startReview', [prId, agentId], opts, () => {
+      // The real adapter's 404 always carries the PR id — the URL path is
+      // `/pulls/:id/review`, so a server-side 404 on an unknown agent id
+      // (embedded in the POST body) still maps to a StaleIdError keyed on
+      // the PR id (http.ts `mapNotFound`).
+      if (!this.knownPrIds().has(prId) || !this.knownAgentIds().has(agentId)) {
+        throw new StaleIdError(prId, `/pulls/${prId}/review`);
+      }
+      return {
+        run_id: `${prId}-run`,
+        agent_id: agentId,
+        agent_name: agentId,
+      };
+    });
   }
 
   streamRunEvents(runId: string, onEvent: (e: RunEventWire) => void, opts?: CallOpts): Promise<StreamEnd> {
@@ -176,14 +219,25 @@ export class FakeDevDigestApi implements DevDigestApi {
   }
 
   listRuns(prId: string, opts?: CallOpts): Promise<RunSummaryWire[]> {
-    return this.apply('listRuns', [prId], opts, () => this.runs[prId] ?? []);
+    return this.apply('listRuns', [prId], opts, () => {
+      if (!this.knownPrIds().has(prId)) throw new StaleIdError(prId, `/pulls/${prId}/runs`);
+      return this.runs[prId] ?? [];
+    });
   }
 
   listReviews(prId: string, opts?: CallOpts): Promise<ReviewWire[]> {
-    return this.apply('listReviews', [prId], opts, () => this.reviews[prId] ?? []);
+    return this.apply('listReviews', [prId], opts, () => {
+      if (!this.knownPrIds().has(prId)) throw new StaleIdError(prId, `/pulls/${prId}/reviews`);
+      return this.reviews[prId] ?? [];
+    });
   }
 
   listConventions(repoId: string, opts?: CallOpts): Promise<ConventionWire[]> {
-    return this.apply('listConventions', [repoId], opts, () => this.conventions[repoId] ?? []);
+    return this.apply('listConventions', [repoId], opts, () => {
+      if (!this.knownRepoIds().has(repoId)) {
+        throw new StaleRepoIdError(repoId, `/repos/${repoId}/conventions`);
+      }
+      return this.conventions[repoId] ?? [];
+    });
   }
 }
