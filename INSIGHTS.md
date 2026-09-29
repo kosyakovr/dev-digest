@@ -11,9 +11,9 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 - Settled knowledge moves to [docs/](docs/); this file is the draft, not the doc.
 - Captured by the `engineering-insights` skill.
 
-> **Consolidated 2026-09-22, -23, -24, -26 and -28** with the user's approval; settled
+> **Consolidated 2026-09-22, -23, -24, -26, -28 and -29** with the user's approval; settled
 > knowledge moved to docs and the `.claude/*/README.md` files, no finding dropped.
-> Prior text, incl. old Session Notes: `git show <sha>:INSIGHTS.md` — 438513f, 79836e0, 916ddb4.
+> Prior text, incl. old Session Notes: `git show <sha>:INSIGHTS.md` — 438513f, 79836e0, 916ddb4, f57ae8f.
 
 ## What Works
 
@@ -25,6 +25,13 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
   Tell the user when you use it: it is someone else's homework.
 
 ## What Doesn't Work
+
+- 2026-09-29 — A NEW package is invisible to the agent tooling: both guards
+  hard-code each package's test paths (test-writer was denied every `mcp/test/*`
+  until `agent-scope-guard.sh:109` changed), and `routing.md`, `check-all.sh`,
+  `fitness-greps.sh`, `implementer.md`, `test-writer.md`, `architecture-reviewer.md`
+  list packages by name → plan those `.claude/`+scripts edits as a main-session
+  gate BEFORE the implementer (the mcp/ change touched all eight).
 
 - 2026-09-26 — `main` is frozen at the revert `c6af1e4`, so a `lessons/*` branch
   diffed against it carries EVERY lesson so far: a full `/pr-self-review` of
@@ -52,19 +59,16 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
   meant to keep both were NO-OPs on 2.1.278 (unverified since; now 2.1.283).
   (ref: .claude/settings.json:2)
 
-- 2026-09-19 — A shared Zod contract does NOT imply a route serves it (rule in
-  `.claude/agents/planner.md` Step 2) — unserved today: `AgentColumn.cost_usd`,
-  `MultiAgentRun.total_cost_usd`, `AgentStats` (contracts/observability.ts:46,82,108),
-  `AgentPerfRow` / `AgentPerf.summary` (contracts/productionize.ts:152,177).
-
 ## Codebase Patterns
 
 ## Tool & Library Notes
 
-- 2026-09-26 — The Bash tool's shell is **zsh**: an unquoted `$var` is NOT
-  word-split, so `sh $rest` with `rest="guard.sh read-only"` runs a file named
-  `guard.sh read-only`, gets no output, and a hook comparison read every case as
-  "allow" → run such loops under `bash -c '…'`, or quote each argument separately.
+- 2026-09-26 / -29 — The Bash tool's shell is **zsh**: an unquoted `$var` is NOT
+  word-split (`sh $rest` with `rest="guard.sh read-only"` ran a file named
+  `guard.sh read-only` and a hook comparison read every case as "allow"), and a
+  word STARTING with `=` expands to a command path (`echo =====` → "===== not
+  found", aborting the `&&` chain) → run such loops under `bash -c '…'` or quote
+  each argument; quote separators (`echo '====='`).
 
 See also — settled recipes, one line each:
 - Cost is the stored `agent_runs.cost_usd`, NULL = unknown (not 0) → `server/specs/L01-run-cost.md` § Null semantics.
@@ -74,6 +78,7 @@ See also — settled recipes, one line each:
 - Testing a hook end to end → `.claude/hooks/README.md` § Testing a hook end to end.
 - A FRESH headless session (`"$CLAUDE_CODE_EXECPATH" -p`) → `.claude/agents/README.md` § Changing an agent.
 - Authoring a skill (PyYAML, `skills-lock.json`) → `.claude/skills/README.md` § Authoring a skill in this repo.
+- A Zod contract ≠ a served route → `.claude/agents/planner.md` Step 2; unserved (2026-09-19): `AgentColumn.cost_usd`, `MultiAgentRun.total_cost_usd`, `AgentStats` (contracts/observability.ts:46,82,108), `AgentPerfRow` / `AgentPerf.summary` (contracts/productionize.ts:152,177).
 
 ## Recurring Errors & Fixes
 
@@ -83,17 +88,20 @@ See also — settled recipes, one line each:
   and prove each new case red against `git show HEAD:<hook>` before trusting it.
   (ref: .claude/hooks/test-gate.sh:72)
 
-- 2026-09-20 / -21 / -28 — Patterns shipped unrun, or run so a failure read as a
+- 2026-09-20 / -21 / -28 / -29 — Patterns shipped unrun, or run so a failure read as a
   pass: a BRE backreference in `grep` (here **ugrep**) dies non-zero; §15's
   `fetch(` matched `refetch()`; an e2e flow command that does not exist
   (`e2e/INSIGHTS.md` 2026-09-22); `git grep -nE "$pat" | wc -l` counted
-  `-----BEGIN …` — read as an option, exit 129 — as "0 hits" → treat every
-  pattern and flow as untested code: run it, pass it with `-e`, no
-  backreferences, exit ≥2 = broken, prove each 0 with a planted positive, and
+  `-----BEGIN …` — read as an option, exit 129 — as "0 hits"; plain `git grep`
+  skips UNTRACKED files, so every check over the uncommitted `mcp/` was silent →
+  treat every pattern and flow as untested code: run it, pass it with `-e`, no
+  backreferences, exit ≥2 = broken, `--untracked` on an uncommitted tree
+  (`fitness-greps.sh:44` does), prove each 0 with a planted positive, and
   ship its EXPECTED output beside it (`greps.md` § The patterns, `scripts/secret-greps.sh`).
 
 ## Session Notes
 
+- 2026-09-29 — L04 MCP server: new npm package `mcp/` (spec: mcp/specs/L04-mcp-server.md).
 - 2026-09-28 — L04 lab: brainstormer + security-reviewer agents (plan, research
   sources, G9 probes: .claude/agents/README.md § Where the rules come from).
 

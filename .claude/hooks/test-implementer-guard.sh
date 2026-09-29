@@ -65,6 +65,8 @@ run_case deny  "edit client lib test"      "$(edit Edit  "$ROOT/client/src/lib/f
 run_case deny  "edit client test setup"    "$(edit Edit  "$ROOT/client/src/test/setup.ts")"
 run_case deny  "write reviewer-core test"  "$(edit Write "$ROOT/reviewer-core/test/run.test.ts")"
 run_case deny  "write e2e flow"            "$(edit Write "$ROOT/e2e/specs/09-x.flow.json")"
+run_case deny  "write mcp test helper"     "$(edit Write "$ROOT/mcp/test/helpers/fixtures.ts")"
+run_case deny  "write mcp test"            "$(edit Write "$ROOT/mcp/test/resolve.test.ts")"
 # ---- Edit / Write: ask
 run_case ask   "edit schema.ts"            "$(edit Edit  "$ROOT/server/src/db/schema.ts")"
 run_case ask   "edit schema/ file"         "$(edit Edit  "$ROOT/server/src/db/schema/runs.ts")"
@@ -73,6 +75,7 @@ run_case ask   "edit client package.json"  "$(edit Edit  "$ROOT/client/package.j
 run_case allow "edit service"              "$(edit Edit  "$ROOT/server/src/modules/reviews/service.ts")"
 run_case allow "write new component"       "$(edit Write "$ROOT/client/src/app/agents/_components/Foo/Foo.tsx")"
 run_case allow "write spec"                "$(edit Write "$ROOT/server/specs/L03-x.md")"
+run_case allow "write mcp fake api"        "$(edit Write "$ROOT/mcp/src/api/fake-api.ts")"
 run_case allow "edit vendored contract"    "$(edit Edit  "$ROOT/client/src/vendor/shared/contracts/runs.ts")"
 run_case allow "edit README"               "$(edit Edit  "$ROOT/README.md")"
 run_case allow "edit mocks.ts"             "$(edit Edit  "$ROOT/server/src/adapters/mocks.ts")"

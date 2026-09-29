@@ -81,6 +81,7 @@ Apply `routing.md` § Groups, but review **only**:
 | A · backend-architecture | `server/src/**/*.ts` | `onion-architecture/SKILL.md` §1–8, §10–12; `server/AGENTS.md` § Must not break |
 | C · frontend-architecture | `client/src/**/*.{ts,tsx}` minus `vendor/ui` | `frontend-ui-architecture/SKILL.md` §1–12; add `next-best-practices/SKILL.md` if `client/src/app/**` is touched |
 | reviewer-core | `reviewer-core/src/**` | `reviewer-core/AGENTS.md` § Must not break |
+| mcp | `mcp/src/**` | `mcp/AGENTS.md` § Must not break; `onion-architecture/SKILL.md` §1–6, §9, §12 by analogy |
 | shared contracts | `{server,client}/src/vendor/shared/**` | root `AGENTS.md` § Cross-package invariants |
 
 Also read `reviewer-prompt.md` (severity, CRITICAL bar, grandfathering,
@@ -102,6 +103,8 @@ method (compared by `(file, normalised match)`, never by line number):
 4. **reviewer-core purity** — `reviewer-core/src` imports no DB, GitHub,
    filesystem or process APIs. Pattern (0 hits at `438513f`):
    `from '(pg|postgres|drizzle-orm[^']*|simple-git|@octokit/[^']*|node:fs[^']*|fs|fs/promises|node:child_process|child_process)'`.
+5. **mcp boundary** — `greps.md` § mcp boundary (run by the script when
+   `mcp/src` is touched).
 
 It prints each new hit already classed by `greps.md` § Scoping a new hit
 (A-file → WARNING, M-file → SUGGESTION, test/fixture → SUGGESTION, outside the

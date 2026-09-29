@@ -86,6 +86,7 @@ file still applies.
    | `server/src/db/schema*`, `**/repository.ts`, `**/*.repo.ts`, `*/src/vendor/shared/**` | `drizzle-orm-patterns`, `postgresql-table-design`, `zod` |
    | `client/src/**/*.{ts,tsx}` (not `vendor/ui`) | `frontend-ui-architecture`; plus `next-best-practices` if `client/src/app/**` |
    | `client/src/**/_components/**`, `client/src/components/**`, `client/src/lib/hooks/**` | `react-best-practices` |
+   | `mcp/src/**/*.ts` | `onion-architecture` — by analogy, rings per `mcp/AGENTS.md` (not `fastify-best-practices`) |
 
    `routing.md` is the source of truth — if it disagrees with this table,
    follow it. Load each skill once, and only for groups you actually touch.
@@ -126,8 +127,9 @@ tree:
 | reviewer-core | `npm run typecheck` · `npm test` |
 | server | `pnpm typecheck` · `pnpm exec vitest run --exclude '**/*.it.test.ts'` · `docker info`, then `scripts/hermetic.sh pnpm exec vitest run .it.test` — without Docker it prints **SKIPPED**, never PASS |
 | client | `pnpm typecheck` · `pnpm test` |
+| mcp | `npm run typecheck` · `npm run build` · `npm test` |
 
-It runs all three packages by default — server compiles against
+It runs all four packages by default — server compiles against
 reviewer-core source, so a reviewer-core change needs the server checks
 anyway. While iterating on one package, `--pkg server --no-it` is fine; the
 final run before your report is the full `--force` one. A failing check prints

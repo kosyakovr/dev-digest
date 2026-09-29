@@ -15,6 +15,7 @@ aliases, not published modules):
 | `client/`        | `@devdigest/web`            | Next.js 15 web app (the studio)                       | 3000 |
 | `reviewer-core/` | `@devdigest/reviewer-core`  | Pure review engine: diff → prompt → LLM → findings    | —    |
 | `e2e/`           | `@devdigest/e2e`            | Deterministic browser e2e (agent-browser)             | —    |
+| `mcp/`           | `@devdigest/mcp`            | MCP server (stdio) for Claude Code etc. — thin client over the API | — |
 | `server/src/vendor/shared` | `@devdigest/shared` | Zod contracts shared across every package             | —    |
 
 `repo-intel` (the codebase indexer that powers the **Indexed** badge and feeds
@@ -47,6 +48,10 @@ flowchart LR
   SHARED -.->|"one schema, every package"| WEB
   SHARED -.-> API
   SHARED -.-> ENGINE
+
+  MCP["mcp/<br/>MCP server · stdio"]
+  CC["Claude Code / MCP client"] -->|stdio| MCP
+  MCP -->|"REST + SSE"| API
 ```
 
 The review flow end to end: **add a repo** → server clones it and `repo-intel`
@@ -131,6 +136,7 @@ cd ../client && pnpm install && pnpm dev               # web on :3000
 `server/`: `dev` · `build` · `db:migrate` · `db:seed` · `db:generate` · `test` · `typecheck`
 (unit/integration split: `pnpm exec vitest run --exclude '**/*.it.test.ts'` / `pnpm exec vitest run .it.test`)
 `client/`: `dev` · `build` · `start` · `test` · `typecheck`
+`mcp/`: `build` · `typecheck` · `test` · `start`
 
 ## Testing & CI
 
@@ -143,6 +149,7 @@ path filter — full strategy in **[`TESTING.md`](TESTING.md)**.
 | server unit (hermetic) | `server-unit.yml` | no |
 | server integration (real Postgres) | `server-integration.yml` | yes |
 | reviewer-core (engine) | `reviewer-core.yml` | no |
+| mcp (stdio MCP server) | `mcp.yml` | no |
 | web e2e (agent-browser, real stack) | `e2e-web.yml` | yes |
 
 Server tests split by filename: `*.it.test.ts` are DB-backed (testcontainers

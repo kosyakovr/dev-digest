@@ -97,7 +97,7 @@ case "$TOOL" in
 
     if [ "$PROFILE" = test-writer ]; then
       case "$REL" in
-        server/test/helpers/*|client/src/test/*|server/src/adapters/mocks.ts)
+        server/test/helpers/*|client/src/test/*|server/src/adapters/mocks.ts|mcp/src/api/fake-api.ts)
           decide ask "shared test infrastructure - every test in the package depends on it. Approve only if the change is additive." ;;
         server/test/*.it.test.ts) exit 0 ;;
         server/test/*.test.ts)
@@ -106,7 +106,7 @@ case "$TOOL" in
             decide deny "a test importing test/helpers/pg must end in .it.test.ts (TESTING.md) - rename the file."
           fi
           exit 0 ;;
-        server/test/*|reviewer-core/test/*|client/src/*.test.ts|client/src/*.test.tsx|e2e/specs/*.flow.json)
+        server/test/*|reviewer-core/test/*|client/src/*.test.ts|client/src/*.test.tsx|e2e/specs/*.flow.json|mcp/test/*)
           exit 0 ;;
       esac
       decide deny "test-writer writes test files only - if production code looks wrong, leave the test red and report it under Suspected defects."

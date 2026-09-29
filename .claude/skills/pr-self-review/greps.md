@@ -129,6 +129,27 @@ git ls-tree -r --name-only HEAD -- client/src | grep -E '(^|/)utils(\.ts|/)'
 the pattern must match `utils/` mid-path, not only at the end. This is the pattern
 `scripts/fitness-greps.sh` runs.
 
+### mcp boundary — run when `mcp/src/**` is in the diff
+
+Source: `mcp/AGENTS.md` § Must not break (onion-architecture by analogy — the skill
+is scoped to `server/`, its dependency-direction rule binds `mcp/` too). Every row
+was proven 2026-09-29 with a planted positive (each fired; `git grep` exit 0, not 2).
+
+| id | pattern | pathspec | both revs |
+|---|---|---|---|
+| `mcp-sdk-outside-boundary` | `@modelcontextprotocol` | `mcp/src` minus `mcp/src/tools`, `mcp/src/server.ts`, `mcp/src/index.ts` | 0 |
+| `mcp-fetch-outside-adapter` | `(^\|[^A-Za-z_.])fetch\(` | `mcp/src` minus `mcp/src/api` | 0 |
+| `mcp-config-bypass` | `process\.env` | `mcp/src` minus `mcp/src/config.ts` | 0 |
+| `mcp-core-reaches-out` | `from '\.\.?/tools/\|from '\.\.?/(server\|index\|config\|log)\.js'` | `mcp/src/use-cases`, `resolve.ts`, `format.ts`, `contracts.ts`, `ports.ts`, `errors.ts`, `constants.ts` | 0 |
+| `mcp-contracts-reach-in` | `from '\.\.?/(use-cases/\|resolve\|format)` | `mcp/src/{contracts,ports,errors,constants}.ts` | 0 |
+| `mcp-adapter-reaches-in` | `from '\.\./(use-cases\|tools)/\|from '\.\./(resolve\|format\|server\|index)\.js'` | `mcp/src/api` | 0 |
+| `mcp-adapter-outside-root` | `from '\.\.?/api/` | `mcp/src` minus `mcp/src/index.ts`, `mcp/src/api` | 0 |
+| `mcp-fake-in-production` | `fake-api` | `mcp/src` minus `mcp/src/api/fake-api.ts` | 0 |
+
+(`\|` is the table's escape for `|`; `scripts/fitness-greps.sh` holds the runnable
+form with `':(exclude)…'` pathspecs.) The `fetch` pattern's leading class keeps
+`refetch()` out, as in `fe-15-fetch-in-ui`.
+
 ## Running them in one command
 
 [`scripts/fitness-greps.sh`](../../../scripts/fitness-greps.sh) runs every

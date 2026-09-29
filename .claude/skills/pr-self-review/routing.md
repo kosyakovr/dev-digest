@@ -25,12 +25,12 @@ it is not invisible.
 
 | Group | Skills to read | Matches |
 |---|---|---|
-| **A · backend-architecture** | `onion-architecture`, `fastify-best-practices` | `server/src/**/*.ts` |
+| **A · backend-architecture** | `onion-architecture`, `fastify-best-practices`; for `mcp/src/**` `onion-architecture` only, **by analogy** (scoped to `server/`; mcp ring map: `mcp/AGENTS.md` § Must not break; greps: `greps.md` § mcp boundary) | `server/src/**/*.ts`, `mcp/src/**/*.ts` |
 | **B · backend-data** | `drizzle-orm-patterns`, `postgresql-table-design`, `zod` | `server/src/db/schema.ts`, `server/src/db/schema/**`, `server/src/**/repository.ts`, `server/src/**/*.repo.ts`, `{server,client}/src/vendor/shared/**` |
 | **C · frontend-architecture** | `frontend-ui-architecture`; add `next-best-practices` iff `client/src/app/**` is touched | `client/src/**/*.{ts,tsx}` minus `client/src/vendor/ui/**` |
 | **D · frontend-react** | `react-best-practices`; add `react-testing-library` iff a `client/src/**/*.test.tsx` is in the diff | `client/src/app/**/_components/**/*.tsx`, `client/src/components/**/*.tsx`, `client/src/lib/hooks/**/*.ts` |
-| **E · security** | `docs/agent-prompts/security-reviewer.md` **as the prompt**, `.claude/skills/security/SKILL.md` **as a checklist only** | `server/src/modules/**/routes.ts`, `server/src/app.ts`, `server/src/adapters/{auth,secrets,github,llm}/**`, `server/src/platform/**`, `server/src/vendor/shared/**`, `client/src/lib/api.ts`, `.github/workflows/**`, plus **any** file whose diff adds `process.env`, `exec(`, `spawn(`, `dangerouslySetInnerHTML`, or a secret-shaped literal — a new hit of `scripts/secret-greps.sh "$MB" HEAD`, which holds the patterns |
-| **F · generic** | `docs/agent-prompts/general-reviewer.md` | everything no group matched **by path** — `reviewer-core/**`, `e2e/**`, `scripts/*.sh`, `docs/**`, `*.md`, `.claude/**`, `.github/**`, `package.json`. A file that reaches E **only** through the content trigger stays in F too (see below) |
+| **E · security** | `docs/agent-prompts/security-reviewer.md` **as the prompt**, `.claude/skills/security/SKILL.md` **as a checklist only** | `server/src/modules/**/routes.ts`, `server/src/app.ts`, `server/src/adapters/{auth,secrets,github,llm}/**`, `server/src/platform/**`, `server/src/vendor/shared/**`, `client/src/lib/api.ts`, `mcp/src/api/{http,sse}.ts`, `mcp/src/tools/**`, `.mcp.json`, `.github/workflows/**`, plus **any** file whose diff adds `process.env`, `exec(`, `spawn(`, `dangerouslySetInnerHTML`, or a secret-shaped literal — a new hit of `scripts/secret-greps.sh "$MB" HEAD`, which holds the patterns |
+| **F · generic** | `docs/agent-prompts/general-reviewer.md` | everything no group matched **by path** — `reviewer-core/**`, `mcp/**`, `.mcp.json`, `e2e/**`, `scripts/*.sh`, `docs/**`, `*.md`, `.claude/**`, `.github/**`, `package.json`. A file that reaches E **only** through the content trigger stays in F too (see below). `mcp/src/**/*.ts` stays in F although A matches it: A reviews its layering, F its correctness |
 
 ### Group E's content trigger never removes a file from F
 

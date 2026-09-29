@@ -8,8 +8,9 @@
 # Source of truth for the patterns and the method: .claude/skills/pr-self-review/greps.md
 # (patterns, "compare by (file, normalised match), never by line number",
 # scoping table) and routing.md § Vendored-contract twin check. The
-# reviewer-core purity pattern is architecture-reviewer.md Step 3.4. If a
-# pattern changes there, change it here.
+# reviewer-core purity pattern is architecture-reviewer.md Step 3.4; the mcp
+# boundary patterns are greps.md § mcp boundary. If a pattern changes there,
+# change it here.
 #
 # Output: one row per check (before → after, new hits), then every new hit with
 # its class from greps.md § Scoping a new hit:
@@ -124,6 +125,18 @@ fi
 
 if touched reviewer-core/src/; then
   check reviewer-core-purity          n "from '(pg|postgres|drizzle-orm[^']*|simple-git|@octokit/[^']*|node:fs[^']*|fs|fs/promises|node:child_process|child_process)'" 'reviewer-core/src'
+fi
+
+# mcp boundary (greps.md § mcp boundary; rings: mcp/AGENTS.md § Must not break — onion-architecture by analogy)
+if touched mcp/src/; then
+  check mcp-sdk-outside-boundary      n '@modelcontextprotocol'            'mcp/src' ':(exclude)mcp/src/tools' ':(exclude)mcp/src/server.ts' ':(exclude)mcp/src/index.ts'
+  check mcp-fetch-outside-adapter     n '(^|[^A-Za-z_.])fetch\('          'mcp/src' ':(exclude)mcp/src/api'
+  check mcp-config-bypass             n 'process\.env'                    'mcp/src' ':(exclude)mcp/src/config.ts'
+  check mcp-core-reaches-out          n "from '\.\.?/tools/|from '\.\.?/(server|index|config|log)\.js'" 'mcp/src/use-cases' 'mcp/src/resolve.ts' 'mcp/src/format.ts' 'mcp/src/contracts.ts' 'mcp/src/ports.ts' 'mcp/src/errors.ts' 'mcp/src/constants.ts'
+  check mcp-contracts-reach-in        n "from '\.\.?/(use-cases/|resolve|format)" 'mcp/src/contracts.ts' 'mcp/src/ports.ts' 'mcp/src/errors.ts' 'mcp/src/constants.ts'
+  check mcp-adapter-reaches-in        n "from '\.\./(use-cases|tools)/|from '\.\./(resolve|format|server|index)\.js'" 'mcp/src/api'
+  check mcp-adapter-outside-root      n "from '\.\.?/api/"               'mcp/src' ':(exclude)mcp/src/index.ts' ':(exclude)mcp/src/api'
+  check mcp-fake-in-production        n 'fake-api'                         'mcp/src' ':(exclude)mcp/src/api/fake-api.ts'
 fi
 
 # Vendored twin (routing.md): every changed <side>/src/vendor/shared/<rel> needs its mirror in the diff.

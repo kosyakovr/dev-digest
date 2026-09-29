@@ -54,7 +54,7 @@ case "$TOOL" in
         decide deny "the implementer may not change .claude/ (its own guard rails, agents, skills, settings). Report it as an out-of-scope observation." ;;
       *CLAUDE.md|*CLAUDE.local.md)
         decide deny "a CLAUDE.md silently disables every AGENTS.md in this repo (root INSIGHTS.md, 2026-09-20)." ;;
-      *.test.ts|*.test.tsx|*/server/test/*|server/test/*|*/reviewer-core/test/*|reviewer-core/test/*|*/client/src/test/*|client/src/test/*|*/e2e/specs/*.flow.json|e2e/specs/*.flow.json)
+      *.test.ts|*.test.tsx|*/server/test/*|server/test/*|*/reviewer-core/test/*|reviewer-core/test/*|*/client/src/test/*|client/src/test/*|*/e2e/specs/*.flow.json|e2e/specs/*.flow.json|*/mcp/test/*|mcp/test/*)
         decide deny "tests are written by the test-writer agent, not the implementer. List what needs a test (and any existing test your change is meant to break) under Handoff to test-writer." ;;
       */server/src/db/schema.ts|*/server/src/db/schema/*)
         decide ask "DB schema change implies a migration (root AGENTS.md). Approve only if the plan's Gates section was approved for this." ;;

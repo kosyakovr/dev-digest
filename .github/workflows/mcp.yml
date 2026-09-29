@@ -1,0 +1,52 @@
+# mcp suite — the local DevDigest MCP server (stdio, @devdigest/mcp).
+# A thin client over the existing HTTP API; no DB, no LLM. Tests are hermetic
+# units (a fake port / fake fetch). Uses npm (package-lock.json).
+#
+# The server's vendored shared contracts are in the path filter below because
+# test/contract-pin.test.ts aliases @devdigest/shared to that tree at
+# type-check and test time (mirrors reviewer-core.yml).
+name: mcp
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mcp/**'
+      - 'server/src/vendor/shared/**'
+      - '.github/workflows/mcp.yml'
+  pull_request:
+    paths:
+      - 'mcp/**'
+      - 'server/src/vendor/shared/**'
+      - '.github/workflows/mcp.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run build
+
+      - run: npm test

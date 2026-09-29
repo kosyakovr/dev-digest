@@ -24,10 +24,10 @@ shaped to pass against whatever it just wrote, bugs included.
 ## Hard rules
 
 1. **Test files only.** You may create or edit `server/test/**`,
-   `client/src/**/*.test.{ts,tsx}`, `reviewer-core/test/**`, and
+   `client/src/**/*.test.{ts,tsx}`, `reviewer-core/test/**`, `mcp/test/**`, and
    `e2e/specs/*.flow.json` (only when the delegation prompt asks for a flow).
    Shared test infrastructure (`server/test/helpers/**`, `client/src/test/**`,
-   `server/src/adapters/mocks.ts`) needs the user's approval; the guard asks.
+   `server/src/adapters/mocks.ts`, `mcp/src/api/fake-api.ts`) needs the user's approval; the guard asks.
    Never production code, `package.json`, configs, lock files, migrations,
    `.claude/`, `INSIGHTS.md`. Never commit. A denial from "Agent scope guard"
    is final: do not work around it, report it.
@@ -96,6 +96,7 @@ architecture problem, `onion-architecture` §9), or a file the guard denies.
    | repositories, schema, `*/src/vendor/shared/**` contracts | add `drizzle-orm-patterns/SKILL.md` (queries), `zod/SKILL.md` (parse / safeParse) |
    | `client/src/**` | `react-testing-library/SKILL.md` § Query Priority, § Async Testing, § What to Test / What to Skip, § Anti-Patterns — with rule 3's overrides · `frontend-ui-architecture/SKILL.md` §3 (colocated test placement) |
    | `reviewer-core/src/**` | `reviewer-core/AGENTS.md` (no DB, GitHub or FS; the model is stubbed) |
+   | `mcp/src/**` | `mcp/AGENTS.md` § Must not break · `onion-architecture/SKILL.md` §9 by analogy (use cases against `FakeDevDigestApi`, no `McpServer`) |
 
 4. Read one or two **existing** tests next to the code under test and copy
    their setup (render helpers, `vi.mock` targets, `ContainerOverrides`,
@@ -122,6 +123,7 @@ Placement and kind:
 | server repository / anything importing `test/helpers/pg.ts` | `server/test/<name>.it.test.ts` — suffix mandatory | real Postgres via testcontainers; self-skips without Docker |
 | client component / hook / lib | next to the source, `<Name>.test.tsx` / `<name>.test.ts` | RTL `render` + `screen`, `fireEvent`, `vi.mock` on the **component's** import specifier |
 | reviewer-core | `reviewer-core/test/<name>.test.ts` | stubbed `LLMProvider` |
+| mcp | `mcp/test/<name>.test.ts` (`use-cases/`, `tools/` subdirs) | `FakeDevDigestApi`, fake `fetchImpl`, SDK `InMemoryTransport` |
 | e2e (only if asked) | `e2e/specs/NN-<name>.flow.json` | deterministic `--url` / `--text` / `find` locators, never `chat`; `click` takes a CSS selector (`e2e/INSIGHTS.md` 2026-09-22) |
 
 What makes a test worth keeping (typological, not exhaustive — `TESTING.md`):
@@ -152,6 +154,7 @@ From inside each package you touched:
 | server | `pnpm typecheck` · `pnpm exec vitest run --exclude '**/*.it.test.ts'`; for `.it.test.ts`: `docker info` first, then **always through** `scripts/hermetic.sh` — `../scripts/hermetic.sh pnpm exec vitest run <file>` — green **without** Docker is "skipped", not "passed" |
 | client | `pnpm typecheck` · `pnpm test` |
 | reviewer-core | `npm run typecheck` · `npm test` |
+| mcp | `npm run typecheck` · `npm test` |
 | e2e | `bash scripts/e2e.sh` from the repo root; without the `agent-browser` binary use the npx shim from `e2e/INSIGHTS.md` 2026-09-22, writing it to `$TMPDIR/devdigest-redproof-ab.sh`. A flow that was not executed is reported as not run |
 
 **Why hermetic.** A developer machine may store real provider keys in
@@ -177,7 +180,7 @@ in the real tree (the guard allows shell writes only under a path containing
 ```bash
 # W = the literal path, e.g. /tmp/devdigest-redproof-1727190000 (resolve ${TMPDIR:-/tmp} once)
 git worktree add --detach W HEAD
-for p in server client reviewer-core; do ln -s "$PWD/$p/node_modules" "W/$p/node_modules"; done
+for p in server client reviewer-core mcp; do mkdir -p "W/$p"; ln -s "$PWD/$p/node_modules" "W/$p/node_modules"; done
 ```
 
 Write `W` out **literally in every command**: shell variables do not survive

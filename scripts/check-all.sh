@@ -12,6 +12,7 @@
 #   reviewer-core  npm run typecheck · npm test
 #   server         pnpm typecheck · vitest (unit) · vitest .it.test (Docker)
 #   client         pnpm typecheck · pnpm test
+#   mcp            npm run typecheck · npm run build · npm test
 # The .it.test suite runs through scripts/hermetic.sh — never against the real
 # provider keys this machine may store (server/INSIGHTS.md, 2026-09-24). Without
 # Docker it is recorded as "skipped", never "pass" (the tests self-skip).
@@ -19,7 +20,7 @@
 #
 # Ledger: <git dir>/devdigest/checks/<tree>/<pkg>-<check>.{status,log}. <tree>
 # is a hash of the committed state, the diff and every untracked, non-ignored
-# file under reviewer-core/, server/, client/ and the two scripts — so any edit
+# file under reviewer-core/, server/, client/, mcp/ and the two scripts — so any edit
 # there (including to this script) produces a new key, and an edit to docs,
 # specs or .claude/ does not. A reused result is printed with "(reused)" and the
 # time it was recorded.
@@ -35,22 +36,22 @@ cd "$ROOT"
 
 FORCE=0
 RUN_IT=1
-PKGS="reviewer-core,server,client"
+PKGS="reviewer-core,server,client,mcp"
 while [ $# -gt 0 ]; do
   case "$1" in
     --force) FORCE=1 ;;
     --no-it) RUN_IT=0 ;;
     --pkg) shift; PKGS=${1:?--pkg needs a comma-separated list} ;;
     --pkg=*) PKGS=${1#--pkg=} ;;
-    -h|--help) sed -n '2,32p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,33p' "$0"; exit 0 ;;
     *) echo "unknown option: $1 (see --help)" >&2; exit 2 ;;
   esac
   shift
 done
 
-# Only what the checks can depend on: the three packages and the two scripts.
+# Only what the checks can depend on: the four packages and the two scripts.
 # Editing docs, specs or .claude/ does not invalidate a green ledger.
-KEY_PATHS=(reviewer-core server client scripts/check-all.sh scripts/hermetic.sh)
+KEY_PATHS=(reviewer-core server client mcp scripts/check-all.sh scripts/hermetic.sh)
 tree_key() {
   {
     for p in "${KEY_PATHS[@]}"; do git rev-parse "HEAD:$p" 2>/dev/null || echo "absent:$p"; done
@@ -131,6 +132,12 @@ fi
 if has_pkg client; then
   run client typecheck client pnpm typecheck
   run client test      client pnpm test
+fi
+
+if has_pkg mcp; then
+  run mcp typecheck mcp npm run typecheck
+  run mcp build     mcp npm run build
+  run mcp test      mcp npm test
 fi
 
 exit "$FAILED"
