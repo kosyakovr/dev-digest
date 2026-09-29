@@ -12,11 +12,13 @@ on:
     branches: [main]
     paths:
       - 'mcp/**'
+      - '.mcp.json'
       - 'server/src/vendor/shared/**'
       - '.github/workflows/mcp.yml'
   pull_request:
     paths:
       - 'mcp/**'
+      - '.mcp.json'
       - 'server/src/vendor/shared/**'
       - '.github/workflows/mcp.yml'
 

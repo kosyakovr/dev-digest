@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getFindings } from '../use-cases/get-findings.js';
+import { GetFindingsOutput } from '../contracts.js';
 import { toolResult } from './result.js';
 import { wrap } from './wrap.js';
 import type { ToolDeps } from './list-agents.js';
@@ -19,47 +20,7 @@ const inputShape = {
   response_format: z.enum(['concise', 'detailed']).default('concise'),
 };
 
-const reviewShape = {
-  run_id: z.string().nullable(),
-  agent_id: z.string().nullable(),
-  agent_name: z.string().nullable(),
-  verdict: z.string().nullable(),
-  score: z.number().nullable(),
-  findings_count: z.number(),
-  created_at: z.string(),
-  review_id: z.string().optional(),
-  summary: z.string().nullable().optional(),
-  model: z.string().nullable().optional(),
-};
-
-const findingShape = {
-  severity: z.string(),
-  title: z.string(),
-  loc: z.string(),
-  agent_name: z.string().nullable(),
-  id: z.string().optional(),
-  category: z.string().optional(),
-  rationale: z.string().optional(),
-  suggestion: z.string().nullable().optional(),
-  confidence: z.number().optional(),
-  kind: z.string().nullable().optional(),
-  run_id: z.string().nullable().optional(),
-};
-
-const outputShape = {
-  untrusted_notice: z.string(),
-  pr: z.string(),
-  pr_title: z.string(),
-  pr_id: z.string().optional(),
-  status: z.literal('running').optional(),
-  run_id: z.string().optional(),
-  agent_name: z.string().nullable().optional(),
-  reviews: z.array(z.object(reviewShape)),
-  findings: z.array(z.object(findingShape)),
-  total: z.number(),
-  next_cursor: z.string().nullable(),
-  hint: z.string().optional(),
-};
+const outputShape = GetFindingsOutput.shape;
 
 export function register(server: McpServer, deps: ToolDeps): void {
   server.registerTool(

@@ -16,7 +16,7 @@ function connectionRefusedFetch(): FetchImpl {
   }) as FetchImpl;
 }
 
-describe('tools 1, 3, 4 with the DevDigest API unreachable', () => {
+describe('tools 1, 2, 3, 4 with the DevDigest API unreachable', () => {
   it('each return isError E1, and the server keeps answering afterwards', async () => {
     const api = new HttpDevDigestApi({ baseUrl: 'http://localhost:3001', fetchImpl: connectionRefusedFetch() });
     const server = createServer({ api, resolver: new Resolver(api) });
@@ -25,6 +25,19 @@ describe('tools 1, 3, 4 with the DevDigest API unreachable', () => {
     const listAgents = await client.callTool({ name: 'devdigest_list_agents', arguments: {} });
     expect(listAgents.isError).toBe(true);
     expect((listAgents.content as { text: string }[])[0]?.text).toMatch(
+      /^DevDigest API is not reachable at http:\/\/localhost:3001/,
+    );
+
+    // generic-2-2 — devdigest_run_review (tool 2) was missing from this
+    // AC-3 coverage; its own resolution catch (use-cases/run-review.ts)
+    // maps a non-abort error by rethrowing it unchanged, so E1 must surface
+    // here just like the other three tools.
+    const runReview = await client.callTool({
+      name: 'devdigest_run_review',
+      arguments: { pr: 'acme/payments-api#482', agent: 'General Reviewer', limit: 5 },
+    });
+    expect(runReview.isError).toBe(true);
+    expect((runReview.content as { text: string }[])[0]?.text).toMatch(
       /^DevDigest API is not reachable at http:\/\/localhost:3001/,
     );
 

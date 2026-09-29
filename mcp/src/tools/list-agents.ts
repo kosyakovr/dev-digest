@@ -7,6 +7,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { listAgents } from '../use-cases/list-agents.js';
 import type { DevDigestApi } from '../ports.js';
 import type { Resolver } from '../resolve.js';
+import { ListAgentsOutput } from '../contracts.js';
 import { toolResult } from './result.js';
 import { wrap } from './wrap.js';
 
@@ -19,22 +20,7 @@ const inputShape = {
   response_format: z.enum(['concise', 'detailed']).default('concise'),
 };
 
-const agentShape = {
-  id: z.string(),
-  name: z.string(),
-  enabled: z.boolean(),
-  model: z.string(),
-  description: z.string().optional(),
-  provider: z.string().optional(),
-  strategy: z.string().optional(),
-  version: z.number().optional(),
-};
-
-const outputShape = {
-  agents: z.array(z.object(agentShape)),
-  count: z.number(),
-  hint: z.string().optional(),
-};
+const outputShape = ListAgentsOutput.shape;
 
 export function register(server: McpServer, deps: ToolDeps): void {
   server.registerTool(

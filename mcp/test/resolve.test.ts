@@ -4,7 +4,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Resolver } from '../src/resolve.js';
-import { GR_ID, GR_NAME, PR_ID, PR_NUMBER, PR_TITLE, REPO_FULL_NAME, SR_ID, SR_NAME, makeFake } from './helpers/fixtures.js';
+import { StaleRepoIdError } from '../src/errors.js';
+import { GR_ID, GR_NAME, PR_ID, PR_NUMBER, PR_TITLE, REPO_FULL_NAME, REPO_ID, SR_ID, SR_NAME, makeFake } from './helpers/fixtures.js';
 
 describe('Resolver.pr', () => {
   it('resolves owner/repo#N, a case-insensitive variant, and a GitHub PR URL to the same PrRef, caching after the first', async () => {
@@ -111,5 +112,83 @@ describe('Resolver', () => {
     await resolver.agent('General Reviewer');
 
     expect(fake.calls.some((c) => c.method === 'startReview')).toBe(false);
+  });
+});
+
+// generic-1-2 (repo) — a cached repo id going stale (repo deleted + re-added
+// in the web app, same full_name, new UUIDs) recovers via invalidate +
+// re-resolve + retry once inside `prByRef` (spec § Resolver § cache
+// invalidation).
+describe('Resolver.pr — repo-id staleness recovers via invalidate + retry (generic-1-2 repo)', () => {
+  it('invalidates, re-resolves, and retries once when a cached repo id 404s, resolving under the new id', async () => {
+    const fake = makeFake();
+    const resolver = new Resolver(fake);
+    // Prime the cache under the OLD repo id (a PR list that only knows #482).
+    await resolver.pr('acme/payments-api#482');
+
+    const NEW_REPO_ID = '99999999-9999-4999-8999-999999999999';
+    fake.script('listPulls', { error: new StaleRepoIdError(REPO_ID, `/repos/${REPO_ID}/pulls`) });
+    fake.repos = [{ id: NEW_REPO_ID, full_name: REPO_FULL_NAME }];
+    fake.pulls = { [NEW_REPO_ID]: [{ id: PR_ID, number: 999, title: 'Renumbered' }] };
+
+    const ref = await resolver.pr('acme/payments-api#999');
+
+    expect(ref).toMatchObject({ id: PR_ID, repoId: NEW_REPO_ID, number: 999 });
+  });
+
+  it('surfaces the id-only "No DevDigest repo with id …" text on a second consecutive StaleRepoIdError', async () => {
+    const fake = makeFake();
+    const resolver = new Resolver(fake);
+    await resolver.pr('acme/payments-api#482');
+
+    fake.script('listPulls', { error: new StaleRepoIdError(REPO_ID, `/repos/${REPO_ID}/pulls`) });
+    fake.script('listPulls', { error: new StaleRepoIdError(REPO_ID, `/repos/${REPO_ID}/pulls`) });
+
+    await expect(resolver.pr('acme/payments-api#999')).rejects.toThrow(
+      `No DevDigest repo with id ${REPO_ID}. Use owner/repo instead.`,
+    );
+  });
+});
+
+// generic-1-3 — once UUID_RE matches, the input is lower-cased before
+// comparing or caching (spec § Resolver), so an upper-case UUID resolves
+// exactly like its lower-case form instead of missing the cache/list scan.
+// Fixture ids (PR_ID, REPO_ID, GR_ID) are all-digit UUIDs, so `.toUpperCase()`
+// on them is a no-op — these tests need ids that actually contain hex
+// letters to exercise the lower-casing.
+describe('UUID case-insensitivity (generic-1-3)', () => {
+  const HEX_PR_ID = 'aabbccdd-1234-4abc-8abc-abcdefabcdef';
+  const HEX_REPO_ID = 'bbccddee-1234-4abc-8abc-abcdefabcdef';
+  const HEX_AGENT_ID = 'ccddeeff-1234-4abc-8abc-abcdefabcdef';
+
+  it('resolves an upper-case PR UUID the same as its lower-case form', async () => {
+    const fake = makeFake();
+    fake.prs[HEX_PR_ID] = { id: HEX_PR_ID, number: PR_NUMBER, title: PR_TITLE };
+    const resolver = new Resolver(fake);
+
+    const ref = await resolver.pr(HEX_PR_ID.toUpperCase());
+
+    expect(ref.id).toBe(HEX_PR_ID);
+    expect(fake.calls.filter((c) => c.method === 'getPull')).toHaveLength(1);
+  });
+
+  it('resolves an upper-case repo UUID the same as its lower-case form', async () => {
+    const fake = makeFake();
+    fake.repos = [{ id: HEX_REPO_ID, full_name: REPO_FULL_NAME }];
+    const resolver = new Resolver(fake);
+
+    const ref = await resolver.repo(HEX_REPO_ID.toUpperCase());
+
+    expect(ref).toEqual({ id: HEX_REPO_ID, fullName: REPO_FULL_NAME });
+  });
+
+  it('resolves an upper-case agent UUID the same as its lower-case form', async () => {
+    const fake = makeFake();
+    fake.agents = [{ id: HEX_AGENT_ID, name: GR_NAME, model: 'gpt-4o', enabled: true }];
+    const resolver = new Resolver(fake);
+
+    const ref = await resolver.agent(HEX_AGENT_ID.toUpperCase());
+
+    expect(ref).toEqual({ id: HEX_AGENT_ID, name: GR_NAME });
   });
 });

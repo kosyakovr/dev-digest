@@ -16,6 +16,7 @@ import {
   prIdNotFound,
   prNotSynced,
   repoNotFound,
+  StaleRepoIdError,
   unreadablePr,
   unreadableRepo,
 } from './errors.js';
@@ -90,9 +91,22 @@ export class Resolver {
     return signal ? { signal } : undefined;
   }
 
+  /** Clears every cache (repos, per-repo PR lists, agents, both PR-ref
+   * maps). Called when a downstream `/pulls/:id/*` call fails with a
+   * `StaleIdError` — the id this resolver handed out no longer exists (e.g.
+   * the repo was deleted and re-added in the web app) — so the next resolve
+   * refetches instead of reusing the stale entry. */
+  invalidate(): void {
+    this.reposCache = null;
+    this.pullsCache.clear();
+    this.agentsCache = null;
+    this.prByRefCache.clear();
+    this.prByIdCache.clear();
+  }
+
   /** Resolves `owner/repo#N`, a GitHub PR URL, or a DevDigest PR UUID. */
   async pr(input: string, signal?: AbortSignal): Promise<PrRef> {
-    if (UUID_RE.test(input)) return this.prByUuid(input, signal);
+    if (UUID_RE.test(input)) return this.prByUuid(input.toLowerCase(), signal);
 
     const m = input.match(PR_REF_RE) ?? input.match(PR_URL_RE);
     if (!m) throw unreadablePr(input);
@@ -100,18 +114,41 @@ export class Resolver {
     return this.prByRef(`${owner}/${name}`, Number(numberStr), signal);
   }
 
+  /** Resolves the repo, then its PR list, for `prByRef`. On a
+   * `StaleRepoIdError` (the cached repo id from `findRepoByFullName` no
+   * longer exists — e.g. the repo was deleted and re-added in the web app),
+   * invalidates every cache and retries once: `findRepoByFullName` then
+   * refetches `listRepos` and picks up the repo's new id. A second failure
+   * propagates as the proper E-text. */
+  private async findRepoAndPulls(
+    fullNameInput: string,
+    number: number,
+    signal?: AbortSignal,
+  ): Promise<{ repo: RepoWire; pulls: PullListItemWire[] }> {
+    const attempt = async (): Promise<{ repo: RepoWire; pulls: PullListItemWire[] }> => {
+      const repo = await this.findRepoByFullName(fullNameInput, signal);
+      let pulls = await this.getPulls(repo, signal);
+      if (!pulls.find((p) => p.number === number)) {
+        pulls = await this.getPulls(repo, signal, { refresh: true });
+      }
+      return { repo, pulls };
+    };
+    try {
+      return await attempt();
+    } catch (err) {
+      if (!(err instanceof StaleRepoIdError)) throw err;
+      this.invalidate();
+      return attempt();
+    }
+  }
+
   private async prByRef(fullNameInput: string, number: number, signal?: AbortSignal): Promise<PrRef> {
     const cacheKey = `${fullNameInput.toLowerCase()}#${number}`;
     const cached = this.prByRefCache.get(cacheKey);
     if (cached) return cached;
 
-    const repo = await this.findRepoByFullName(fullNameInput, signal);
-    let pulls = await this.getPulls(repo, signal);
-    let found = pulls.find((p) => p.number === number);
-    if (!found) {
-      pulls = await this.getPulls(repo, signal, { refresh: true });
-      found = pulls.find((p) => p.number === number);
-    }
+    const { repo, pulls } = await this.findRepoAndPulls(fullNameInput, number, signal);
+    const found = pulls.find((p) => p.number === number);
     if (!found || found.id == null) {
       throw prNotSynced(`${repo.full_name}#${number}`, repo.full_name);
     }
@@ -155,13 +192,14 @@ export class Resolver {
   /** Resolves `owner/repo` (case-insensitive) or a DevDigest repo UUID. */
   async repo(input: string, signal?: AbortSignal): Promise<RepoRef> {
     if (UUID_RE.test(input)) {
+      const id = input.toLowerCase();
       let repos = await this.getRepos(signal);
-      let found = repos.find((r) => r.id === input);
+      let found = repos.find((r) => r.id === id);
       if (!found) {
         repos = await this.getRepos(signal, { refresh: true });
-        found = repos.find((r) => r.id === input);
+        found = repos.find((r) => r.id === id);
       }
-      if (!found) throw repoNotFound(input, repos.map((r) => r.full_name));
+      if (!found) throw repoNotFound(id, repos.map((r) => r.full_name));
       return { id: found.id, fullName: found.full_name };
     }
     const m = input.match(REPO_REF_RE);
@@ -185,12 +223,13 @@ export class Resolver {
     let agents = await this.agents(signal);
 
     if (UUID_RE.test(input)) {
-      let found = agents.find((a) => a.id === input);
+      const id = input.toLowerCase();
+      let found = agents.find((a) => a.id === id);
       if (!found) {
         agents = await this.agents(signal, { refresh: true });
-        found = agents.find((a) => a.id === input);
+        found = agents.find((a) => a.id === id);
       }
-      if (!found) throw agentIdNotFound(input);
+      if (!found) throw agentIdNotFound(id);
       return { id: found.id, name: found.name };
     }
 

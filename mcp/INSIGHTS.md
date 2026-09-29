@@ -13,6 +13,12 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## What Doesn't Work
 
+- 2026-09-29 — The shared fixture UUIDs are ALL DIGITS (`PR_ID = '22222222-…'`),
+  so `.toUpperCase()` on them is a no-op and a case-insensitivity test built on
+  them passes even with the lower-casing deleted → use a local id with hex
+  letters (`'ccddeeff-…'`) for any UUID-case test. (ref: mcp/test/helpers/fixtures.ts:9,12;
+  mcp/test/resolve.test.ts "UUID case-insensitivity")
+
 - 2026-09-29 — The mcp boundary greps cannot tell code from comments: a ring
   docblock naming the forbidden token ("the only `process.env` reader", "no
   `eventsource`") is a hit, and the implementer reworded four headers → in

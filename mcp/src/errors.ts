@@ -18,6 +18,45 @@ export class NotFoundError extends DevDigestError {
   }
 }
 
+function prIdNotFoundText(id: string): string {
+  return `No DevDigest PR with id ${id}. Use owner/repo#123 instead.`;
+}
+
+/** A 404 on a `/pulls/:id/*` endpoint other than `getPull` (`startReview`,
+ * `listRuns`, `listReviews`) — the cached id the resolver handed out no
+ * longer exists (the PR, or — for `startReview` — the agent). Carries the
+ * same E10 text as `prIdNotFound`, but its own class (ring ①) so a use case
+ * can `instanceof` it and react with a cache-invalidate-and-retry
+ * (`resolve.ts`) without importing ring ③. */
+export class StaleIdError extends DevDigestError {
+  constructor(
+    public readonly id: string,
+    public readonly path: string,
+  ) {
+    super(prIdNotFoundText(id));
+  }
+}
+
+function repoIdNotFoundText(id: string): string {
+  return `No DevDigest repo with id ${id}. Use owner/repo instead.`;
+}
+
+/** A 404 on a `/repos/:id/*` endpoint (`listPulls`, `listConventions`) — the
+ * cached repo id no longer exists (e.g. the repo was deleted and re-added in
+ * the web app). Same class family as `StaleIdError` (ring ①, so a use case
+ * can `instanceof` it and react with a cache-invalidate-and-retry,
+ * `resolve.ts`), but its own id-only text — the adapter has no `listRepos()`
+ * result on hand to name the known repos the way E8 does (spec §
+ * 404 mapping). */
+export class StaleRepoIdError extends DevDigestError {
+  constructor(
+    public readonly id: string,
+    public readonly path: string,
+  ) {
+    super(repoIdNotFoundText(id));
+  }
+}
+
 function list(items: string[], max: number): string {
   if (items.length === 0) return 'none';
   return items.slice(0, max).join(', ');
@@ -105,7 +144,7 @@ export function prNotSynced(prLabel: string, repoFullName: string): DevDigestErr
 
 // E10 — 404 on a PR-id endpoint
 export function prIdNotFound(id: string): DevDigestError {
-  return new DevDigestError(`No DevDigest PR with id ${id}. Use owner/repo#123 instead.`);
+  return new DevDigestError(prIdNotFoundText(id));
 }
 
 // E11 — agent name: 0 matches

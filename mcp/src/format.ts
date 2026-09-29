@@ -4,7 +4,16 @@
  * not import the SDK, `fetch`, the environment, `api/`, `tools/`,
  * `server.ts`, `index.ts`, `config.ts` or `log.ts`.
  */
-import type { AgentWire, ConventionWire, FindingWire, ReviewWire } from './contracts.js';
+import type {
+  AgentOutput,
+  AgentWire,
+  ConventionOutput,
+  ConventionWire,
+  FindingWire,
+  GetFindingsFindingOutput,
+  GetFindingsReviewOutput,
+  ReviewWire,
+} from './contracts.js';
 import { invalidCursor } from './errors.js';
 
 export type ResponseFormat = 'concise' | 'detailed';
@@ -57,44 +66,15 @@ export function minSeverityFilter(min?: string): (severity: string) => boolean {
   return () => true;
 }
 
-export interface AgentConcise {
-  id: string;
-  name: string;
-  enabled: boolean;
-  model: string;
-}
-export interface AgentDetailed extends AgentConcise {
-  description?: string;
-  provider?: string;
-  strategy?: string;
-  version?: number;
-}
-
-export function projectAgent(agent: AgentWire, format: ResponseFormat): AgentConcise | AgentDetailed {
-  const base: AgentConcise = { id: agent.id, name: agent.name, enabled: agent.enabled, model: agent.model };
+export function projectAgent(agent: AgentWire, format: ResponseFormat): AgentOutput {
+  const base: AgentOutput = { id: agent.id, name: agent.name, enabled: agent.enabled, model: agent.model };
   if (format === 'concise') return base;
-  const detailed: AgentDetailed = { ...base };
+  const detailed: AgentOutput = { ...base };
   if (agent.description !== undefined) detailed.description = agent.description;
   if (agent.provider !== undefined) detailed.provider = agent.provider;
   if (agent.strategy !== undefined) detailed.strategy = agent.strategy;
   if (agent.version !== undefined) detailed.version = agent.version;
   return detailed;
-}
-
-export interface FindingConcise {
-  severity: string;
-  title: string;
-  loc: string;
-  agent_name: string | null;
-}
-export interface FindingDetailed extends FindingConcise {
-  id: string;
-  category: string;
-  rationale: string;
-  suggestion: string | null;
-  confidence: number;
-  kind: string | null;
-  run_id: string | null;
 }
 
 /** Used by `devdigest_get_findings` — the finding shape carries `agent_name`
@@ -103,8 +83,8 @@ export function projectFinding(
   f: FindingWire,
   format: ResponseFormat,
   ctx: { agentName: string | null; runId: string | null },
-): FindingConcise | FindingDetailed {
-  const base: FindingConcise = {
+): GetFindingsFindingOutput {
+  const base: GetFindingsFindingOutput = {
     severity: f.severity,
     title: f.title,
     loc: loc(f.file, f.start_line, f.end_line),
@@ -123,27 +103,12 @@ export function projectFinding(
   };
 }
 
-export interface ReviewConcise {
-  run_id: string | null;
-  agent_id: string | null;
-  agent_name: string | null;
-  verdict: string | null;
-  score: number | null;
-  findings_count: number;
-  created_at: string;
-}
-export interface ReviewDetailed extends ReviewConcise {
-  review_id: string;
-  summary: string | null;
-  model: string | null;
-}
-
 export function projectReview(
   review: ReviewWire,
   format: ResponseFormat,
   findingsCount: number,
-): ReviewConcise | ReviewDetailed {
-  const base: ReviewConcise = {
+): GetFindingsReviewOutput {
+  const base: GetFindingsReviewOutput = {
     run_id: review.run_id,
     agent_id: review.agent_id,
     agent_name: review.agent_name ?? null,
@@ -156,22 +121,8 @@ export function projectReview(
   return { ...base, review_id: review.id, summary: review.summary, model: review.model };
 }
 
-export interface ConventionConcise {
-  rule: string;
-  category: string;
-  status: string;
-  evidence: string;
-}
-export interface ConventionDetailed extends ConventionConcise {
-  id: string;
-  rationale: string | null;
-  evidence_snippet: string;
-  confidence: number;
-  created_at: string;
-}
-
-export function projectConvention(c: ConventionWire, format: ResponseFormat): ConventionConcise | ConventionDetailed {
-  const base: ConventionConcise = {
+export function projectConvention(c: ConventionWire, format: ResponseFormat): ConventionOutput {
+  const base: ConventionOutput = {
     rule: c.rule,
     category: c.category,
     status: c.status,

@@ -98,6 +98,8 @@ See also — settled recipes, one line each:
   backreferences, exit ≥2 = broken, `--untracked` on an uncommitted tree
   (`fitness-greps.sh:44` does), prove each 0 with a planted positive, and
   ship its EXPECTED output beside it (`greps.md` § The patterns, `scripts/secret-greps.sh`).
+- 2026-09-29 — Correction to the line above: `--untracked` is in `fitness-greps.sh`
+  `hits()` (:46, not :44), and it predates the mcp/ change. (pr-self-review generic-2-4)
 
 ## Session Notes
 

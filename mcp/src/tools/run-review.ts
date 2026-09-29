@@ -10,6 +10,7 @@ import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/proto
 import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
 import { runReview } from '../use-cases/run-review.js';
 import { PROGRESS_THROTTLE_MS } from '../constants.js';
+import { RunReviewOutput } from '../contracts.js';
 import { toolError, toolResult, type ToolCallResult } from './result.js';
 import { wrap } from './wrap.js';
 import type { ToolDeps } from './list-agents.js';
@@ -20,32 +21,7 @@ const inputShape = {
   limit: z.number().int().min(1).max(50).default(10).describe('Max findings returned'),
 };
 
-const findingShape = {
-  severity: z.string(),
-  title: z.string(),
-  loc: z.string(),
-  category: z.string(),
-};
-
-const outputShape = {
-  untrusted_notice: z.string(),
-  status: z.enum(['done', 'running']),
-  pr: z.string(),
-  pr_title: z.string(),
-  run_id: z.string(),
-  agent_id: z.string().optional(),
-  agent_name: z.string(),
-  verdict: z.string().nullable().optional(),
-  score: z.number().nullable().optional(),
-  summary: z.string().nullable().optional(),
-  findings_count: z.number().optional(),
-  cost_usd: z.number().nullable().optional(),
-  duration_ms: z.number().nullable().optional(),
-  findings: z.array(z.object(findingShape)).optional(),
-  omitted: z.number().optional(),
-  elapsed_s: z.number().optional(),
-  hint: z.string().optional(),
-};
+const outputShape = RunReviewOutput.shape;
 
 type Extra = RequestHandlerExtra<ServerRequest, ServerNotification>;
 

@@ -10,11 +10,13 @@ import {
   reviewNotReady,
   runFailed,
   runNotOnPr,
+  StaleIdError,
   unexpectedResponse,
 } from '../errors.js';
 import { loc, sortFindings } from '../format.js';
 import type { DevDigestApi } from '../ports.js';
-import type { Resolver } from '../resolve.js';
+import type { AgentRef, PrRef, Resolver } from '../resolve.js';
+import type { RunReviewFindingOutput, RunReviewOutput } from '../contracts.js';
 
 export interface RunReviewInput {
   pr: string;
@@ -42,7 +44,7 @@ export async function runReview(
   deps: RunReviewDeps,
   input: RunReviewInput,
   ctx: RunReviewCtx,
-): Promise<Record<string, unknown> | null> {
+): Promise<RunReviewOutput | null> {
   const deadlineMs = ctx.deadlineMs ?? RUN_DEADLINE_MS;
   const confirmTimeoutMs = ctx.confirmTimeoutMs ?? CONFIRM_TIMEOUT_MS;
   const t0 = Date.now();
@@ -52,8 +54,8 @@ export async function runReview(
   const combined = AbortSignal.any([ctx.signal, deadlineController.signal]);
 
   try {
-    let pr;
-    let agentRef;
+    let pr: PrRef;
+    let agentRef: AgentRef;
     try {
       pr = await deps.resolver.pr(input.pr, combined);
       agentRef = await deps.resolver.agent(input.agent, combined);
@@ -71,18 +73,22 @@ export async function runReview(
       throw resolutionBudgetExceeded(input.pr, Math.round(deadlineMs / 1000));
     }
 
-    const reviewResponse = await deps.api.startReview(pr.id, agentRef.id, {
-      signal: ctx.signal,
-      timeoutMs: confirmTimeoutMs,
-    });
-    const target = reviewResponse.runs[0];
-    if (reviewResponse.runs.length !== 1 || !target) {
-      throw unexpectedResponse(
-        'POST',
-        `/pulls/${pr.id}/review`,
-        'runs',
-        `expected exactly 1 run target, got ${reviewResponse.runs.length}`,
-      );
+    const startWithCurrentIds = (): ReturnType<DevDigestApi['startReview']> =>
+      deps.api.startReview(pr.id, agentRef.id, { signal: ctx.signal, timeoutMs: confirmTimeoutMs });
+
+    let target;
+    try {
+      target = await startWithCurrentIds();
+    } catch (err) {
+      if (!(err instanceof StaleIdError)) throw err;
+      // The cached pr/agent id no longer exists (e.g. the repo was deleted
+      // and re-added in the web app). No run was started — safe to
+      // invalidate, re-resolve, and retry once; a second failure surfaces
+      // the proper E-text (never retried again after this).
+      deps.resolver.invalidate();
+      pr = await deps.resolver.pr(input.pr, combined);
+      agentRef = await deps.resolver.agent(input.agent, combined);
+      target = await startWithCurrentIds();
     }
 
     try {
@@ -149,7 +155,7 @@ export async function runReview(
 
     const nonDismissed = review.findings.filter((f) => !f.dismissed_at);
     const sorted = sortFindings(nonDismissed);
-    const findings = sorted.slice(0, input.limit).map((f) => ({
+    const findings: RunReviewFindingOutput[] = sorted.slice(0, input.limit).map((f) => ({
       severity: f.severity,
       title: f.title,
       loc: loc(f.file, f.start_line, f.end_line),
@@ -157,7 +163,7 @@ export async function runReview(
     }));
     const omitted = nonDismissed.length - findings.length;
 
-    const out: Record<string, unknown> = {
+    const out: RunReviewOutput = {
       untrusted_notice: UNTRUSTED_NOTICE,
       status: 'done',
       pr: pr.label,

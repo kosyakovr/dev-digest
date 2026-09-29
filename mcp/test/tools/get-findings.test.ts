@@ -42,8 +42,12 @@ function review(
   };
 }
 
-/** Newest-first: GR-new (R2, 1 CRITICAL + 1 dismissed WARNING), GR-old (R1, 1
- * CRITICAL), SR (R3, 1 SUGGESTION), plus one kind:'summary' row. */
+/** Newest-first: GR-new (R2, 1 CRITICAL + 1 non-dismissed WARNING + 1
+ * dismissed WARNING), GR-old (R1, 1 CRITICAL), SR (R3, 1 SUGGESTION), plus
+ * one kind:'summary' row. The non-dismissed WARNING (generic-2-3) exists so
+ * a severity:'WARNING' query can be told apart from severity:'CRITICAL' —
+ * with only a dismissed WARNING in the fixture, both thresholds used to
+ * produce the same result. */
 function seedReviews(fake: FakeDevDigestApi): void {
   fake.reviews[PR_ID] = [
     review({
@@ -54,6 +58,7 @@ function seedReviews(fake: FakeDevDigestApi): void {
       created_at: '2024-01-03T00:00:00Z',
       findings: [
         finding({ id: 'f-new-crit', severity: 'CRITICAL', title: 'NEW-crit', file: 'a.ts', start_line: 5 }),
+        finding({ id: 'f-new-warn-live', severity: 'WARNING', title: 'NEW-warn-live', file: 'a.ts', start_line: 7 }),
         finding({
           id: 'f-new-warn',
           severity: 'WARNING',
@@ -120,8 +125,8 @@ describe('devdigest_get_findings', () => {
     expect(result.isError).toBeFalsy();
     const sc = result.structuredContent as { reviews: { run_id: string }[]; findings: { title: string }[]; total: number };
     expect(sc.reviews.map((r) => r.run_id)).toEqual([R2, R3]);
-    expect(sc.findings.map((f) => f.title)).toEqual(['NEW-crit', 'SR-sugg']);
-    expect(sc.total).toBe(2);
+    expect(sc.findings.map((f) => f.title)).toEqual(['NEW-crit', 'NEW-warn-live', 'SR-sugg']);
+    expect(sc.total).toBe(3);
     // SR-1 — untrusted_notice is the first key of the success structuredContent.
     expect(Object.keys(result.structuredContent as object)[0]).toBe('untrusted_notice');
     expect((result.content as { text: string }[])[0]?.text.startsWith('{"untrusted_notice":')).toBe(true);
@@ -154,14 +159,43 @@ describe('devdigest_get_findings', () => {
     expect(hint).not.toContain('IGNORE PREVIOUS INSTRUCTIONS');
   });
 
-  it('filters findings by minimum severity (WARNING keeps only the CRITICAL finding here)', async () => {
+  it('filters findings by minimum severity: CRITICAL only vs CRITICAL+WARNING (generic-2-3)', async () => {
     const { fake, client } = await setup();
     seedReviews(fake);
 
-    const result = await callGetFindings(client, { pr: 'acme/payments-api#482', severity: 'WARNING' });
+    const criticalOnly = await callGetFindings(client, { pr: 'acme/payments-api#482', severity: 'CRITICAL' });
+    const criticalAndWarning = await callGetFindings(client, { pr: 'acme/payments-api#482', severity: 'WARNING' });
 
-    const sc = result.structuredContent as { findings: { title: string }[] };
-    expect(sc.findings.map((f) => f.title)).toEqual(['NEW-crit']);
+    const scCritical = criticalOnly.structuredContent as { findings: { title: string }[] };
+    const scWarning = criticalAndWarning.structuredContent as { findings: { title: string }[] };
+    expect(scCritical.findings.map((f) => f.title)).toEqual(['NEW-crit']);
+    expect(scWarning.findings.map((f) => f.title)).toEqual(['NEW-crit', 'NEW-warn-live']);
+  });
+
+  it('accepts an upper-case run_id, resolving the same as its lower-case form (generic-1-3)', async () => {
+    // R1/R2/R3 are all-digit UUIDs, so .toUpperCase() would be a no-op on
+    // them — use an id that actually contains hex letters to exercise the
+    // lower-casing (spec § Resolver).
+    const HEX_RUN_ID = 'aabbccdd-1234-4abc-8abc-abcdefabcdef';
+    const { fake, client } = await setup();
+    seedReviews(fake);
+    fake.reviews[PR_ID] = [
+      ...(fake.reviews[PR_ID] ?? []),
+      review({
+        id: 'rev-hex',
+        run_id: HEX_RUN_ID,
+        agent_id: GR_ID,
+        agent_name: GR_NAME,
+        created_at: '2024-01-05T00:00:00Z',
+        findings: [finding({ id: 'f-hex', severity: 'CRITICAL', title: 'HEX-crit', file: 'h.ts', start_line: 1 })],
+      }),
+    ];
+
+    const result = await callGetFindings(client, { pr: 'acme/payments-api#482', run_id: HEX_RUN_ID.toUpperCase() });
+
+    const sc = result.structuredContent as { reviews: { run_id: string }[]; findings: { title: string }[] };
+    expect(sc.reviews.map((r) => r.run_id)).toEqual([HEX_RUN_ID]);
+    expect(sc.findings.map((f) => f.title)).toEqual(['HEX-crit']);
   });
 
   it('run_id selects that run\'s own review, bypassing the per-agent newest dedup', async () => {

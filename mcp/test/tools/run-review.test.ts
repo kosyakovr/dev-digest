@@ -19,7 +19,7 @@ async function setup(): Promise<{ fake: FakeDevDigestApi; client: Awaited<Return
 
 function scriptStartReview(fake: FakeDevDigestApi): void {
   fake.script('startReview', {
-    value: { pr_id: PR_ID, runs: [{ run_id: RUN_ID, agent_id: GR_ID, agent_name: GR_NAME }] },
+    value: { run_id: RUN_ID, agent_id: GR_ID, agent_name: GR_NAME },
   });
 }
 

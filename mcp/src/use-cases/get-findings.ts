@@ -3,13 +3,14 @@
  * `fetch`, the environment, `api/`, `tools/`, `server.ts`, `index.ts`,
  * `config.ts` or `log.ts`.
  */
-import type { FindingWire, ReviewWire } from '../contracts.js';
-import { UNTRUSTED_NOTICE } from '../constants.js';
+import type { FindingWire, GetFindingsOutput, ReviewWire } from '../contracts.js';
+import { UNTRUSTED_NOTICE, UUID_RE } from '../constants.js';
 import {
   reviewNotReady,
   runAgentMismatch,
   runFailed,
   runNotOnPr,
+  StaleIdError,
   unexpectedResponse,
 } from '../errors.js';
 import {
@@ -22,7 +23,7 @@ import {
   type ResponseFormat,
 } from '../format.js';
 import type { DevDigestApi } from '../ports.js';
-import type { Resolver } from '../resolve.js';
+import type { AgentRef, PrRef, Resolver } from '../resolve.js';
 
 export interface GetFindingsInput {
   pr: string;
@@ -43,21 +44,43 @@ function unknownAgent(name: string | null | undefined): string {
   return name ?? '(unknown agent)';
 }
 
+/** Resolves `pr` (+ `agent`, if given), then calls `listReviews(pr.id)`; on a
+ * `StaleIdError` (the cached `pr.id` no longer exists — e.g. the repo was
+ * deleted and re-added), invalidates every resolver cache, re-resolves once,
+ * and retries the read once. Safe: both calls are read-only. A second
+ * failure propagates as the proper E-text. */
+async function resolveAndListReviews(
+  deps: GetFindingsDeps,
+  input: GetFindingsInput,
+  signal: AbortSignal,
+): Promise<{ pr: PrRef; agentRef: AgentRef | null; allReviews: ReviewWire[] }> {
+  const attempt = async (): Promise<{ pr: PrRef; agentRef: AgentRef | null; allReviews: ReviewWire[] }> => {
+    const pr = await deps.resolver.pr(input.pr, signal);
+    const agentRef = input.agent ? await deps.resolver.agent(input.agent, signal) : null;
+    const allReviews = await deps.api.listReviews(pr.id, { signal });
+    return { pr, agentRef, allReviews };
+  };
+  try {
+    return await attempt();
+  } catch (err) {
+    if (!(err instanceof StaleIdError)) throw err;
+    deps.resolver.invalidate();
+    return attempt();
+  }
+}
+
 export async function getFindings(
   deps: GetFindingsDeps,
   input: GetFindingsInput,
   signal: AbortSignal,
-): Promise<Record<string, unknown>> {
-  const pr = await deps.resolver.pr(input.pr, signal);
-  const agentRef = input.agent ? await deps.resolver.agent(input.agent, signal) : null;
-
-  const allReviews = await deps.api.listReviews(pr.id, { signal });
+): Promise<GetFindingsOutput> {
+  const { pr, agentRef, allReviews } = await resolveAndListReviews(deps, input, signal);
   const reviewsOnly = allReviews.filter((r) => r.kind === 'review');
 
   let selected: ReviewWire[];
 
   if (input.run_id) {
-    const runId = input.run_id;
+    const runId = UUID_RE.test(input.run_id) ? input.run_id.toLowerCase() : input.run_id;
     const match = reviewsOnly.find((r) => r.run_id === runId);
     if (match) {
       if (agentRef && match.agent_id !== agentRef.id) {
@@ -65,7 +88,15 @@ export async function getFindings(
       }
       selected = [match];
     } else {
-      const runs = await deps.api.listRuns(pr.id, { signal });
+      let runs;
+      try {
+        runs = await deps.api.listRuns(pr.id, { signal });
+      } catch (err) {
+        if (!(err instanceof StaleIdError)) throw err;
+        deps.resolver.invalidate();
+        const fresh = await deps.resolver.pr(input.pr, signal);
+        runs = await deps.api.listRuns(fresh.id, { signal });
+      }
       const run = runs.find((r) => r.run_id === runId);
       if (!run) throw runNotOnPr(runId, pr.label);
       if (agentRef && run.agent_id !== agentRef.id) {
@@ -147,7 +178,7 @@ export async function getFindings(
     return projectReview(r, input.response_format, findingsCount);
   });
 
-  const out: Record<string, unknown> = {
+  const out: GetFindingsOutput = {
     untrusted_notice: UNTRUSTED_NOTICE,
     pr: pr.label,
     pr_title: pr.title ?? '',

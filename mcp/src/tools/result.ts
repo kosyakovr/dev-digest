@@ -25,7 +25,7 @@ export interface ToolErrorResult {
 
 export type ToolCallResult = ToolSuccessResult | ToolErrorResult;
 
-export function toolResult(sc: Record<string, unknown>): ToolSuccessResult {
+export function toolResult<T extends Record<string, unknown>>(sc: T): ToolSuccessResult {
   return {
     content: [{ type: 'text', text: JSON.stringify(sc) }],
     structuredContent: sc,

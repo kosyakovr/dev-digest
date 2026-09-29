@@ -185,7 +185,7 @@ for p in server client reviewer-core mcp; do mkdir -p "W/$p"; ln -s "$PWD/$p/nod
 
 Write `W` out **literally in every command**: shell variables do not survive
 between Bash calls, and the guard looks for `devdigest-redproof-` in the
-command text itself. The symlinked `node_modules` resolve imports for all three
+command text itself. The symlinked `node_modules` resolve imports for all four
 packages, and `git worktree remove --force` leaves the real ones intact (verified
 2026-09-24). Never run an install inside `W`.
 

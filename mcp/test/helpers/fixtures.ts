@@ -1,7 +1,7 @@
 /**
- * Test helper — the hermetic fixtures named in the plan's Test brief
- * (`mcp-plan-v2.md` <!-- test-brief -->): one repo, one PR, two agents.
- * Shared by every `mcp/test/**` file that needs a resolvable pr/repo/agent.
+ * Test helper — the hermetic fixtures named in `mcp/specs/L04-mcp-server.md`
+ * § Test plan: one repo, one PR, two agents. Shared by every `mcp/test/**`
+ * file that needs a resolvable pr/repo/agent.
  */
 import type { AgentWire, PullListItemWire, RepoWire } from '../../src/contracts.js';
 import { FakeDevDigestApi } from '../../src/api/fake-api.js';

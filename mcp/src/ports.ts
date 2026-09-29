@@ -9,7 +9,7 @@ import type {
   RepoWire,
   PullListItemWire,
   PullDetailWire,
-  ReviewRunResponseWire,
+  ReviewRunTargetWire,
   RunSummaryWire,
   ReviewWire,
   ConventionWire,
@@ -35,7 +35,10 @@ export interface DevDigestApi {
   listRepos(opts?: CallOpts): Promise<RepoWire[]>;
   listPulls(repoId: string, opts?: CallOpts): Promise<PullListItemWire[]>;
   getPull(prId: string, opts?: CallOpts): Promise<PullDetailWire>;
-  startReview(prId: string, agentId: string, opts?: CallOpts): Promise<ReviewRunResponseWire>;
+  /** Returns the single run target the server started (the adapter has
+   * already checked there is exactly one — onion-architecture §5, by
+   * analogy). */
+  startReview(prId: string, agentId: string, opts?: CallOpts): Promise<ReviewRunTargetWire>;
   streamRunEvents(
     runId: string,
     onEvent: (e: RunEventWire) => void,

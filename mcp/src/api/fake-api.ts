@@ -10,7 +10,7 @@ import type {
   PullDetailWire,
   PullListItemWire,
   RepoWire,
-  ReviewRunResponseWire,
+  ReviewRunTargetWire,
   ReviewWire,
   RunEventWire,
   RunSummaryWire,
@@ -124,8 +124,15 @@ export class FakeDevDigestApi implements DevDigestApi {
     });
   }
 
-  startReview(prId: string, agentId: string, opts?: CallOpts): Promise<ReviewRunResponseWire> {
-    return this.apply('startReview', [prId, agentId], opts, () => ({ pr_id: prId, runs: [] }));
+  /** Matches the port's `startReview` (single target, not the envelope) —
+   * script a `{run_id, agent_id, agent_name}` value for a specific case; the
+   * fallback below is a de-facto default only (Handoff to test-writer). */
+  startReview(prId: string, agentId: string, opts?: CallOpts): Promise<ReviewRunTargetWire> {
+    return this.apply('startReview', [prId, agentId], opts, () => ({
+      run_id: `${prId}-run`,
+      agent_id: agentId,
+      agent_name: agentId,
+    }));
   }
 
   streamRunEvents(runId: string, onEvent: (e: RunEventWire) => void, opts?: CallOpts): Promise<StreamEnd> {

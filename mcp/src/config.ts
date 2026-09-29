@@ -18,7 +18,9 @@ const DEFAULT_API_BASE = 'http://localhost:3001';
  * code needs no argument; tests pass a plain object instead.
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const raw = env.DEVDIGEST_API_BASE ?? DEFAULT_API_BASE;
+  // An MCP client expanding an unset `${VAR}` can pass '' rather than
+  // omitting the key entirely — treat empty/whitespace the same as unset.
+  const raw = env.DEVDIGEST_API_BASE?.trim() || DEFAULT_API_BASE;
 
   let url: URL;
   try {

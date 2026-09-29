@@ -21,6 +21,7 @@ import {
   type ReviewWire,
   type RunEventWire,
   type RunSummaryWire,
+  type ReviewRunTargetWire,
 } from '../contracts.js';
 import {
   httpError,
@@ -29,6 +30,9 @@ import {
   unexpectedResponse,
   unreachable,
   NotFoundError,
+  StaleIdError,
+  StaleRepoIdError,
+  type DevDigestError,
 } from '../errors.js';
 import type { CallOpts, DevDigestApi, StreamEnd } from '../ports.js';
 import { REQUEST_TIMEOUT_MS } from '../constants.js';
@@ -61,6 +65,37 @@ async function readErrorMessage(res: Response): Promise<string | undefined> {
   }
 }
 
+/** Matches every `/pulls/:id` and `/pulls/:id/...` path this adapter calls;
+ * group 1 is the id, group 2 the rest (undefined for the bare `getPull` path). */
+const PULLS_ID_PATH_RE = /^\/pulls\/([^/]+)(\/.*)?$/;
+
+/** Matches every `/repos/:id/...` path this adapter calls (`listPulls`,
+ * `listConventions`) — there is no bare `GET /repos/:id` here, so this
+ * adapter never calls it without a further segment. */
+const REPOS_ID_PATH_RE = /^\/repos\/([^/]+)\/.*$/;
+
+/** 404 mapping (spec § Error texts): `getPull` (`GET /pulls/:id` exactly) is
+ * the only endpoint whose 404 is a `NotFoundError`, which the resolver
+ * translates to E10. A 404 on any other `/pulls/:id/*` endpoint means the id
+ * the resolver handed out (the PR, or — for `startReview` — the agent) no
+ * longer exists: it becomes a `StaleIdError` carrying the same E10 text, so a
+ * use case can react (`resolve.ts`). A 404 on `/repos/:id/*` (`listPulls`,
+ * `listConventions`) is the same family — `StaleRepoIdError` — for a cached
+ * repo id that no longer exists. Every other 404 is a plain E4. */
+async function mapNotFound(method: string, path: string, res: Response): Promise<DevDigestError> {
+  const msg = await readErrorMessage(res);
+  const pullsMatch = path.match(PULLS_ID_PATH_RE);
+  if (pullsMatch) {
+    const id = pullsMatch[1] as string;
+    const rest = pullsMatch[2];
+    if (method === 'GET' && !rest) return new NotFoundError(path, msg ?? 'not found');
+    return new StaleIdError(id, path);
+  }
+  const reposMatch = path.match(REPOS_ID_PATH_RE);
+  if (reposMatch) return new StaleRepoIdError(reposMatch[1] as string, path);
+  return httpError(method, path, res.status, msg);
+}
+
 export class HttpDevDigestApi implements DevDigestApi {
   private readonly baseUrl: string;
   private readonly fetchImpl: FetchImpl;
@@ -84,6 +119,14 @@ export class HttpDevDigestApi implements DevDigestApi {
     const timer = setTimeout(() => ownController.abort(), timeoutMs);
     const signal = opts?.signal ? AbortSignal.any([opts.signal, ownController.signal]) : ownController.signal;
 
+    const ownTimeout = (): DevDigestError => {
+      const prId = reviewPostPrId(method, path);
+      return timeout(method, path, Math.round(timeoutMs / 1000), {
+        isReviewPost: prId !== undefined,
+        pr: prId,
+      });
+    };
+
     try {
       let res: Response;
       try {
@@ -94,13 +137,7 @@ export class HttpDevDigestApi implements DevDigestApi {
           body: body !== undefined ? JSON.stringify(body) : undefined,
         });
       } catch (err) {
-        if (ownController.signal.aborted) {
-          const prId = reviewPostPrId(method, path);
-          throw timeout(method, path, Math.round(timeoutMs / 1000), {
-            isReviewPost: prId !== undefined,
-            pr: prId,
-          });
-        }
+        if (ownController.signal.aborted) throw ownTimeout();
         if (opts?.signal?.aborted) {
           throw err; // caller abort — rethrow so wrap() can map it to "Cancelled."
         }
@@ -110,16 +147,22 @@ export class HttpDevDigestApi implements DevDigestApi {
       }
 
       if (res.status === 429) throw rateLimited(method, path);
-      if (res.status === 404) {
-        const msg = await readErrorMessage(res);
-        throw new NotFoundError(path, msg ?? 'not found');
-      }
+      if (res.status === 404) throw await mapNotFound(method, path, res);
       if (!res.ok) {
         const msg = await readErrorMessage(res);
         throw httpError(method, path, res.status, msg);
       }
 
-      const text = await res.text();
+      let text: string;
+      try {
+        text = await res.text();
+      } catch (err) {
+        // An own-timeout can fire while the body is still being read; a
+        // caller abort at the same point still rethrows so wrap() maps it to
+        // "Cancelled." — never surfaced as a raw AbortError either way.
+        if (ownController.signal.aborted) throw ownTimeout();
+        throw err;
+      }
       let json: unknown;
       try {
         json = text.length > 0 ? JSON.parse(text) : undefined;
@@ -191,8 +234,21 @@ export class HttpDevDigestApi implements DevDigestApi {
     return this.get(`/pulls/${prId}`, PullDetailWire, opts);
   }
 
-  startReview(prId: string, agentId: string, opts?: CallOpts) {
-    return this.post(`/pulls/${prId}/review`, { agentId }, ReviewRunResponseWire, opts);
+  /** Also owns the "exactly one run target" shape check (onion-architecture
+   * §5, by analogy: the adapter knows the route, so the E5 text belongs
+   * here, not duplicated in a ring ② use case). */
+  async startReview(prId: string, agentId: string, opts?: CallOpts): Promise<ReviewRunTargetWire> {
+    const response = await this.post(`/pulls/${prId}/review`, { agentId }, ReviewRunResponseWire, opts);
+    const target = response.runs[0];
+    if (response.runs.length !== 1 || !target) {
+      throw unexpectedResponse(
+        'POST',
+        `/pulls/${prId}/review`,
+        'runs',
+        `expected exactly 1 run target, got ${response.runs.length}`,
+      );
+    }
+    return target;
   }
 
   async streamRunEvents(

@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getConventions } from '../use-cases/get-conventions.js';
+import { GetConventionsOutput } from '../contracts.js';
 import { toolResult } from './result.js';
 import { wrap } from './wrap.js';
 import type { ToolDeps } from './list-agents.js';
@@ -18,27 +19,7 @@ const inputShape = {
   response_format: z.enum(['concise', 'detailed']).default('concise'),
 };
 
-const conventionShape = {
-  rule: z.string(),
-  category: z.string(),
-  status: z.string(),
-  evidence: z.string(),
-  id: z.string().optional(),
-  rationale: z.string().nullable().optional(),
-  evidence_snippet: z.string().optional(),
-  confidence: z.number().optional(),
-  created_at: z.string().optional(),
-};
-
-const outputShape = {
-  untrusted_notice: z.string(),
-  repo: z.string(),
-  repo_id: z.string().optional(),
-  conventions: z.array(z.object(conventionShape)),
-  total: z.number(),
-  truncated: z.boolean(),
-  hint: z.string().optional(),
-};
+const outputShape = GetConventionsOutput.shape;
 
 export function register(server: McpServer, deps: ToolDeps): void {
   server.registerTool(

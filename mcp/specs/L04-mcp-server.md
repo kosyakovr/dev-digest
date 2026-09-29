@@ -84,6 +84,21 @@ DevDigest HTTP API (default `http://localhost:3001`), through one port,
 | E20 | blast-radius stub | `devdigest_get_blast_radius is not implemented yet. For review results on this PR use devdigest_get_findings.` |
 | E21 | any other throw | `Unexpected error in {tool}: {err.message}. Retry; if it persists check the mcp stderr log.` |
 
+**404 mapping** (`src/api/http.ts`): `GET /pulls/:id` (`getPull`) is the only
+endpoint whose 404 is a `NotFoundError`, which the resolver's `prByUuid`
+translates to E10 — this is the only place a caller ever sees "Not found:
+…" text, and it never reaches a tool result. A 404 on any other
+`/pulls/:id/*` endpoint (`startReview`, `listRuns`, `listReviews`) means the
+id the resolver handed out no longer exists — the PR, or, for `startReview`,
+the agent embedded in the POST body — and becomes a `StaleIdError`
+(`src/errors.ts`), carrying the same E10 text but its own class so a use case
+can react (see Resolver § cache invalidation below). A 404 on `/repos/:id/*`
+(`listPulls`, `listConventions`) is the same family — `StaleRepoIdError` —
+for a cached repo id that no longer exists; its text is an id-only sibling of
+E8 (`No DevDigest repo with id {id}. Use owner/repo instead.`), since the
+adapter has no fresh `listRepos()` result on hand to name the known repos the
+way E8's `{input}`/`Known repos:` form does. Every other 404 is a plain E4.
+
 ### Architecture: rings inside `mcp/` (onion-architecture, by analogy)
 
 | Ring | Files | May import | Must not import |
@@ -179,6 +194,9 @@ Every `src/**/*.ts` opens with a `/**` docblock naming its ring (`Contracts` |
 
 ### Resolver (`src/resolve.ts`, ring ②, per-process cache)
 - UUID: `/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i`.
+  Once it matches, the input is lower-cased before comparing or caching (`pr`,
+  `repo`, `agent`, and `devdigest_get_findings`'s `run_id`) — Postgres ids are
+  lower-case, so an upper-case UUID must not miss the cache or the list scan.
 - PR by reference: `owner/repo#N`, or a GitHub PR URL — via `listRepos` →
   case-insensitive `full_name` match → `listPulls` → `number` match (E9 on miss).
 - PR by UUID: reverse cache, else `getPull` (404 → E10), labelled `#{number}`.
@@ -186,9 +204,25 @@ Every `src/**/*.ts` opens with a `/**` docblock naming its ring (`Contracts` |
 - `agent`: UUID, or trimmed case-insensitive exact name, against `listAgents`.
 - Cache: repos, per-repo PR lists, agents, a `prById` map. On a miss, refetch
   the list once before erroring. Never POST — the port has no such method.
+- **Cache invalidation on a stale id:** `Resolver.invalidate()` clears every
+  cache. A use case calls it when a downstream `/pulls/:id/*` call made with a
+  cached id (`startReview`, `listRuns`, `listReviews`) fails with a
+  `StaleIdError` (§ Error texts § 404 mapping) — e.g. the repo behind the PR
+  was deleted and re-added in the web app, so the cached id is gone. The use
+  case then re-resolves the same input once and retries the failed call once;
+  a second failure surfaces the E10 text. This is safe for
+  `devdigest_run_review` because a `StaleIdError` from `POST
+  /pulls/:id/review` means no run was started — the retry only ever runs
+  before a successful POST, never after. The same pattern applies to a
+  `StaleRepoIdError` from `listPulls` (PR resolution by `owner/repo#N`, inside
+  `prByRef`) and from `listConventions` (`devdigest_get_conventions`) — both
+  read-only, so a safe retry.
 
 ### Config and constants
 - `DEVDIGEST_API_BASE`, default `http://localhost:3001`, trailing `/` stripped.
+  An empty or whitespace-only value falls back to the default too — an MCP
+  client expanding an unset `${VAR}` may pass `''` rather than omitting the
+  key.
 - A non-`http(s)` value → stderr `devdigest-mcp: DEVDIGEST_API_BASE must be an
   http(s) URL, got "<v>"` and exit 1, with empty stdout.
 - `src/constants.ts`: `REQUEST_TIMEOUT_MS` 30000 · `RUN_DEADLINE_MS` 100000 ·
@@ -222,7 +256,7 @@ Every `src/**/*.ts` opens with a `/**` docblock naming its ring (`Contracts` |
 - [ ] **AC-11:** `devdigest_get_blast_radius` returns `isError:true` with E20 and makes no port call.
 - [ ] **AC-12:** over stdio, every stdout line parses as JSON-RPC 2.0, including on API-down errors.
 - [ ] **AC-13:** `mcp/test/contract-pin.test.ts` fails when a field a local schema reads is renamed in its paired server contract.
-- [ ] **AC-14:** `.mcp.json` equals the Contract block. `mcp.yml` triggers on `mcp/**` and `server/src/vendor/shared/**`.
+- [ ] **AC-14:** `.mcp.json` equals the Contract block. `mcp.yml` triggers on `mcp/**`, `.mcp.json` and `server/src/vendor/shared/**`.
 - [ ] **AC-15:** the only lockfile added or changed is `mcp/package-lock.json`, and `git diff --stat -- server client reviewer-core e2e` is empty.
 - [ ] **AC-16 (onion):** all 8 boundary greps print nothing, each proven by its plant; every `mcp/src/**/*.ts` opens with a `/**` ring docblock; `git grep -nE -e "(api|resolver)\.[A-Za-z]+\(" -- mcp/src/tools` prints nothing; each use case is tested against `FakeDevDigestApi` with no `McpServer`.
 - [ ] **AC-17 (tooling):** `routing.md` routes `mcp/src/**/*.ts` to A and F; `scripts/fitness-greps.sh` reports the 8 `mcp-*` checks when `mcp/src` changes; `.claude/hooks/test-implementer-guard.sh` exits 0; with G4, `.claude/hooks/test-agent-scope-guard.sh` exits 0.
@@ -235,4 +269,4 @@ formatting, the five tools (over an SDK `Client` + `InMemoryTransport` against
 `FakeDevDigestApi`), `devdigest_run_review`'s timing/cancellation/progress, a
 contract-pin test against `server/src/vendor/shared`, `.mcp.json` shape, and
 stdout cleanliness over a real `stdio` child process. Full detail per case is
-in the plan's Test brief (`mcp-plan-v2.md`), sections WP4.tests–WP9.tests.
+in `mcp/test/**` itself, against this spec's Contract and Acceptance criteria above.

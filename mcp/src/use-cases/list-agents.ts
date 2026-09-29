@@ -5,6 +5,7 @@
  */
 import type { Resolver } from '../resolve.js';
 import { projectAgent, type ResponseFormat } from '../format.js';
+import type { ListAgentsOutput } from '../contracts.js';
 
 export interface ListAgentsInput {
   response_format: ResponseFormat;
@@ -18,7 +19,7 @@ export async function listAgents(
   deps: ListAgentsDeps,
   input: ListAgentsInput,
   signal: AbortSignal,
-): Promise<Record<string, unknown>> {
+): Promise<ListAgentsOutput> {
   // Always fresh (never the resolver's cache): an agent created in the web
   // app must show up in the same session.
   const agents = await deps.resolver.agents(signal, { refresh: true });
