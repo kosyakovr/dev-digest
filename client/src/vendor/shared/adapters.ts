@@ -181,6 +181,18 @@ export interface GitClient {
   blame(repo: RepoRef, path: string): Promise<BlameLine[]>;
   log(repo: RepoRef, path?: string): Promise<GitCommit[]>;
   readFile(repo: RepoRef, path: string): Promise<string>;
+  /**
+   * Read a file as it is at commit `ref` (a hex SHA) via the object database.
+   * `path` is repo-relative. Returns `null` when the object is missing at `ref`.
+   * When the blob is larger than `maxBytes` it returns `{ text: '', bytes }`
+   * without reading the content.
+   */
+  readFileAtRef(
+    repo: RepoRef,
+    ref: string,
+    path: string,
+    maxBytes: number,
+  ): Promise<{ text: string; bytes: number } | null>;
   clonePathFor(repo: RepoRef): string;
 }
 

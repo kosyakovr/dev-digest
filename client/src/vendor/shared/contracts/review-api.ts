@@ -56,9 +56,67 @@ export const ReviewRunResponse = z.object({
 });
 export type ReviewRunResponse = z.infer<typeof ReviewRunResponse>;
 
+/** Confidence in a derived PR intent. Computed in code from the sources found; never model-reported. */
+export const IntentConfidence = z.enum(['high', 'medium', 'low']);
+export type IntentConfidence = z.infer<typeof IntentConfidence>;
+
+/** Where a piece of intent evidence came from. `link` = a URL/path that was found but not read. */
+export const IntentSourceKind = z.enum([
+  'title',
+  'description',
+  'ticket',
+  'spec',
+  'commits',
+  'branch',
+  'files',
+  'diff',
+  'link',
+]);
+export type IntentSourceKind = z.infer<typeof IntentSourceKind>;
+
+/** Why a referenced source could not be used. */
+export const IntentUnresolvedReason = z.enum([
+  'external_not_fetched',
+  'cross_repo',
+  'outside_repo',
+  'unsupported_type',
+  'not_found',
+  'too_large',
+  'is_pull_request',
+  'github_unavailable',
+  'limit_reached',
+]);
+export type IntentUnresolvedReason = z.infer<typeof IntentUnresolvedReason>;
+
+export const IntentSource = z.object({
+  kind: IntentSourceKind,
+  /** '#471' | 'docs/specs/x.md' | URL | null */
+  ref: z.string().nullable(),
+  status: z.enum(['used', 'unresolved']),
+  reason: IntentUnresolvedReason.nullable(),
+});
+export type IntentSource = z.infer<typeof IntentSource>;
+
 /** Intent persisted for a PR (the Intent plus the pr_id it scopes). */
-export const PrIntentRecord = Intent.extend({ pr_id: z.string() });
+export const PrIntentRecord = Intent.extend({
+  pr_id: z.string(),
+  confidence: IntentConfidence,
+  sources: z.array(IntentSource),
+  head_sha: z.string(),
+  /** true when the PR's head moved since this intent was derived. */
+  stale: z.boolean(),
+  provider: z.string().nullable(),
+  model: z.string().nullable(),
+  tokens_in: z.number().int().nullable(),
+  tokens_out: z.number().int().nullable(),
+  /** null = unknown, never 0-as-unknown (server/specs/L01-run-cost.md § Null semantics). */
+  cost_usd: z.number().nullable(),
+  derived_at: z.string(),
+});
 export type PrIntentRecord = z.infer<typeof PrIntentRecord>;
+
+export const PrIntentResponse = z.object({ intent: PrIntentRecord.nullable() });
+export type PrIntentResponse = z.infer<typeof PrIntentResponse>;
 
 /** Smart-diff response for a PR (the SmartDiff). */
 export const SmartDiffResponse = SmartDiff;

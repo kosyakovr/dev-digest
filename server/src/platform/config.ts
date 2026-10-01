@@ -29,12 +29,23 @@ const EnvSchema = z.object({
   API_PORT: z.coerce.number().int().default(3001),
   WEB_PORT: z.coerce.number().int().default(3000),
   DEVDIGEST_CLONE_DIR: z.string().optional(),
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  // An empty (or blank) NODE_ENV counts as unset: it falls through to the default
+  // and, for prompt logging, is not "explicit" (see loadConfig).
+  NODE_ENV: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+    z.enum(['development', 'test', 'production']).default('development'),
+  ),
   // `.env` (and .env.example) ship `LOG_LEVEL=` empty; an empty string is not a
   // valid enum member, so coerce '' → undefined to fall through to the default.
   LOG_LEVEL: z.preprocess(
     (v) => (v === '' ? undefined : v),
     z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).optional(),
+  ),
+  // Prompt-assembly logging. `verbose` adds per-chunk detail (hashes, a masked
+  // system-prompt preview) and is honoured only for an EXPLICIT local NODE_ENV.
+  DEVDIGEST_PROMPT_LOG: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.enum(['default', 'verbose']).optional(),
   ),
 });
 
@@ -48,6 +59,12 @@ export type AppConfig = {
   secretsPath: string;
   nodeEnv: 'development' | 'test' | 'production';
   logLevel: string;
+  /** Prompt-log mode actually in effect (verbose only for an explicit development/test NODE_ENV). */
+  promptLog: 'default' | 'verbose';
+  /** What DEVDIGEST_PROMPT_LOG asked for, before the environment check. */
+  promptLogRequested: 'default' | 'verbose';
+  /** Why a requested verbose mode was not honoured; undefined when it was (or not requested). */
+  promptLogIgnoredReason?: string;
   /** Allowed CORS origin for the Next.js dev server. */
   webOrigin: string;
   /** Whether memory/RAG embeddings (OpenAI) are enabled. Default false. */
@@ -66,6 +83,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const cloneDirRaw =
     parsed.DEVDIGEST_CLONE_DIR ?? join(homedir(), '.devdigest', 'workspace');
   const cloneDir = isAbsolute(cloneDirRaw) ? cloneDirRaw : resolve(process.cwd(), cloneDirRaw);
+  const promptLogRequested = parsed.DEVDIGEST_PROMPT_LOG ?? 'default';
+  // "Local only" needs an EXPLICIT NODE_ENV: the schema default ('development')
+  // must not count, or an unconfigured deployment would honour the flag.
+  const rawNodeEnv = env.NODE_ENV;
+  const nodeEnvExplicit = typeof rawNodeEnv === 'string' && rawNodeEnv.trim() !== '';
+  const local = nodeEnvExplicit && (parsed.NODE_ENV === 'development' || parsed.NODE_ENV === 'test');
+  const promptLog = promptLogRequested === 'verbose' && local ? 'verbose' : 'default';
+  const promptLogIgnoredReason =
+    promptLogRequested === 'verbose' && !local
+      ? nodeEnvExplicit
+        ? `NODE_ENV=${parsed.NODE_ENV}`
+        : 'NODE_ENV not set explicitly'
+      : undefined;
   return {
     databaseUrl: parsed.DATABASE_URL,
     apiPort: parsed.API_PORT,
@@ -73,7 +103,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     cloneDir,
     secretsPath: join(homedir(), '.devdigest', 'secrets.json'),
     nodeEnv: parsed.NODE_ENV,
-    logLevel: parsed.LOG_LEVEL ?? (parsed.NODE_ENV === 'test' ? 'silent' : 'info'),
+    logLevel:
+      parsed.LOG_LEVEL ??
+      (parsed.NODE_ENV === 'test' ? 'silent' : promptLog === 'verbose' ? 'debug' : 'info'),
+    promptLog,
+    promptLogRequested,
+    ...(promptLogIgnoredReason ? { promptLogIgnoredReason } : {}),
     webOrigin: `http://localhost:${parsed.WEB_PORT}`,
     embeddingsEnabled: parsed.EMBEDDINGS_ENABLED === 'true',
     repoIntelEnabled: parsed.REPO_INTEL_ENABLED !== 'false',

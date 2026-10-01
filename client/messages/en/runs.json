@@ -44,6 +44,7 @@
     },
     "prompt": {
       "system": "System",
+      "intent": "Stated intent — derived, untrusted (dynamic)",
       "skills": "Skills (dynamic)",
       "memory": "Memory (dynamic)",
       "repoMap": "Repo skeleton — repo-intel (dynamic)",

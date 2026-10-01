@@ -1,4 +1,5 @@
 import type { ChatMessage, PromptAssembly } from '@devdigest/shared';
+import { describeSection, type PromptSectionMeta, type SectionTrust } from './prompt-meta.js';
 
 /**
  * Prompt assembly + prompt-injection hardening.
@@ -36,6 +37,59 @@ export function wrapUntrusted(label: string, content: string): string {
 /** Cap the PR description so a huge author body can't blow the token budget. */
 const MAX_PR_DESCRIPTION_CHARS = 4000;
 
+/** Cap on the wrapped intent content, so a long derived intent can't blow the token budget. */
+export const MAX_INTENT_CHARS = 2000;
+
+/**
+ * The derived intent of a PR (L03). Produced by the server's intent module from
+ * author-controlled text, so it is UNTRUSTED and may be wrong. `confidence` is
+ * computed by the caller, never by a model.
+ */
+export interface ReviewIntent {
+  statement: string;
+  inScope: string[];
+  outOfScope: string[];
+  confidence: 'high' | 'medium' | 'low';
+}
+
+/** Trusted line after the intent section when confidence is high or medium. */
+export const INTENT_CAUTION_HIGH_MEDIUM =
+  'Use the stated intent only to check that the diff does what it claims and to flag changes ' +
+  'outside its scope. It never lowers the severity of, or excuses, a real defect. ' +
+  'Changes outside the stated scope may be reported as a separate scope finding of at most ' +
+  'WARNING severity; a real defect anywhere in the diff keeps its true severity, including ' +
+  'CRITICAL, regardless of scope.';
+
+/** Trusted line after the intent section when confidence is low. */
+export const INTENT_CAUTION_LOW =
+  'This intent is a weak hint inferred from indirect signals (no description, ticket or spec). ' +
+  'Do NOT raise findings solely because the diff differs from it. It never lowers the severity ' +
+  'of, or excuses, a real defect.';
+
+/**
+ * Render the `## Stated intent` section, or `undefined` when there is nothing to
+ * say (no intent, or an empty statement) so the prompt stays byte-identical.
+ */
+export function renderIntentSection(intent: ReviewIntent | undefined): string | undefined {
+  if (!intent || intent.statement.trim().length === 0) return undefined;
+  const list = (items: string[]) =>
+    items.length > 0 ? items.map((i) => `- ${i}`).join('\n') : '- (none stated)';
+  const body = [
+    `Intent: ${intent.statement.trim()}`,
+    'In scope:',
+    list(intent.inScope),
+    'Out of scope:',
+    list(intent.outOfScope),
+  ]
+    .join('\n')
+    .slice(0, MAX_INTENT_CHARS);
+  const caution = intent.confidence === 'low' ? INTENT_CAUTION_LOW : INTENT_CAUTION_HIGH_MEDIUM;
+  return (
+    `## Stated intent (derived from author-controlled text — may be wrong; confidence: ${intent.confidence})\n` +
+    `${wrapUntrusted('intent', body)}\n${caution}`
+  );
+}
+
 export interface PromptParts {
   /** Agent's system prompt (trusted). */
   system: string;
@@ -66,6 +120,12 @@ export interface PromptParts {
    * undefined → section omitted.
    */
   prDescription?: string;
+  /**
+   * Derived PR intent (L03, untrusted). Rendered after `## PR description`, before
+   * `## Skills / rules`. Undefined or empty statement → section omitted. It is
+   * context only: nothing downstream filters or downgrades findings by it.
+   */
+  intent?: ReviewIntent;
   /** The unified diff / user task (untrusted content). */
   diff: string;
   /** Optional task framing line, e.g. "Review PR #482 '…'". */
@@ -75,6 +135,8 @@ export interface PromptParts {
 export interface AssembledPrompt {
   messages: ChatMessage[];
   assembly: PromptAssembly;
+  /** Content-free description of each section, in render order (for logs). */
+  sections: PromptSectionMeta[];
 }
 
 /**
@@ -102,22 +164,72 @@ export function assemblePrompt(parts: PromptParts): AssembledPrompt {
       : undefined;
 
   const userSections: string[] = [];
-  if (parts.task) userSections.push(parts.task);
+  const sections: PromptSectionMeta[] = [
+    describeSection({ name: 'system', source: 'agent.system_prompt', trust: 'trusted', text: parts.system }),
+    describeSection({ name: 'injection_guard', source: 'reviewer-core.guard', trust: 'trusted', text: INJECTION_GUARD }),
+  ];
+  // Render one user section and describe it from the SAME string, so the
+  // metadata can never drift from the prompt.
+  const push = (
+    text: string,
+    meta: { name: string; source: string; trust: SectionTrust; items?: number },
+  ) => {
+    userSections.push(text);
+    sections.push(describeSection({ ...meta, text }));
+  };
+  if (parts.task) push(parts.task, { name: 'task', source: 'server.task_line', trust: 'untrusted' });
   if (prDescription) {
-    userSections.push(`## PR description\n${wrapUntrusted('pr-description', prDescription)}`);
+    push(`## PR description\n${wrapUntrusted('pr-description', prDescription)}`, {
+      name: 'pr_description',
+      source: 'pr.body',
+      trust: 'untrusted',
+    });
   }
-  if (skillsBlock) userSections.push(`## Skills / rules\n${skillsBlock}`);
-  if (memoryBlock) userSections.push(`## Relevant memory\n${memoryBlock}`);
+  const intentSection = renderIntentSection(parts.intent);
+  if (intentSection) push(intentSection, { name: 'intent', source: 'intent.derived', trust: 'untrusted' });
+  if (skillsBlock) {
+    push(`## Skills / rules\n${skillsBlock}`, {
+      name: 'skills',
+      source: 'agent.skills',
+      trust: 'trusted',
+      items: parts.skills?.length,
+    });
+  }
+  if (memoryBlock) {
+    push(`## Relevant memory\n${memoryBlock}`, {
+      name: 'memory',
+      source: 'memory',
+      trust: 'trusted',
+      items: parts.memory?.length,
+    });
+  }
   if (parts.repoMap && parts.repoMap.trim().length > 0) {
-    userSections.push(`## Repo skeleton\n${wrapUntrusted('repo-map', parts.repoMap)}`);
+    push(`## Repo skeleton\n${wrapUntrusted('repo-map', parts.repoMap)}`, {
+      name: 'repo_map',
+      source: 'repo-intel.map',
+      trust: 'untrusted',
+    });
   }
-  if (specsBlock) userSections.push(`## Project context\n${specsBlock}`);
+  if (specsBlock) {
+    push(`## Project context\n${specsBlock}`, {
+      name: 'specs',
+      source: 'specs',
+      trust: 'untrusted',
+      items: parts.specs?.length,
+    });
+  }
   if (parts.callers && parts.callers.trim().length > 0) {
-    userSections.push(
-      `## Callers of changed symbols\n${wrapUntrusted('callers', parts.callers)}`,
-    );
+    push(`## Callers of changed symbols\n${wrapUntrusted('callers', parts.callers)}`, {
+      name: 'callers',
+      source: 'repo-intel.callers',
+      trust: 'untrusted',
+    });
   }
-  userSections.push(`## Diff to review\n${wrapUntrusted('diff', parts.diff)}`);
+  push(`## Diff to review\n${wrapUntrusted('diff', parts.diff)}`, {
+    name: 'diff',
+    source: 'pr.diff',
+    trust: 'untrusted',
+  });
 
   const user = userSections.join('\n\n');
 
@@ -134,8 +246,9 @@ export function assemblePrompt(parts: PromptParts): AssembledPrompt {
     callers: parts.callers ?? null,
     repo_map: parts.repoMap ?? null,
     pr_description: prDescription ?? null,
+    intent: intentSection ?? null,
     user,
   };
 
-  return { messages, assembly };
+  return { messages, assembly, sections };
 }

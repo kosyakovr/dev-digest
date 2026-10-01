@@ -7,7 +7,8 @@ import type {
   UnifiedDiff,
 } from '@devdigest/shared';
 import { Review as ReviewSchema } from '@devdigest/shared';
-import { assemblePrompt } from '../prompt.js';
+import { assemblePrompt, type ReviewIntent } from '../prompt.js';
+import type { PromptSectionMeta } from '../prompt-meta.js';
 import { groundFindings, groundingSummary } from '../grounding.js';
 import { reduceReviews, scoreFromFindings, sliceDiff } from './reduce.js';
 
@@ -39,6 +40,22 @@ export interface ReviewEvent {
   kind: RunEventKind;
   msg: string;
   data?: unknown;
+  /**
+   * Text safe for a stdout/pino mirror, when `msg` carries model-generated text
+   * (e.g. a finding title). The live log keeps `msg`; the mirror uses this.
+   */
+  mirrorMsg?: string;
+}
+
+/** Emitted before each LLM call: what the prompt is made of, never its content. */
+export interface PromptEvent {
+  mode: ReviewMode;
+  chunkCount: number;
+  /** Sections of the whole-diff assembly (shared by every chunk). */
+  overall: PromptSectionMeta[];
+  /** Exact length of the whole-diff messages (separators included). */
+  overallChars: number;
+  chunk: { index: number; label: string; sections: PromptSectionMeta[] };
 }
 
 export interface ReviewInput {
@@ -71,6 +88,8 @@ export interface ReviewInput {
   /** PR author's description/body (untrusted; truncated + delimiter-wrapped in
       the prompt). Empty/undefined → section omitted. */
   prDescription?: string;
+  /** Derived PR intent (L03, untrusted). Omitted → the prompt is unchanged. */
+  intent?: ReviewIntent;
   /** Task framing line, e.g. "Review PR #482 …". */
   task?: string;
   /** Override the structured-output retry budget. */
@@ -84,6 +103,11 @@ export interface ReviewInput {
   sessionId?: string;
   /** Progress sink. */
   onEvent?: (e: ReviewEvent) => void;
+  /**
+   * Called before each LLM call with content-free section metadata. A throwing
+   * callback is ignored — logging must never fail a review.
+   */
+  onPrompt?: (e: PromptEvent) => void;
   /**
    * Cancellation checkpoint, called before each (expensive) chunk LLM call.
    * Supply a function that THROWS to abort mid-run (the caller owns the error
@@ -124,8 +148,8 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
   const threshold = input.mapThresholdLines ?? DEFAULT_MAP_THRESHOLD_LINES;
   const maxRetries = input.maxRetries ?? DEFAULT_REVIEW_MAX_RETRIES;
   const mode = selectMode(input.strategy ?? 'auto', input.diff, threshold);
-  const emit = (kind: RunEventKind, msg: string, data?: unknown) =>
-    input.onEvent?.({ kind, msg, data });
+  const emit = (kind: RunEventKind, msg: string, data?: unknown, mirrorMsg?: string) =>
+    input.onEvent?.({ kind, msg, data, ...(mirrorMsg !== undefined ? { mirrorMsg } : {}) });
 
   const promptParts = {
     system: input.systemPrompt,
@@ -135,11 +159,14 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
     callers: input.callers,
     repoMap: input.repoMap,
     prDescription: input.prDescription,
+    intent: input.intent,
     task: input.task,
   };
 
   // Whole-diff assembly is the trace default; overwritten below for single-pass.
-  let assembly: PromptAssembly = assemblePrompt({ ...promptParts, diff: input.diff.raw }).assembly;
+  const whole = assemblePrompt({ ...promptParts, diff: input.diff.raw });
+  let assembly: PromptAssembly = whole.assembly;
+  const overall = whole.sections;
 
   const chunks =
     mode === 'map-reduce'
@@ -159,7 +186,7 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
   let costUsd: number | null = 0;
   const raws: string[] = [];
 
-  for (const chunk of chunks) {
+  for (const [index, chunk] of chunks.entries()) {
     // Cancellation checkpoint — stop before the next (expensive) LLM call.
     input.checkCancelled?.();
     // 'map:' prefix only for the map-reduce path (one call per file). In
@@ -171,6 +198,17 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
     );
     const a = assemblePrompt({ ...promptParts, diff: chunk.diffText });
     if (mode === 'single-pass') assembly = a.assembly;
+    try {
+      input.onPrompt?.({
+        mode,
+        chunkCount: chunks.length,
+        overall,
+        overallChars: whole.messages.reduce((n, m) => n + m.content.length, 0),
+        chunk: { index, label: chunk.label, sections: a.sections },
+      });
+    } catch {
+      // Observability must never fail a review.
+    }
     const res = await input.llm.completeStructured<Review>({
       model: input.model,
       schema: ReviewSchema,
@@ -197,7 +235,15 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
   const ground = groundFindings(merged.findings, input.diff);
   const grounding = groundingSummary(ground);
   for (const d of ground.dropped) {
-    emit('info', `grounding dropped "${d.finding.title}": ${d.reason}`);
+    // The title is model-generated: the live log keeps it, the pino mirror gets
+    // only a count and a generic reason (the raw reason embeds a model-chosen path).
+    const why = d.reason.includes('not present in diff') ? 'file not in diff' : 'line not in diff';
+    emit(
+      'info',
+      `grounding dropped "${d.finding.title}": ${d.reason}`,
+      undefined,
+      `grounding dropped 1 finding(s) (reason: ${why})`,
+    );
   }
   emit('result', `Citation grounding: ${grounding}`);
 

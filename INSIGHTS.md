@@ -17,6 +17,13 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 
 ## What Works
 
+- 2026-10-01 — `implementer-guard.sh` denies every write under
+  `server/src/db/migrations/**` even AFTER the user approves the migration gate,
+  so delegating an approved migration to the implementer just bounces → the main
+  session writes the `.sql`, snapshot and journal entry (per
+  docs/hand-written-migrations.md) BEFORE launching the implementer, and the
+  implementer only edits `src/db/schema/*.ts` to match. (ref: L03 intent, 0013_extend_pr_intent)
+
 - 2026-09-24 — A hook cannot be tested end to end through an agent in this repo
   (it refuses first, citing AGENTS.md) nor via a project agent in `-p` (hooks
   skipped) → use `--settings` in a throwaway dir with no AGENTS.md, or
@@ -86,6 +93,13 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 
 ## Tool & Library Notes
 
+- 2026-10-01 — `git grep -E` here does NOT understand `\s`: the secret pattern
+  `(secret|key|token|password)\s*[:=]\s*['"][^'"]{8,}` matched 0 files with exit
+  1 — indistinguishable from a clean scan — while the same pattern with
+  `[[:space:]]` matched 9 → write POSIX classes (`[[:space:]]`, `[[:alnum:]]`)
+  in every `git grep -E` pattern, and prove a new pattern on a planted sample.
+  (ref: .claude/agents/security-reviewer.md Step 2)
+
 - 2026-09-20 — `grep` in this environment is **ugrep**, not GNU grep: a BRE
   backreference (`grep -v "^src/modules/\([a-z-]*\)/[^:]*:.*modules/\1/"`) that
   GNU grep accepts dies on `ugrep: error: ... invalid escape`, and it fails with a
@@ -114,6 +128,9 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 
 ## Session Notes
 
+- 2026-10-01 — L03 Intent Layer: cheap-model PR intent (migration 0013 on
+  `pr_intent`, contracts in both vendored copies, `## Stated intent` review slot,
+  one live call at $0.00013) (spec: server/specs/L03-intent-layer.md).
 - 2026-09-24 — L02 subagents: test-writer, plan-verifier, architecture-reviewer,
   doc-writer + `agent-scope-guard.sh`; tests moved from implementer to test-writer
   (design and sources: .claude/agents/README.md).

@@ -1,5 +1,6 @@
 import type { RunEventKind, RunLogLine } from '@devdigest/shared';
 import type { RunBus } from './sse.js';
+import { maskSecrets } from './secret-mask.js';
 
 /**
  * Structured run logger — the SINGLE sink for everything a run does.
@@ -47,9 +48,14 @@ export class RunLogger {
   }
 
   /** Publish one event to every target run's stream + mirror to stdout. */
-  event(kind: RunEventKind, msg: string, data?: unknown): void {
+  event(kind: RunEventKind, msg: string, data?: unknown, mirrorMsg?: string): void {
     for (const runId of this.runIds) this.bus.publish(runId, kind, msg, data);
-    this.base?.[LEVEL[kind]]({ ...this.ctx, runIds: this.runIds, kind, ...(data !== undefined ? { data } : {}) }, msg);
+    // The bus keeps `msg` as is. The pino mirror uses `mirrorMsg` when the caller
+    // supplies one (msg carries model-generated text), masked as a backup layer.
+    this.base?.[LEVEL[kind]](
+      { ...this.ctx, runIds: this.runIds, kind, ...(data !== undefined ? { data } : {}) },
+      maskSecrets(mirrorMsg ?? msg),
+    );
   }
 
   info(msg: string, data?: unknown): void {

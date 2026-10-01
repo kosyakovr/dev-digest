@@ -84,6 +84,14 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## Open Questions
 
+- 2026-10-01 — Why does the step `open the PR row` (`find text "Add rate
+  limiting to public API endpoints" click`) fail intermittently on a HERMETIC
+  run, right after `land on the PR list` passes? At HEAD `6e6fbd0` it failed
+  flow 05 (6/8 with flow 02's Cost); on the L03 working tree it failed 04+05
+  in one run and only 05 in the next — so a run of 5/8 or 6/8 with exactly
+  these two plus 02 is the current baseline, not a regression. Suspect the
+  click races the list render (no `wait --text` before `find`).
+
 - 2026-09-22 — Why does flow 02's `wait --text "Cost"` fail on a HERMETIC fresh
   stack (reproducible, twice), when the step before it — the PR title on the
   same page — passes, and `COLUMN_KEYS` in

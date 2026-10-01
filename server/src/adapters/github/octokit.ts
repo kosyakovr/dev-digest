@@ -360,6 +360,9 @@ export class OctokitGitHubClient implements GitHubClient {
       title: res.data.title,
       body: res.data.body,
       state: res.data.state,
+      labels: (res.data.labels ?? []).map((l) => (typeof l === 'string' ? l : (l.name ?? ''))).filter(Boolean),
+      state_reason: res.data.state_reason ?? null,
+      is_pull_request: res.data.pull_request != null,
     };
   }
 

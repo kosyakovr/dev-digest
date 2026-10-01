@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import type { Container } from '../../platform/container.js';
 import type { Provider, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
-import { reviewPullRequest, countBlockers } from '@devdigest/reviewer-core';
+import { reviewPullRequest, countBlockers, type ReviewIntent } from '@devdigest/reviewer-core';
 import { RunLogger } from '../../platform/run-logger.js';
+import { childLogger, logPrompt, logPromptDetail } from '../../platform/prompt-log.js';
 import * as schema from '../../db/schema.js';
 import type { AgentRow } from '../../db/rows.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
@@ -23,6 +25,7 @@ export type Logger = {
   warn: (obj: unknown, msg?: string) => void;
   error: (obj: unknown, msg?: string) => void;
   debug: (obj: unknown, msg?: string) => void;
+  child?: (bindings: Record<string, unknown>) => Logger;
 };
 
 // A reduced "Review per file" — same schema as Review (the model returns a small
@@ -36,7 +39,8 @@ export type RunOutcome = {
 
 /**
  * Owns the background execution of queued agent runs (extracted from
- * ReviewService; behaviour unchanged). Loads the diff + intent once, then
+ * ReviewService). Loads the diff once and resolves the PR intent once
+ * (`container.intent`, cached by input hash), then
  * map-reduces each agent, streaming events over the runBus and persisting each
  * review. Per-agent failures are isolated.
  */
@@ -57,8 +61,12 @@ export class ReviewRunExecutor {
     pull: PullRow,
     repo: typeof schema.repos.$inferSelect,
     jobs: { agent: AgentRow; runId: string }[],
-    logger?: Logger,
+    rootLogger?: Logger,
   ): Promise<void> {
+    // One id per batch: the intent lines and every agent's prompt line carry it.
+    const correlationId = randomUUID();
+    const logger = rootLogger && childLogger(rootLogger, { correlationId, prId: pull.id });
+    logger?.info({ runIds: jobs.map((j) => j.runId) }, 'review: batch started');
     // ONE logger fanned out over every queued run: shared pre-work (diff +
     // intent) is streamed into each target agent's Live Log and persisted into
     // each run's trace. Per-agent work below narrows it to a single run.
@@ -106,6 +114,18 @@ export class ReviewRunExecutor {
     }
     runLog.info(`Diff ready — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`);
 
+    // L03 — derive (or reuse) the PR intent ONCE for the whole batch; every agent
+    // gets the same one. Never throws: on failure it logs and returns undefined,
+    // and the agents run without the slot.
+    const intent = await this.container.intent.resolveForReview({
+      workspaceId,
+      pull,
+      repo: { owner: repo.owner, name: repo.name },
+      diff,
+      runLog,
+      logger,
+    });
+
     for (const { agent, runId } of jobs) {
       const agentStart = Date.now();
       logger?.info(
@@ -113,7 +133,17 @@ export class ReviewRunExecutor {
         `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
       );
       try {
-        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog);
+        const outcome = await this.runOneAgent(
+          workspaceId,
+          pull,
+          repo,
+          diff,
+          agent,
+          runId,
+          runLog,
+          intent,
+          logger && childLogger(logger, { runId, agent: agent.name }),
+        );
         logger?.info(
           {
             runId,
@@ -145,6 +175,8 @@ export class ReviewRunExecutor {
     agent: AgentRow,
     runId: string,
     parentLog: RunLogger,
+    intent?: ReviewIntent,
+    agentLog?: Logger,
   ): Promise<RunOutcome> {
     const start = Date.now();
     // Narrow the fanned-out pre-work logger to THIS run; the shared diff/intent
@@ -221,9 +253,32 @@ export class ReviewRunExecutor {
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
+        // L03 — derived intent: untrusted context for the model only. INVARIANT:
+        // nothing downstream filters, drops or downgrades findings by intent or
+        // scope — `groundFindings` (inside reviewPullRequest) and
+        // `countBlockers(findings, agent.ciFailOn)` below never receive it, so a
+        // CRITICAL finding outside the stated scope stays CRITICAL and a blocker.
+        ...(intent ? { intent } : {}),
         task,
         sessionId: `${repo.owner}/${repo.name}#${pull.number}:${agent.name}`,
-        onEvent: (e) => runLog.event(e.kind, e.msg, e.data),
+        onEvent: (e) => runLog.event(e.kind, e.msg, e.data, e.mirrorMsg),
+        // Content-free section metadata only (see platform/prompt-log.ts).
+        onPrompt: (e) => {
+          const promptLog = this.container.config.promptLog;
+          const input = {
+            kind: 'review' as const,
+            provider: agent.provider,
+            model: agent.model,
+            strategy: e.mode,
+            chunks: e.chunkCount,
+            sections: e.overall,
+            totalChars: e.overallChars,
+            systemPrompt: agent.systemPrompt,
+          };
+          const chunk = { index: e.chunk.index, of: e.chunkCount, label: e.chunk.label, sections: e.chunk.sections };
+          if (e.chunk.index === 0) logPrompt(agentLog, { ...input, detailChunks: [chunk] }, promptLog);
+          else logPromptDetail(agentLog, input, chunk, promptLog);
+        },
         checkCancelled: () => {
           if (this.container.runBus.isCancelled(runId)) throw new RunCancelledError();
         },

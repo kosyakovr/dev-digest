@@ -38,6 +38,7 @@ delimiter-wrapped (`prompt.ts:104-122`):
 ```
 <task line, e.g. "Review PR #7 '…'">
 ## PR description        (untrusted, author-controlled, truncated to 4000 chars)
+## Stated intent         (untrusted, derived from author text; omitted when absent)
 ## Skills / rules        (linked skill bodies)
 ## Relevant memory       (curated memory items)
 ## Repo skeleton         (untrusted, repo-derived)
@@ -49,6 +50,41 @@ delimiter-wrapped (`prompt.ts:104-122`):
 Sections with no content are omitted. Everything repo- or author-derived is wrapped
 in `<untrusted source="…">…</untrusted>` so the model can tell instructions
 (system) from data (user).
+
+### Prompt logging
+
+Each agent run and each intent derivation writes one `prompt: assembled` line:
+section names, sources, trust, chars and estimated tokens, provider/model and a
+`correlationId` (spec: `server/specs/L03-prompt-logging.md`). Logs carry lengths and hashes, never section content.
+
+| Section | Source | Trust |
+|---|---|---|
+| `system` | `agent.system_prompt` | trusted |
+| `injection_guard` | `reviewer-core.guard` | trusted |
+| `task` | `server.task_line` | untrusted |
+| `pr_description` | `pr.body` | untrusted |
+| `intent` | `intent.derived` | untrusted |
+| `skills` / `memory` | `agent.skills` / `memory` | trusted |
+| `repo_map` / `specs` / `callers` | `repo-intel.map` / `specs` / `repo-intel.callers` | untrusted |
+| `diff` | `pr.diff` | untrusted |
+
+`DEVDIGEST_PROMPT_LOG=verbose` (explicit development/test `NODE_ENV` only) adds a per-chunk `prompt: detail` debug line with hashes and a masked system-prompt preview.
+
+## Stated intent — context, never a filter
+
+The `## Stated intent` section is the server's derived paraphrase of the PR's
+title, description, ticket and spec (spec: `server/specs/L03-intent-layer.md`).
+It carries a confidence (`high`/`medium`/`low`, computed in code) and a trusted
+caution line after it. Invariants, enforced by the prompt and by the absence of
+any code path that reads the intent after the model call:
+
+1. Scope never filters or lowers findings. `groundFindings` and
+   `countBlockers(findings, agent.ciFailOn)` do not receive the intent.
+2. A CRITICAL outside the stated scope is still CRITICAL and still a blocker.
+3. An author's "out of scope" never excuses reviewing that code.
+4. A scope mismatch on its own is at most a WARNING finding.
+5. "Does not do what it promised" findings only at medium/high confidence; at
+   low confidence the intent is a weak hint and must not be the sole reason for a finding.
 
 ## Skill ordering
 

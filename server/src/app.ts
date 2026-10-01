@@ -52,12 +52,45 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         ? false
         : {
             level: config.logLevel,
+            // Backup layer only: prompt content is never put into a log payload.
+            // pino's `*.x` matches ONE level down only, so each key is listed
+            // bare too, for the common top-level shape `log.info({ token })`.
+            redact: {
+              paths: [
+                'apiKey',
+                'token',
+                'authorization',
+                'diff',
+                'body',
+                'content',
+                'text',
+                'systemPrompt',
+                'prDescription',
+                '*.apiKey',
+                '*.token',
+                '*.authorization',
+                'req.headers.authorization',
+                'req.headers.cookie',
+                '*.diff',
+                '*.body',
+                '*.content',
+                '*.text',
+                '*.systemPrompt',
+                '*.prDescription',
+              ],
+              censor: '[redacted]',
+            },
             transport:
               config.nodeEnv === 'development'
                 ? { target: 'pino-pretty', options: { colorize: true } }
                 : undefined,
           },
   });
+
+  if (config.promptLogRequested === 'verbose') {
+    if (config.promptLog === 'verbose') app.log.info('prompt logging: verbose (local only)');
+    else app.log.warn(`prompt logging: verbose ignored (${config.promptLogIgnoredReason ?? 'not local'})`);
+  }
 
   // Use zod schemas directly for request validation + response serialization.
   // Routes opt in per-module via `app.withTypeProvider<ZodTypeProvider>()`.

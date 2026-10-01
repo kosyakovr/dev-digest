@@ -62,6 +62,20 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## Tool & Library Notes
 
+- 2026-10-01 — Spying `process.stdout.write` captures NOTHING from the app's
+  real pino logger: pino's stdout destination (sonic-boom) writes via
+  `fs.write` / `fs.writeSync` on fd 1 → to assert on real log lines (e.g. that
+  `correlationId === reqId`, or that a secret never reaches stdout) spy on both
+  `fs.write` and `fs.writeSync` for fd 1 and poll for the line, with
+  `NODE_ENV=production` so no pino-pretty transport is in the way.
+  (ref: server/test/prompt-log-http.it.test.ts:36)
+
+- 2026-10-01 — The `.it.test` suite can fail ONE file with testcontainers
+  `Error: No host port found for host IP` (seen in
+  `test/repo-intel-symbol-clamp.it.test.ts`, 1 of 3 identical runs; the next
+  two were 64/64) — an infra flake of the port mapping, not the code → re-run
+  the suite before investigating; only a repeat on the same file is a signal.
+
 - 2026-09-23 — `StructuredRequest.timeoutMs` is PER ATTEMPT, not per call, and
   `maxRetries` defaults to 2 (`adapters/llm/openai.ts:90,108` — the timeout sits
   INSIDE the retry loop), so a bound that is merely tight does not fail: it

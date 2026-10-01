@@ -12,5 +12,8 @@ import * as t from './schema.js';
 export type AgentRow = typeof t.agents.$inferSelect;
 export type AgentVersionRow = typeof t.agentVersions.$inferSelect;
 export type FindingRow = typeof t.findings.$inferSelect;
+export type PrIntentRow = typeof t.prIntent.$inferSelect;
+export type NewPrIntentRow = typeof t.prIntent.$inferInsert;
+export type PrCommitRow = typeof t.prCommits.$inferSelect;
 export type PullRow = typeof t.pullRequests.$inferSelect;
 export type AgentRunRow = typeof t.agentRuns.$inferSelect;

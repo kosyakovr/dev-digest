@@ -125,6 +125,8 @@ export interface MockGitHubOptions {
   login?: string;
   /** Existing inline review comments returned by listReviewComments. */
   comments?: PrReviewComment[];
+  /** Per-number `getIssue` results; a `null` entry makes `getIssue` throw (simulates 404). */
+  issues?: Record<number, IssueMeta | null>;
 }
 
 export class MockGitHubClient implements GitHubClient {
@@ -231,6 +233,9 @@ export class MockGitHubClient implements GitHubClient {
   }
 
   async getIssue(_repo: RepoRef, n: number): Promise<IssueMeta> {
+    const entry = this.opts.issues?.[n];
+    if (entry === null) throw new Error(`mock: issue #${n} not found`);
+    if (entry) return entry;
     return { number: n, title: `Issue #${n}`, body: 'mock issue', state: 'open' };
   }
 
@@ -249,11 +254,17 @@ export interface MockGitOptions {
   head?: string;
   /** Head `currentHead()` returns AFTER `sync()` runs — simulates fetch+reset advancing HEAD. */
   syncedHead?: string;
+  /** Blob contents served by `readFileAtRef`, keyed `${ref}:${path}`. */
+  filesAtRef?: Record<string, string>;
 }
 
 export class MockGitClient implements GitClient {
   public cloned: { repo: RepoRef; url: string }[] = [];
   public syncs: { repo: RepoRef; branch: string }[] = [];
+  /** Every `readFileAtRef` call, in order. */
+  public readsAtRef: { ref: string; path: string }[] = [];
+  /** PR numbers passed to `fetchPullHead`. */
+  public fetchedPulls: number[] = [];
   private syncedHead?: string;
 
   constructor(private opts: MockGitOptions = {}) {}
@@ -265,7 +276,9 @@ export class MockGitClient implements GitClient {
     this.cloned.push({ repo, url });
     return { path: this.clonePathFor(repo) };
   }
-  async fetchPullHead(): Promise<void> {}
+  async fetchPullHead(_repo?: RepoRef, n?: number): Promise<void> {
+    if (n !== undefined) this.fetchedPulls.push(n);
+  }
   async sync(repo: RepoRef, branch: string): Promise<{ head: string }> {
     this.syncs.push({ repo, branch });
     // After a sync, HEAD advances to syncedHead (or stays at head if unset).
@@ -292,6 +305,18 @@ export class MockGitClient implements GitClient {
   }
   async readFile(_repo: RepoRef, path: string): Promise<string> {
     return this.opts.files?.[path] ?? '';
+  }
+  async readFileAtRef(
+    _repo: RepoRef,
+    ref: string,
+    path: string,
+    maxBytes: number,
+  ): Promise<{ text: string; bytes: number } | null> {
+    this.readsAtRef.push({ ref, path });
+    const text = this.opts.filesAtRef?.[`${ref}:${path}`];
+    if (text === undefined) return null;
+    const bytes = Buffer.byteLength(text);
+    return bytes > maxBytes ? { text: '', bytes } : { text, bytes };
   }
 }
 

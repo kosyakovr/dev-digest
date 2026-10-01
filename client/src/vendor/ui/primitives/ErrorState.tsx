@@ -7,11 +7,14 @@ export function ErrorState({
   title = "Something went wrong",
   body,
   onRetry,
+  retryLabel = "Retry",
   fullScreen,
 }: {
   title?: string;
   body?: React.ReactNode;
   onRetry?: () => void;
+  /** Label of the retry button (pass a translated string). */
+  retryLabel?: string;
   fullScreen?: boolean;
 }) {
   return (
@@ -51,7 +54,7 @@ export function ErrorState({
       {onRetry && (
         <div style={{ marginTop: 12 }}>
           <Button kind="secondary" icon="RefreshCw" onClick={onRetry}>
-            Retry
+            {retryLabel}
           </Button>
         </div>
       )}

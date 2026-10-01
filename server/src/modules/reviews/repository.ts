@@ -1,6 +1,6 @@
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
-import type { Finding, Intent, RunSummary, RunTrace } from '@devdigest/shared';
+import type { Finding, RunSummary, RunTrace } from '@devdigest/shared';
 
 /**
  * A2 — review data-access. The ONLY layer touching the DB for the review
@@ -13,7 +13,7 @@ import type { Finding, Intent, RunSummary, RunTrace } from '@devdigest/shared';
  * composes them so its public API stays identical.
  */
 
-import type { FindingRow, PullRow } from '../../db/rows.js';
+import type { FindingRow, NewPrIntentRow, PrCommitRow, PrIntentRow, PullRow } from '../../db/rows.js';
 export type { FindingRow, PullRow };
 
 export type ReviewRow = typeof t.reviews.$inferSelect;
@@ -127,12 +127,19 @@ export class ReviewRepository {
 
   // ---- intent -------------------------------------------------------------
 
-  upsertIntent(prId: string, intent: Intent): Promise<void> {
-    return pullRepo.upsertIntent(this.db, prId, intent);
+  /** Insert or overwrite the single `pr_intent` row of a PR (every column is set). */
+  upsertIntent(row: NewPrIntentRow): Promise<void> {
+    return pullRepo.upsertIntent(this.db, row);
   }
 
-  getIntent(prId: string): Promise<Intent | undefined> {
-    return pullRepo.getIntent(this.db, prId);
+  /** The stored intent of a PR in this workspace, or undefined. */
+  getIntent(workspaceId: string, prId: string): Promise<PrIntentRow | undefined> {
+    return pullRepo.getIntent(this.db, workspaceId, prId);
+  }
+
+  /** The PR's commits in this workspace, oldest first (empty for another workspace's PR). */
+  getPrCommits(workspaceId: string, prId: string): Promise<PrCommitRow[]> {
+    return pullRepo.getPrCommits(this.db, workspaceId, prId);
   }
 
   // ---- observability: agent_runs + run_traces ----------------------------

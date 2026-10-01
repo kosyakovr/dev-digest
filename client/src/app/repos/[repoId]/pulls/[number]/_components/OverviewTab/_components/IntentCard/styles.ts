@@ -1,0 +1,45 @@
+import type { CSSProperties } from "react";
+
+export const s = {
+  card: {
+    border: "1px solid var(--border)",
+    borderRadius: 8,
+    background: "var(--bg-elevated)",
+    padding: 18,
+    display: "flex",
+    flexDirection: "column",
+    gap: 14,
+  } satisfies CSSProperties,
+  headerRight: { display: "flex", alignItems: "center", gap: 8 } satisfies CSSProperties,
+  statement: {
+    margin: 0,
+    fontSize: 15,
+    fontStyle: "italic",
+    color: "var(--text-primary)",
+    lineHeight: 1.5,
+  } satisfies CSSProperties,
+  columns: { display: "flex", gap: 24, flexWrap: "wrap" } satisfies CSSProperties,
+  column: { flex: 1, minWidth: 220 } satisfies CSSProperties,
+  columnTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: "0.07em",
+    marginBottom: 8,
+  } satisfies CSSProperties,
+  list: {
+    margin: 0,
+    paddingLeft: 18,
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    fontSize: 14,
+    color: "var(--text-secondary)",
+  } satisfies CSSProperties,
+  muted: { fontSize: 13, color: "var(--text-muted)" } satisfies CSSProperties,
+  hint: { fontSize: 13, color: "var(--warn)" } satisfies CSSProperties,
+  footer: { fontSize: 12, color: "var(--text-muted)" } satisfies CSSProperties,
+  error: { fontSize: 13, color: "var(--crit)" } satisfies CSSProperties,
+} as const;

@@ -7,7 +7,6 @@ import type {
 import type { Container } from '../../platform/container.js';
 import { ValidationError } from '../../platform/errors.js';
 import { RepoRepository, type RepoRow } from '../repos/repository.js';
-import { resolveFeatureModel } from '../settings/feature-models.js';
 import {
   CONFIG_SAMPLE_PATHS,
   EXTRACT_MAX_RETRIES,
@@ -80,7 +79,7 @@ export class ConventionsService {
     const rendered = renderSamples([...files.values()], MAX_SAMPLE_CHARS);
 
     // ---- stage 2: propose (the only model call) --------------------------
-    const choice = await resolveFeatureModel(this.container, workspaceId, 'conventions');
+    const choice = await this.container.resolveFeatureModel(workspaceId, 'conventions');
     const llm = await this.container.llm(choice.provider);
     const res = await llm.completeStructured({
       model: choice.model,

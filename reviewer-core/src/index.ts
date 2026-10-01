@@ -15,9 +15,22 @@
 export {
   assemblePrompt,
   wrapUntrusted,
+  renderIntentSection,
+  MAX_INTENT_CHARS,
+  INTENT_CAUTION_HIGH_MEDIUM,
+  INTENT_CAUTION_LOW,
+  type ReviewIntent,
   type PromptParts,
   type AssembledPrompt,
 } from './prompt.js';
+
+// Content-free prompt section metadata (for logs).
+export {
+  describeSection,
+  estimateTokens,
+  type PromptSectionMeta,
+  type SectionTrust,
+} from './prompt-meta.js';
 
 // Citation grounding — the mandatory mechanical gate for diff findings.
 export { groundFindings, groundingSummary, type GroundingResult } from './grounding.js';
@@ -42,6 +55,7 @@ export {
   type ReviewInput,
   type ReviewOutcome,
   type ReviewEvent,
+  type PromptEvent,
   type ReviewStrategy,
   type ReviewMode,
 } from './review/run.js';

@@ -19,6 +19,9 @@ import { parseUnifiedDiff } from './diff-parser.js';
  */
 const RESYNC_FETCH_DEPTH = 50;
 
+/** A commit id `readFileAtRef` accepts: 7-40 lowercase hex chars (never an option or a ref name). */
+const HEX_REF = /^[0-9a-f]{7,40}$/;
+
 /**
  * GitClient over simple-git. Repos clone to
  * `<cloneDir>/<owner>/<repo>`. We NEVER execute repo code — only git ops.
@@ -128,6 +131,38 @@ export class SimpleGitClient implements GitClient {
 
   async readFile(repo: RepoRef, path: string): Promise<string> {
     return readFile(join(this.clonePathFor(repo), path), 'utf8');
+  }
+
+  /**
+   * Reads `<ref>:<path>` from the object database (`git cat-file` / `git show`),
+   * never the working tree, so a path cannot escape the repo through the file
+   * system. Throws on a malformed ref/path; returns null when the object is missing.
+   */
+  async readFileAtRef(
+    repo: RepoRef,
+    ref: string,
+    path: string,
+    maxBytes: number,
+  ): Promise<{ text: string; bytes: number } | null> {
+    if (!HEX_REF.test(ref)) throw new Error(`readFileAtRef: invalid ref "${ref}"`);
+    if (!path || path.startsWith('-') || path.startsWith('/') || path.split('/').includes('..')) {
+      throw new Error(`readFileAtRef: invalid path "${path}"`);
+    }
+    const g = this.git(repo);
+    const spec = `${ref}:${path}`;
+    let bytes: number;
+    try {
+      bytes = Number.parseInt((await g.raw(['cat-file', '-s', spec])).trim(), 10);
+    } catch {
+      return null;
+    }
+    if (!Number.isFinite(bytes)) return null;
+    if (bytes > maxBytes) return { text: '', bytes };
+    try {
+      return { text: await g.raw(['show', spec]), bytes };
+    } catch {
+      return null;
+    }
   }
 }
 
