@@ -44,54 +44,48 @@ function renderLine(findings: FindingRecord[], api?: Partial<DiffFindingApi>) {
   return onAction;
 }
 
+/** Titles of every inline card on screen, in DOM order. */
+const cardTitles = () => screen.queryAllByRole("article").map((a) => a.getAttribute("aria-label"));
+
 describe("CodeLine findings", () => {
-  it("the label button toggles the inline card: collapse hides it, expand brings it back", () => {
-    renderLine([finding("c1", "CRITICAL")]);
+  it("several findings on one line: the label shows the worst severity, ALL cards stack in the given order, and the label toggles them", () => {
+    renderLine([finding("c1", "CRITICAL"), finding("w1", "WARNING"), finding("s1", "SUGGESTION")]);
     const label = screen.getByRole("button", { name: "blocker" });
+    expect(screen.queryByRole("button", { name: "warning" })).toBeNull();
     expect(label).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("Title c1")).toBeInTheDocument();
+    expect(cardTitles()).toEqual(["Title c1", "Title w1", "Title s1"]);
 
     fireEvent.click(label);
     expect(label).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("Title c1")).toBeNull();
+    expect(cardTitles()).toEqual([]);
 
     fireEvent.click(label);
     expect(label).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("Title c1")).toBeInTheDocument();
+    expect(cardTitles()).toEqual(["Title c1", "Title w1", "Title s1"]);
   });
 
-  it("several findings on one line: the label shows the worst severity and ALL cards stack in the given order", () => {
-    renderLine([finding("c1", "CRITICAL"), finding("w1", "WARNING"), finding("s1", "SUGGESTION")]);
-    expect(screen.getByRole("button", { name: "blocker" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "warning" })).toBeNull();
-    const ids = [...document.body.querySelectorAll("[data-finding-id]")].map((el) => el.getAttribute("data-finding-id"));
-    expect(ids).toEqual(["c1", "w1", "s1"]);
-    expect(screen.getByText("Title w1")).toBeInTheDocument();
-    expect(screen.getByText("Title s1")).toBeInTheDocument();
-  });
-
-  it("a line whose worst finding is a WARNING is labelled 'warning'; a SUGGESTION one 'suggestion'", () => {
-    renderLine([finding("w1", "WARNING"), finding("s1", "SUGGESTION")]);
-    expect(screen.getByRole("button", { name: "warning" })).toBeInTheDocument();
-    cleanup();
-    renderLine([finding("s1", "SUGGESTION")]);
-    expect(screen.getByRole("button", { name: "suggestion" })).toBeInTheDocument();
+  it.each([
+    { name: "a worst WARNING", findings: [finding("w1", "WARNING"), finding("s1", "SUGGESTION")], label: "warning" },
+    { name: "a lone SUGGESTION", findings: [finding("s1", "SUGGESTION")], label: "suggestion" },
+    { name: "no findings", findings: [], label: null },
+  ])("a line with $name is labelled $label", ({ findings, label }) => {
+    renderLine(findings);
+    if (label) {
+      expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
+      expect(screen.getAllByRole("article")).toHaveLength(findings.length);
+    } else {
+      expect(screen.queryByRole("button", { name: /blocker|warning|suggestion/ })).toBeNull();
+      expect(screen.queryByRole("article")).toBeNull();
+    }
   });
 
   it("a card's Accept reports the finding id and action; only the in-flight finding is disabled", () => {
     const onAction = renderLine([finding("c1", "CRITICAL"), finding("w1", "WARNING")], { pendingId: "w1" });
-    const card = (id: string) =>
-      document.querySelector(`[data-finding-id="${id}"]`) as HTMLElement;
-    expect(within(card("w1")).getByRole("button", { name: "Accept" })).toBeDisabled();
-    const accept = within(card("c1")).getByRole("button", { name: "Accept" });
+    const card = (title: string) => within(screen.getByRole("article", { name: title }));
+    expect(card("Title w1").getByRole("button", { name: "Accept" })).toBeDisabled();
+    const accept = card("Title c1").getByRole("button", { name: "Accept" });
     expect(accept).toBeEnabled();
     fireEvent.click(accept);
     expect(onAction).toHaveBeenCalledWith("c1", "accept");
-  });
-
-  it("a line without findings has no label button and no card", () => {
-    renderLine([]);
-    expect(screen.queryByRole("button", { name: /blocker|warning|suggestion/ })).toBeNull();
-    expect(document.querySelector("[data-finding-id]")).toBeNull();
   });
 });

@@ -27,7 +27,12 @@ export function InlineFinding({
       : t("diffViewer.lineRange", { start: f.start_line, end: f.end_line });
 
   return (
-    <div data-finding-id={f.id} data-severity={f.severity} style={is.card(SEV[f.severity].c)}>
+    <div
+      role="article"
+      aria-label={f.title}
+      data-finding-id={f.id}
+      data-severity={f.severity}
+      style={is.card(SEV[f.severity].c)}>
       <div style={is.head}>
         <SeverityBadge severity={f.severity} compact />
         <span style={is.title}>{f.title}</span>

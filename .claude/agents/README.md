@@ -325,7 +325,8 @@ the suite with an empty `HOME` and those variables unset:
 cd server
 NODE_BIN="$(asdf which node 2>/dev/null || command -v node)"   # resolve BEFORE HOME changes
 DOCKER_SOCK="$(docker context inspect --format '{{.Endpoints.docker.Host}}')"
-FAKE_HOME="$(mktemp -d)"
+FAKE_HOME=/tmp/devdigest-redproof-home1   # a literal devdigest-redproof- path: agent-scope-guard denies mktemp/rm elsewhere
+mkdir -p "$FAKE_HOME"
 env -u OPENROUTER_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_API_KEY -u GITHUB_TOKEN -u GITHUB_PAT \
   HOME="$FAKE_HOME" DOCKER_HOST="$DOCKER_SOCK" \
   TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock \

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, max } from 'drizzle-orm';
 import type { Db } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
 import type { Finding } from '@devdigest/shared';
@@ -85,13 +85,22 @@ export async function latestReviewSet(
   workspaceId: string,
   prId: string,
 ): Promise<{ reviewIds: string[]; findings: FindingRow[] }> {
-  const runs = await db
-    .select({ id: t.agentRuns.id, ranAt: t.agentRuns.ranAt })
+  // Newest instant resolved in SQL (a JS Date would truncate Postgres' microseconds).
+  const newestRanAt = db
+    .select({ at: max(t.agentRuns.ranAt) })
     .from(t.agentRuns)
-    .where(and(eq(t.agentRuns.workspaceId, workspaceId), eq(t.agentRuns.prId, prId)))
-    .orderBy(desc(t.agentRuns.ranAt));
-  const newest = runs[0]?.ranAt.getTime();
-  const batchRunIds = runs.filter((r) => r.ranAt.getTime() === newest).map((r) => r.id);
+    .where(and(eq(t.agentRuns.workspaceId, workspaceId), eq(t.agentRuns.prId, prId)));
+  const batchRuns = await db
+    .select({ id: t.agentRuns.id })
+    .from(t.agentRuns)
+    .where(
+      and(
+        eq(t.agentRuns.workspaceId, workspaceId),
+        eq(t.agentRuns.prId, prId),
+        eq(t.agentRuns.ranAt, newestRanAt),
+      ),
+    );
+  const batchRunIds = batchRuns.map((r) => r.id);
 
   let reviewIds: string[] = [];
   if (batchRunIds.length > 0) {

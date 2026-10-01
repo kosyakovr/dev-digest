@@ -110,6 +110,7 @@ function renderTab() {
 const ROLE_RE = /^(Core|Tests|Wiring|Docs|Boilerplate)\b/;
 const header = (label: string) => screen.getByRole("button", { name: new RegExp(`^${label}\\b`) });
 const UNAVAILABLE = "Smart grouping is unavailable — showing files in original order.";
+const NO_REVIEW = "No review yet — findings will appear here after a review.";
 
 beforeEach(() => {
   setSmart({ data: smartResponse() });
@@ -118,8 +119,8 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe("DiffTab role groups", () => {
-  it("shows the groups in fixed order; Core and Tests open, Docs and Boilerplate collapsed", () => {
+describe("DiffTab", () => {
+  it("groups files by role in fixed order (Core and Tests open, Docs and Boilerplate collapsed), badges FILES with findings, and expands a collapsed group", () => {
     renderTab();
     const headers = screen
       .getAllByRole("button", { name: ROLE_RE })
@@ -136,106 +137,94 @@ describe("DiffTab role groups", () => {
     expect(screen.getByText("a.test.ts")).toBeInTheDocument();
     expect(screen.queryByText("README.md")).toBeNull();
     expect(screen.queryByText("pnpm-lock.yaml")).toBeNull();
-  });
+    // a review exists, so no "No review yet" note
+    expect(screen.queryByText(/No review yet/)).toBeNull();
 
-  it("opening a collapsed group reveals its files", () => {
-    renderTab();
-    fireEvent.click(header("Docs"));
-    expect(header("Docs")).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("README.md")).toBeInTheDocument();
-  });
-
-  it("the header badge counts FILES with findings (2 files / 5 lines → 2), open or collapsed, and is absent at 0", () => {
-    renderTab();
+    // Badge counts FILES with findings: two files carry five finding lines → 2, not 5.
     const core = header("Core");
-    // two files carry five finding lines between them — the badge says 2, not 5
     expect(within(core).getByLabelText("2 files with findings")).toBeInTheDocument();
     expect(within(core).getByText("● 2")).toBeInTheDocument();
     expect(within(core).getByText("2 files")).toBeInTheDocument();
-
+    // ... and no badge at 0 findings.
     expect(within(header("Tests")).queryByLabelText(/files? with findings/)).toBeNull();
     expect(within(header("Tests")).queryByText(/●/)).toBeNull();
 
-    // Q1: the badge stays on a COLLAPSED group
+    // Q1: the badge stays on a COLLAPSED group.
     const docs = header("Docs");
-    expect(docs).toHaveAttribute("aria-expanded", "false");
     expect(within(docs).getByLabelText("1 file with findings")).toBeInTheDocument();
     expect(within(docs).getByText("● 1")).toBeInTheDocument();
 
-    // ... and on an open group it does not vanish when the group is collapsed by the user
+    // Opening the collapsed group reveals its files; the badge stays.
+    fireEvent.click(docs);
+    expect(docs).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("README.md")).toBeInTheDocument();
+    expect(within(docs).getByLabelText("1 file with findings")).toBeInTheDocument();
+
+    // An open group keeps its badge when the user collapses it.
     fireEvent.click(core);
     expect(core).toHaveAttribute("aria-expanded", "false");
     expect(within(core).getByLabelText("2 files with findings")).toBeInTheDocument();
   });
-});
 
-describe("DiffTab states", () => {
-  it("smart-diff failed: every file in the original flat list, no group headers, with the notice", () => {
-    setSmart({ data: undefined, isError: true });
-    renderTab();
-    expect(screen.queryByRole("button", { name: ROLE_RE })).toBeNull();
-    for (const p of PATHS) expect(screen.getByText(p)).toBeInTheDocument();
-    expect(screen.getByText(UNAVAILABLE)).toBeInTheDocument();
-  });
-
-  it("a failed refresh with stale data still counts as failed: flat list with the notice, no groups", () => {
-    setSmart({ data: smartResponse(), isError: true });
-    renderTab();
-    expect(screen.queryByRole("button", { name: ROLE_RE })).toBeNull();
-    expect(screen.getByText(UNAVAILABLE)).toBeInTheDocument();
-  });
-
-  it("smart-diff path set differs from the PR's files: same flat fallback", () => {
-    const stale = smartResponse({
-      groups: [{ role: "core", files: [{ path: "a.ts", additions: 3, deletions: 0, finding_lines: [] }] }],
-    });
-    setSmart({ data: stale });
-    renderTab();
-    expect(screen.queryByRole("button", { name: ROLE_RE })).toBeNull();
-    for (const p of PATHS) expect(screen.getByText(p)).toBeInTheDocument();
-    expect(screen.getByText(UNAVAILABLE)).toBeInTheDocument();
-  });
-
-  it("while smart-diff loads no file is shown yet and no notice is raised", () => {
-    setSmart({ data: undefined, isLoading: true });
-    renderTab();
-    for (const p of PATHS) expect(screen.queryByText(p)).toBeNull();
-    expect(screen.queryByRole("button", { name: ROLE_RE })).toBeNull();
-    expect(screen.queryByText(UNAVAILABLE)).toBeNull();
-  });
-
-  it("no review yet: the 'No review yet' note is shown; with a review it is not", () => {
-    setSmart({ data: smartResponse({ review_ids: [] }) });
-    renderTab();
-    expect(
-      screen.getByText("No review yet — findings will appear here after a review."),
-    ).toBeInTheDocument();
-    cleanup();
-    setSmart({ data: smartResponse() });
-    renderTab();
-    expect(screen.queryByText(/No review yet/)).toBeNull();
-  });
-});
-
-describe("DiffTab findings", () => {
-  it("shows only findings of the reviews the smart-diff was built from, and never dismissed ones", () => {
+  it("shows only findings of the reviews the smart-diff was built from, never dismissed ones, and Accept asks to accept that finding of this PR", () => {
     h.reviews = [
       review("R1", [finding("Old", { review_id: "R1" })]),
       review("R2", [finding("New"), finding("Gone", { dismissed_at: "2026-10-02T00:00:00Z" })]),
     ];
     renderTab();
-    expect(screen.getByText("New")).toBeInTheDocument();
-    expect(screen.queryByText("Old")).toBeNull();
-    expect(screen.queryByText("Gone")).toBeNull();
+    expect(screen.getAllByRole("article").map((a) => a.getAttribute("aria-label"))).toEqual(["New"]);
+    expect(screen.queryByRole("article", { name: "Old" })).toBeNull();
+    expect(screen.queryByRole("article", { name: "Gone" })).toBeNull();
     // the finding sits on a.ts, which therefore carries the file dot (comments are hidden by default)
     expect(screen.getAllByLabelText("Has findings")).toHaveLength(1);
-  });
 
-  it("Accept on a card asks to accept that finding of this PR", () => {
-    h.reviews = [review("R2", [finding("New")])];
-    renderTab();
-    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    fireEvent.click(within(screen.getByRole("article", { name: "New" })).getByRole("button", { name: "Accept" }));
     expect(h.mutate).toHaveBeenCalledTimes(1);
     expect(h.mutate).toHaveBeenCalledWith({ findingId: "New", action: "accept", prId: "pr1" });
+  });
+
+  it.each([
+    {
+      name: "smart-diff failed",
+      state: () => setSmart({ data: undefined, isError: true }),
+      flat: true,
+    },
+    {
+      name: "a failed refresh with stale data",
+      state: () => setSmart({ data: smartResponse(), isError: true }),
+      flat: true,
+    },
+    {
+      name: "smart-diff path set differs from the PR's files",
+      state: () =>
+        setSmart({
+          data: smartResponse({
+            groups: [{ role: "core", files: [{ path: "a.ts", additions: 3, deletions: 0, finding_lines: [] }] }],
+          }),
+        }),
+      flat: true,
+    },
+    {
+      name: "smart-diff still loading",
+      state: () => setSmart({ data: undefined, isLoading: true }),
+      flat: false,
+    },
+  ])("$name: no group headers (flat list with the notice, or nothing and no notice while loading)", ({ state, flat }) => {
+    state();
+    renderTab();
+    expect(screen.queryByRole("button", { name: ROLE_RE })).toBeNull();
+    for (const p of PATHS) {
+      if (flat) expect(screen.getByText(p)).toBeInTheDocument();
+      else expect(screen.queryByText(p)).toBeNull();
+    }
+    if (flat) expect(screen.getByText(UNAVAILABLE)).toBeInTheDocument();
+    else expect(screen.queryByText(UNAVAILABLE)).toBeNull();
+  });
+
+  it("no review yet (review_ids = []): the 'No review yet' note is shown above the groups", () => {
+    setSmart({ data: smartResponse({ review_ids: [] }) });
+    renderTab();
+    expect(screen.getByText(NO_REVIEW)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: ROLE_RE })).toHaveLength(4);
   });
 });

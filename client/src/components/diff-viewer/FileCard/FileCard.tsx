@@ -15,7 +15,7 @@ import {
   type CommentThread,
   type DiffCommentApi,
 } from "../comments";
-import { partitionFindings, type DiffFindingApi } from "../findings";
+import { findingsForLine, partitionFindings, type DiffFindingApi } from "../findings";
 import { s, chevronFor, outsideStyles } from "../styles";
 import { InlineFinding } from "../InlineFinding";
 import { CodeLine } from "../CodeLine";
@@ -49,25 +49,26 @@ export function FileCard({
 
   // Group this file's comments into threads, then split into ones we can anchor
   // to a rendered line vs. "outdated" (GitHub dropped the line / it's not here).
+  const renderedKeys = React.useMemo(() => {
+    const keys = new Set<string>();
+    for (const ln of lines) for (const k of keysForLine(ln)) keys.add(k);
+    return keys;
+  }, [lines]);
   const comments = commenting?.comments;
   const { matched, outdated } = React.useMemo(() => {
     if (!comments) return { matched: new Map<string, CommentThread[]>(), outdated: [] };
     const fileThreads = buildThreads(comments.filter((c) => c.path === file.path));
-    const renderedKeys = new Set<string>();
-    for (const ln of lines) for (const k of keysForLine(ln)) renderedKeys.add(k);
     return partitionThreads(fileThreads, renderedKeys);
-  }, [comments, file.path, lines]);
+  }, [comments, file.path, lines, renderedKeys]);
 
   // Findings of the latest review for this file, anchored on the same rendered
   // keys as threads; the rest are listed on top so none is silently dropped.
   const allFindings = findings?.findings;
   const { matchedFindings, outsideFindings, hasFindings } = React.useMemo(() => {
     const fileFindings = (allFindings ?? []).filter((f) => f.file === file.path);
-    const renderedKeys = new Set<string>();
-    for (const ln of lines) for (const k of keysForLine(ln)) renderedKeys.add(k);
     const { matched, outside } = partitionFindings(fileFindings, renderedKeys);
     return { matchedFindings: matched, outsideFindings: outside, hasFindings: fileFindings.length > 0 };
-  }, [allFindings, file.path, lines]);
+  }, [allFindings, file.path, lines, renderedKeys]);
 
   const commentCount = commenting
     ? commenting.comments.filter((c) => c.path === file.path).length
@@ -104,7 +105,11 @@ export function FileCard({
       {open && (
         <div style={s.fileBody}>
           {findings && outsideFindings.length > 0 && (
-            <div style={outsideStyles.wrap}>
+            <div
+              role="region"
+              aria-label={t("diffViewer.findingsOutsideDiff")}
+              style={outsideStyles.wrap}
+            >
               <div style={outsideStyles.heading}>{t("diffViewer.findingsOutsideDiff")}</div>
               {outsideFindings.map((f) => (
                 <div key={f.id} style={outsideStyles.item}>
@@ -127,11 +132,7 @@ export function FileCard({
                 path={file.path}
                 threads={threadsForLine(ln, matched)}
                 commenting={commenting}
-                findings={
-                  ln.kind === "del" || ln.kind === "hunk"
-                    ? undefined
-                    : matchedFindings.get(`RIGHT:${ln.newNo}`)
-                }
+                findings={findingsForLine(ln, matchedFindings)}
                 findingApi={findings}
               />
             ))

@@ -114,10 +114,10 @@ ALTER TABLE "conventions" DROP COLUMN "accepted";
 Apply the whole chain to a throwaway database — never to the dev database first:
 
 ```sh
-docker exec devdigest-postgres psql -U devdigest -d postgres -c 'CREATE DATABASE mig_check;'
-DATABASE_URL=postgres://devdigest:<pw>@localhost:5432/mig_check npx tsx src/db/migrate.ts
-docker exec devdigest-postgres psql -U devdigest -d mig_check -c '\d <table>'
-docker exec devdigest-postgres psql -U devdigest -d postgres -c 'DROP DATABASE mig_check;'
+docker exec devdigest2-postgres psql -U devdigest2 -d postgres -c 'CREATE DATABASE mig_check;'
+DATABASE_URL=postgres://devdigest2:<pw>@localhost:5432/mig_check npx tsx src/db/migrate.ts
+docker exec devdigest2-postgres psql -U devdigest2 -d mig_check -c '\d <table>'
+docker exec devdigest2-postgres psql -U devdigest2 -d postgres -c 'DROP DATABASE mig_check;'
 ```
 
 `src/db/migrate.ts` reads `DATABASE_URL` through `dotenv`, which loads `.env` —

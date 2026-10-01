@@ -1,7 +1,8 @@
 /* diff-viewer — findings layer: the contract the host passes in, plus the pure
    helpers that order findings and anchor them to rendered diff lines. */
 import type { FindingActionKind, FindingRecord, Severity } from "@devdigest/shared";
-import { SEVERITY_RANK } from "./constants";
+import { SEVERITY_RANK } from "@/lib/severity";
+import type { Line } from "./helpers";
 
 /** Findings of the latest review + the accept/dismiss action, supplied by the host. */
 export interface DiffFindingApi {
@@ -14,6 +15,15 @@ export interface DiffFindingApi {
 /** Anchor key of a finding — only the new (RIGHT) side of the diff is anchored. */
 export function findingKey(f: Pick<FindingRecord, "start_line">): string {
   return `RIGHT:${f.start_line}`;
+}
+
+/** Findings anchored to a parsed line — new-side lines only (deleted/hunk lines → []). */
+export function findingsForLine(
+  ln: Line,
+  matched: Map<string, FindingRecord[]>,
+): FindingRecord[] {
+  if (ln.kind === "del" || ln.kind === "hunk") return [];
+  return matched.get(findingKey({ start_line: ln.newNo as number })) ?? [];
 }
 
 /** Severity (CRITICAL first), then start_line, end_line, id — all ascending. */

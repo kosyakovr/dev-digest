@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { FindingRecord, Severity } from "@devdigest/shared";
-import { sortFindings, worstSeverity, partitionFindings } from "./findings";
+import { sortFindings, worstSeverity, partitionFindings, findingsForLine } from "./findings";
 
 function f(id: string, severity: Severity, start_line: number, end_line = start_line): FindingRecord {
   return {
@@ -41,6 +41,26 @@ describe("worstSeverity", () => {
   it("returns the most severe severity of the list", () => {
     expect(worstSeverity([f("w", "WARNING", 1), f("s", "SUGGESTION", 1)])).toBe("WARNING");
     expect(worstSeverity([f("s", "SUGGESTION", 1), f("c", "CRITICAL", 1), f("w", "WARNING", 1)])).toBe("CRITICAL");
+  });
+});
+
+describe("findingsForLine", () => {
+  const onLine2 = [f("a", "CRITICAL", 2), f("b", "WARNING", 2)];
+  const matched = new Map([["RIGHT:2", onLine2]]);
+
+  it("returns the findings of the new-side line number for add and context lines", () => {
+    expect(findingsForLine({ kind: "add", text: "x", newNo: 2 }, matched)).toEqual(onLine2);
+    expect(findingsForLine({ kind: "ctx", text: "x", oldNo: 1, newNo: 2 }, matched)).toEqual(onLine2);
+  });
+
+  it("returns [] for deleted and hunk lines, even when their numbers collide with a finding", () => {
+    expect(findingsForLine({ kind: "del", text: "x", oldNo: 2, newNo: 2 }, matched)).toEqual([]);
+    expect(findingsForLine({ kind: "hunk", text: "@@ -1,2 +1,3 @@", oldNo: 2, newNo: 2 }, matched)).toEqual([]);
+  });
+
+  it("returns [] for a line nothing is anchored to", () => {
+    expect(findingsForLine({ kind: "add", text: "x", newNo: 3 }, matched)).toEqual([]);
+    expect(findingsForLine({ kind: "add", text: "x", newNo: 2 }, new Map())).toEqual([]);
   });
 });
 

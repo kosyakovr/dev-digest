@@ -168,7 +168,14 @@ case "$TOOL" in
     if [ "$PROFILE" != test-writer ] && matches "$BARE" "${B}npx[[:space:]]"; then
       decide deny "npx can fetch and run an arbitrary package - use the package's own scripts (pnpm test, npm test, pnpm typecheck)."
     fi
-    if matches "$BARE" "db:(generate|migrate|seed|push)|drizzle-kit[[:space:]]+(generate|push|drop|migrate)"; then
+    # BARE drops quoted spans, so `pnpm 'db:generate'` would slip through it: also
+    # read the command with only the quote CHARACTERS removed, but there demand a
+    # package manager (or command position) in front, so git grep 'db:generate'
+    # stays allowed (2026-10-02 self-review, generic-2).
+    UNQ=$(printf '%s' "$CMD" | tr -d "'\"")
+    if matches "$BARE" "db:(generate|migrate|seed|push)|drizzle-kit[[:space:]]+(generate|push|drop|migrate)" \
+       || matches "$UNQ" "${B}(pnpm|npm|yarn|bun)[[:space:]]+([^;&|]*[[:space:]])?db:(generate|migrate|seed|push)" \
+       || matches "$UNQ" "(^|[;&|(\`])[[:space:]]*drizzle-kit[[:space:]]|${B}(npx|pnpx|pnpm|npm|yarn|bun)[[:space:]]+([^;&|]*[[:space:]])?drizzle-kit[[:space:]]+(generate|push|drop|migrate)"; then
       decide deny "db:* / drizzle-kit write migrations or the database, both off-limits (root AGENTS.md)."
     fi
     if matches "$CMD" "${B}docker[[:space:]]+(rm|rmi|kill|stop|volume|system|network[[:space:]]+rm)|${B}docker[[:space:]]+compose[^;&|]*[[:space:]]down"; then

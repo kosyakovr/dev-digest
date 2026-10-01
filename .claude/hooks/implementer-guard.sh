@@ -89,7 +89,14 @@ case "$TOOL" in
     if matches "$BARE" "${B}(yarn)([[:space:]]|$)"; then
       decide deny "this repo uses pnpm/npm; yarn would write a new lock file."
     fi
-    if matches "$BARE" "db:generate|drizzle-kit[[:space:]]+(generate|push|drop|migrate)"; then
+    # BARE drops quoted spans, so `pnpm 'db:generate'` would slip through it: also
+    # read the command with only the quote CHARACTERS removed, but there demand a
+    # package manager (or command position) in front, so git grep 'db:generate'
+    # stays allowed (2026-10-02 self-review, generic-2).
+    UNQ=$(printf '%s' "$CMD" | tr -d "'\"")
+    if matches "$BARE" "db:generate|drizzle-kit[[:space:]]+(generate|push|drop|migrate)" \
+       || matches "$UNQ" "${B}(pnpm|npm|yarn|bun)[[:space:]]+([^;&|]*[[:space:]])?db:generate" \
+       || matches "$UNQ" "(^|[;&|(\`])[[:space:]]*drizzle-kit[[:space:]]+(generate|push|drop|migrate)|${B}(npx|pnpx|pnpm|npm|yarn|bun)[[:space:]]+([^;&|]*[[:space:]])?drizzle-kit[[:space:]]+(generate|push|drop|migrate)"; then
       decide deny "db:generate / drizzle-kit writes migrations or the DB, both off-limits (root AGENTS.md)."
     fi
     P='(server/src/db/migrations|pnpm-lock\.yaml|package-lock\.json|skills-lock\.json|\.claude/)'

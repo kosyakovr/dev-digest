@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { FindingRecord, Severity } from "@devdigest/shared";
 import type { PrFile } from "@/lib/types";
@@ -48,19 +48,20 @@ function api(findings: FindingRecord[]): DiffFindingApi {
 }
 
 function renderCard(f: PrFile, findings?: DiffFindingApi, commenting?: DiffCommentApi) {
-  return render(
+  render(
     <NextIntlClientProvider locale="en" messages={{ shell, prReview }}>
       <FileCard file={f} findings={findings} commenting={commenting} />
     </NextIntlClientProvider>,
   );
 }
 
-const cardIds = (c: HTMLElement) =>
-  [...c.querySelectorAll("[data-finding-id]")].map((el) => el.getAttribute("data-finding-id"));
+const outsideRegion = () => screen.getByRole("region", { name: OUTSIDE_HEADING });
+/** Titles of every inline card on screen, in DOM order. */
+const cardTitles = () => screen.getAllByRole("article").map((a) => a.getAttribute("aria-label"));
 
 describe("FileCard findings", () => {
-  it("marks the file, stacks same-line cards by severity then id, and lists an unanchored finding under the outside heading", () => {
-    const { container } = renderCard(
+  it("marks the file, stacks same-line cards by severity then id, and lists an unanchored finding in the outside region above them", () => {
+    renderCard(
       file(),
       api([
         finding("W1", "WARNING", 2),
@@ -76,46 +77,46 @@ describe("FileCard findings", () => {
     expect(screen.queryByRole("button", { name: "warning" })).toBeNull();
 
     // The outside list comes first, then the stacked cards of line 2.
-    expect(cardIds(container)).toEqual(["Outside", "C0", "C1", "W1"]);
-    const heading = screen.getByText(OUTSIDE_HEADING);
-    const outside = container.querySelector('[data-finding-id="Outside"]')!;
-    expect(heading.compareDocumentPosition(outside) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    const stacked = container.querySelector('[data-finding-id="C0"]')!;
-    expect(outside.compareDocumentPosition(stacked) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // Only the unanchored one is under the heading's wrapper.
-    expect(heading.parentElement!.querySelectorAll("[data-finding-id]")).toHaveLength(1);
+    expect(cardTitles()).toEqual(["Title Outside", "Title C0", "Title C1", "Title W1"]);
+    // Only the unanchored one sits in the outside region, under its heading.
+    const outside = within(outsideRegion());
+    expect(outside.getByText(OUTSIDE_HEADING)).toBeInTheDocument();
+    expect(outside.getAllByRole("article").map((a) => a.getAttribute("aria-label"))).toEqual(["Title Outside"]);
   });
 
-  it("a file without findings has no dot, no outside list and no label", () => {
+  it.each([
+    {
+      name: "a file without patch text",
+      card: () => file({ patch: null }),
+      anchored: finding("P", "WARNING", 3),
+      note: "No diff text available (binary or unfetched patch).",
+    },
+    {
+      name: "a finding on a removed (old-side-only) line",
+      card: () => file({ patch: "@@ -1,2 +1,1 @@\n ctx\n-removed", additions: 0, deletions: 1 }),
+      anchored: finding("D", "WARNING", 2),
+      note: null,
+    },
+  ])("$name is not anchored: it goes to the outside region and no line label appears", ({ card, anchored, note }) => {
+    renderCard(card(), api([anchored]));
+    if (note) expect(screen.getByText(note)).toBeInTheDocument();
+    expect(within(outsideRegion()).getByRole("article", { name: `Title ${anchored.id}` })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "warning" })).toBeNull();
+  });
+
+  it("without findings for this file (another file's only, or no findings prop) no dot, region, label or card is rendered", () => {
+    const expectNoFindingsUi = () => {
+      expect(screen.queryByLabelText("Has findings")).toBeNull();
+      expect(screen.queryByRole("region", { name: OUTSIDE_HEADING })).toBeNull();
+      expect(screen.queryByText(OUTSIDE_HEADING)).toBeNull();
+      expect(screen.queryByRole("button", { name: "blocker" })).toBeNull();
+      expect(screen.queryByRole("article")).toBeNull();
+    };
     renderCard(file(), api([finding("X", "CRITICAL", 2, "src/other.ts")]));
-    expect(screen.queryByLabelText("Has findings")).toBeNull();
-    expect(screen.queryByText(OUTSIDE_HEADING)).toBeNull();
-    expect(screen.queryByRole("button", { name: "blocker" })).toBeNull();
-    expect(document.querySelector("[data-finding-id]")).toBeNull();
-  });
-
-  it("without the findings prop nothing findings-related is rendered", () => {
+    expectNoFindingsUi();
+    cleanup();
     renderCard(file());
-    expect(screen.queryByLabelText("Has findings")).toBeNull();
-    expect(screen.queryByText(OUTSIDE_HEADING)).toBeNull();
-  });
-
-  it("a file without patch text: the 'no diff text' note, and the finding goes to the outside list", () => {
-    renderCard(file({ patch: null }), api([finding("P", "WARNING", 3)]));
-    expect(screen.getByText("No diff text available (binary or unfetched patch).")).toBeInTheDocument();
-    const heading = screen.getByText(OUTSIDE_HEADING);
-    expect(heading.parentElement!.querySelector('[data-finding-id="P"]')).not.toBeNull();
-    expect(screen.queryByRole("button", { name: "warning" })).toBeNull();
-  });
-
-  it("a finding on a removed (old-side-only) line is not anchored: outside list, no label", () => {
-    renderCard(
-      file({ patch: "@@ -1,2 +1,1 @@\n ctx\n-removed", additions: 0, deletions: 1 }),
-      api([finding("D", "WARNING", 2)]),
-    );
-    expect(screen.queryByRole("button", { name: "warning" })).toBeNull();
-    const heading = screen.getByText(OUTSIDE_HEADING);
-    expect(heading.parentElement!.querySelector('[data-finding-id="D"]')).not.toBeNull();
+    expectNoFindingsUi();
   });
 
   it("cards render even when comments are hidden, and the GitHub comment counter stays next to the dot", () => {
@@ -140,7 +141,7 @@ describe("FileCard findings", () => {
       onSubmit: vi.fn(),
     };
     renderCard(file(), api([finding("C1", "CRITICAL", 2)]), commenting);
-    expect(screen.getByText("Title C1")).toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "Title C1" })).toBeInTheDocument();
     expect(screen.getByLabelText("Has findings")).toBeInTheDocument();
     expect(screen.getByText("4")).toBeInTheDocument(); // the comment counter, unchanged
   });

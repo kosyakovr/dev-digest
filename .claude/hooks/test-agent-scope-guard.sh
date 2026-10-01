@@ -109,6 +109,7 @@ tw deny  "worktree add without marker" "$(bash_ 'git worktree add /tmp/x HEAD')"
 tw deny  "npx -y"                      "$(bash_ 'npx -y stryker run')"
 tw deny  "node -e"                     "$(bash_ "node -e 'require(1)'")"
 tw deny  "db:migrate"                  "$(bash_ 'pnpm db:migrate')"
+tw deny  "quoted db:generate"          "$(bash_ "pnpm 'db:generate'")"
 # Quoted text is data, not a command (2026-09-26 self-review, generic-1-2).
 tw allow "quoted test name with up"    "$(bash_ "cd server && pnpm exec vitest run test/x.test.ts -t 'rolls up costs'")"
 tw deny  "unquoted pnpm up still"      "$(bash_ 'pnpm up zod')"
@@ -202,6 +203,10 @@ ro deny  "sh -c"                       "$(bash_ "sh -c 'echo x'")"
 ro deny  "curl"                        "$(bash_ 'curl https://example.com')"
 ro deny  "db:migrate"                  "$(bash_ 'pnpm db:migrate')"
 ro deny  "drizzle-kit push"            "$(bash_ 'pnpm exec drizzle-kit push')"
+ro deny  "quoted db:generate"          "$(bash_ "pnpm 'db:generate'")"
+ro deny  "run \"db:migrate\""          '{"tool_name":"Bash","tool_input":{"command":"pnpm run \"db:migrate\"","description":"x"}}'
+ro deny  "quoted drizzle-kit"          "$(bash_ "npx 'drizzle-kit' push")"
+ro allow "git grep drizzle-kit push"   "$(bash_ "git grep -n 'drizzle-kit push' -- docs")"
 ro deny  "docker compose down"         "$(bash_ 'docker compose down -v')"
 # ---- what brainstormer and security-reviewer depend on
 ro allow "diff hunks range"            "$(bash_ 'git diff -U0 HEAD~1 HEAD')"

@@ -15,6 +15,7 @@ import { notify } from "@/lib/toast";
 import type { PrFile } from "@devdigest/shared";
 import { RoleGroup } from "./_components/RoleGroup";
 import { planGroups, visibleFindings } from "./helpers";
+import { note } from "./styles";
 
 interface DiffTabProps {
   prId: string | null;
@@ -69,7 +70,7 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
   } else if (smart.isError || !smart.data || !groups) {
     body = (
       <>
-        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 10px" }}>
+        <p style={note}>
           {t("smartDiff.unavailable")}
         </p>
         <DiffViewer files={files} commenting={commenting} />
@@ -78,11 +79,11 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
   } else {
     body = (
       <>
-        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 10px" }}>
+        <p style={note}>
           {t("smartDiff.groupedByRole")}
         </p>
         {smart.data.review_ids.length === 0 && (
-          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 10px" }}>
+          <p style={note}>
             {t("smartDiff.noReview")}
           </p>
         )}

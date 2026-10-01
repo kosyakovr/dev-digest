@@ -54,6 +54,10 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
   `mkdir -p /tmp/devdigest-redproof-home<N>` as `FAKE_HOME` (and `rm -rf` that
   path); the main session or `scripts/checks.sh` can run the recipe as written.
   (ref: .claude/hooks/README.md:179, Smart Diff L03)
+- 2026-10-02 (correction) — The recipe itself now uses the literal
+  `FAKE_HOME=/tmp/devdigest-redproof-home1` + `mkdir -p`, so agents can run it
+  as written; the trap above applies only to older copies of it.
+  (ref: .claude/agents/README.md:328)
 
 - 2026-09-24 — Writing a markdown file through a Bash heredoc (or `python3 - <<EOF`)
   gets DENIED by the pr-self-review gate whenever the prose merely mentions a
