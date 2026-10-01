@@ -43,10 +43,10 @@ matches() { printf '%s' "$1" | grep -E -q -- "$2"; }
 # `pnpm db\:generate`, `pnpm $'db:push'`, `env pnpm "db:migrate"`). Quote and
 # backslash characters are removed, the command is split into segments on
 # ; & | ( ` and newlines, and a segment that is a read-only search or print
-# (grep, ugrep, rg, git [-C x] grep/log/show, echo, printf) is skipped - its
-# quoted text is data - unless the command pipes into sh/bash/zsh/xargs. Any
-# other segment matching $2 or $3 anywhere is a run, so wrappers like env, time,
-# sudo, { }, then and find -exec stay covered (2026-10-02 self-review rounds 1-4).
+# (grep, rg, git [-C x] grep/log/show; echo/printf unless piped) is skipped -
+# its quoted text is data. Any other segment matching $2 or $3 anywhere is a run,
+# so wrappers like env, time, sudo, { }, then and find -exec stay covered
+# (2026-10-02 self-review rounds 1-5).
 quoted_db_run() {
   # Without jq, field() leaves JSON \n / \t escapes literal: decode them so a
   # newline-separated command still splits (with jq they are real characters).
@@ -54,16 +54,21 @@ quoted_db_run() {
   if [ -n "${GUARD_NO_JQ:-}" ] || ! command -v jq >/dev/null 2>&1; then
     dec='{ gsub(/\\n/, "\n"); gsub(/\\t/, " "); print }'
   fi
-  # Text piped into a shell or xargs is no longer data: drop the exemption then.
-  local piped=false
-  matches "$1" '\|[[:space:]]*(sh|bash|zsh|xargs)([[:space:]]|$)' && piped=true
-  if $piped && printf '%s' "$1" | tr -d "'\"\\\\" | grep -E -q 'db:(generate|migrate|seed|push)|drizzle-kit'; then return 0; fi
+  # echo/printf text is data only while nothing can execute it: once the command
+  # has a pipe (not ||) or a process substitution, their segments are checked
+  # too, including a bare db:* token ($4) for `echo 'db:generate' | xargs pnpm`.
+  # grep/rg/git output stays data even when piped.
+  local exec_ctx=false
+  matches "$1" '(^|[^|])\|([^|]|$)|<\(' && exec_ctx=true
   printf '%s\n' "$1" | awk "$dec" \
     | tr -d "'\"\\\\" | tr ';&|(`' '\n\n\n\n\n' | while IFS= read -r seg; do
     head=$(printf '%s' "$seg" | sed -E -e 's/^[[:space:]{!]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*//' \
-      -e 's/^git([[:space:]]+(-C[[:space:]]+[^[:space:]]+|-c[[:space:]]+[^[:space:]]+|--no-pager|--git-dir=[^[:space:]]+))*[[:space:]]+/git /')
+      -e 's/^git([[:space:]]+(-C[[:space:]]+[^[:space:]]+|-c[[:space:]]+[^[:space:]]+|-P|--no-pager|--git-dir=[^[:space:]]+))*[[:space:]]+/git /')
     case "$head" in
-      grep\ *|egrep\ *|fgrep\ *|ugrep\ *|rg\ *|ag\ *|echo|echo\ *|printf\ *|git\ grep\ *|git\ log\ *|git\ show\ *) $piped || continue ;;
+      grep\ *|egrep\ *|fgrep\ *|rg\ *|git\ grep\ *|git\ log\ *|git\ show\ *) continue ;;
+      echo|echo\ *|printf\ *)
+        $exec_ctx || continue
+        matches " $seg" "$4" && { echo hit; continue; } ;;
     esac
     if matches " $seg" "$2" || matches " $seg" "$3"; then echo hit; fi
   done | grep -q hit
@@ -120,7 +125,7 @@ case "$TOOL" in
       decide deny "this repo uses pnpm/npm; yarn would write a new lock file."
     fi
     if matches "$BARE" "db:generate|drizzle-kit[[:space:]]+(generate|push|drop|migrate)" \
-       || quoted_db_run "$CMD" '[[:space:]{!](pnpm|npm|yarn|bun)[[:space:]]+([^[:space:]]+[[:space:]]+)*\$?db:generate' '[[:space:]/{!]drizzle-kit(@[^[:space:]]*)?(/[^[:space:]]*)?[[:space:]]+(generate|push|drop|migrate)'; then
+       || quoted_db_run "$CMD" '[[:space:]{!](pnpm|npm|yarn|bun)[[:space:]]+([^[:space:]]+[[:space:]]+)*\$?db:generate' '[[:space:]/{!]drizzle-kit(@[^[:space:]]*)?(/[^[:space:]]*)?[[:space:]]+(generate|push|drop|migrate)' '[[:space:]]\$?db:generate'; then
       decide deny "db:generate / drizzle-kit writes migrations or the DB, both off-limits (root AGENTS.md)."
     fi
     P='(server/src/db/migrations|pnpm-lock\.yaml|package-lock\.json|skills-lock\.json|\.claude/)'

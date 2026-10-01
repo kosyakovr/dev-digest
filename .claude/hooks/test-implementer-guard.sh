@@ -117,7 +117,10 @@ run_case allow "git log --grep db:generate" "$(bash_ "git log --oneline --grep '
 run_case allow "rg drizzle-kit generate"   "$(bash_ "rg -n 'drizzle-kit generate' docs")"
 # round-4 self-review: git global options / ugrep stay data; pipes into a shell do not
 run_case allow "git -C x grep db:generate" "$(bash_ "git -C server grep -n 'pnpm db:generate'")"
-run_case allow "ugrep for db:generate"     "$(bash_ "ugrep -n 'pnpm db:generate' docs")"
+run_case deny  "ugrep --filter runs cmds"  "$(bash_ "ugrep --filter='md:env pnpm db:generate' -r x docs")"
+run_case deny  "printf db:gen | /bin/sh"   "$(bash_ "printf 'pnpm db:generate' | /bin/sh")"
+run_case allow "rg -l | xargs wc"          "$(bash_ "rg -l 'db:generate' docs | xargs wc -l")"
+run_case allow "grep || bash"              "$(bash_ "grep -c 'db:generate' docs/x.md || bash scripts/x.sh")"
 run_case deny  "printf db:generate | sh"   "$(bash_ "printf 'pnpm db:generate' | sh")"
 run_case deny  "echo db:generate | xargs"  "$(bash_ "echo 'db:generate' | xargs pnpm")"
 run_case deny  "versioned drizzle-kit"     "$(bash_ 'npx drizzle-kit@0.31.4 generate')"
