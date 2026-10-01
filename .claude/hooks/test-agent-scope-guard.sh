@@ -211,6 +211,17 @@ ro deny  "backslash db:generate"       '{"tool_name":"Bash","tool_input":{"comma
 ro deny  "path to drizzle-kit"         "$(bash_ "node_modules/.bin/'drizzle-kit' push")"
 ro allow "grep for pnpm db:generate"   "$(bash_ "grep -rn 'pnpm db:generate' docs")"
 ro allow "git log --grep pnpm db:"     "$(bash_ "git log --oneline --grep 'pnpm db:migrate'")"
+# wrappers before a quoted target (round-3 self-review, E+F-1) and other launchers
+ro deny  "env + quoted db:migrate"     "$(bash_ "env pnpm 'db:migrate'")"
+ro deny  "time + quoted db:push"       "$(bash_ "cd server && time pnpm 'db:push'")"
+ro deny  "{ } + quoted db:seed"        "$(bash_ "{ pnpm 'db:seed'; }")"
+ro deny  "then + quoted db:migrate"    "$(bash_ "if true; then pnpm 'db:migrate'; fi")"
+ro deny  "find -exec quoted db:gen"    "$(bash_ "find . -maxdepth 0 -exec pnpm 'db:generate' ;")"
+ro deny  "ANSI-C quoted db:push"       "$(bash_ "pnpm \$'db:push'")"
+ro deny  "bunx quoted drizzle-kit"     "$(bash_ "bunx 'drizzle-kit' push")"
+ro deny  "node drizzle-kit bin"        "$(bash_ 'node node_modules/drizzle-kit/bin.cjs push')"
+ro allow "rg drizzle-kit push"         "$(bash_ "rg -n 'drizzle-kit push' docs")"
+tw deny  "env + quoted db:generate"    "$(bash_ "env pnpm 'db:generate'")"
 ro deny  "docker compose down"         "$(bash_ 'docker compose down -v')"
 # ---- what brainstormer and security-reviewer depend on
 ro allow "diff hunks range"            "$(bash_ 'git diff -U0 HEAD~1 HEAD')"

@@ -39,6 +39,31 @@ field() {
 
 matches() { printf '%s' "$1" | grep -E -q -- "$2"; }
 
+# A db:* / drizzle-kit run hidden from BARE by quoting (`pnpm 'db:generate'`,
+# `pnpm db\:generate`, `pnpm $'db:push'`, `env pnpm "db:migrate"`). Quote and
+# backslash characters are removed, the command is split into segments on
+# ; & | ( ` and newlines (also a literal \n), and a segment that is a read-only search or print
+# (grep, rg, git grep/log/show, echo, printf) is skipped - its quoted text is
+# data. Any other segment matching $2 or $3 anywhere is a run. Matching anywhere
+# (not only at command position) keeps wrappers like env/time/sudo/{ }/then/
+# find -exec covered (2026-10-02 self-review, generic-2, generic-EF-1/2, E+F-1).
+quoted_db_run() {
+  # Without jq, field() leaves JSON \n / \t escapes literal: decode them so a
+  # newline-separated command still splits (with jq they are real characters).
+  local dec='{ print }'
+  if [ -n "${GUARD_NO_JQ:-}" ] || ! command -v jq >/dev/null 2>&1; then
+    dec='{ gsub(/\\n/, "\n"); gsub(/\\t/, " "); print }'
+  fi
+  printf '%s\n' "$1" | awk "$dec" \
+    | tr -d "'\"\\\\" | tr ';&|(`' '\n\n\n\n\n' | while IFS= read -r seg; do
+    head=$(printf '%s' "$seg" | sed -E 's/^[[:space:]{!]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*//')
+    case "$head" in
+      grep\ *|egrep\ *|rg\ *|ag\ *|echo|echo\ *|printf\ *|git\ grep\ *|git\ log\ *|git\ show\ *) continue ;;
+    esac
+    if matches " $seg" "$2" || matches " $seg" "$3"; then echo hit; fi
+  done | grep -q hit
+}
+
 TOOL=$(field '.tool_name' tool_name)
 
 case "$TOOL" in
@@ -89,15 +114,8 @@ case "$TOOL" in
     if matches "$BARE" "${B}(yarn)([[:space:]]|$)"; then
       decide deny "this repo uses pnpm/npm; yarn would write a new lock file."
     fi
-    # BARE drops quoted spans, so `pnpm 'db:generate'` would slip through it: also
-    # read the command with quote and backslash CHARACTERS removed (`db\:generate`),
-    # but there demand drizzle-kit or a package manager at COMMAND position (after
-    # ;&|( or env assignments), so git grep 'db:generate' and grep 'pnpm db:generate'
-    # stay data (2026-10-02 self-review, generic-2 / generic-EF-1, -2).
-    UNQ=$(printf '%s' "$CMD" | tr -d "'\"\\\\")   # quote AND backslash escapes
     if matches "$BARE" "db:generate|drizzle-kit[[:space:]]+(generate|push|drop|migrate)" \
-       || matches "$UNQ" "(^|[;&|(\`])[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*(pnpm|npm|yarn|bun)[[:space:]]+([^;&|]*[[:space:]])?db:generate" \
-       || matches "$UNQ" "(^|[;&|(\`])[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*([^[:space:];&|]*/)?drizzle-kit[[:space:]]+(generate|push|drop|migrate)|(^|[;&|(\`])[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*(npx|pnpx|pnpm|npm|yarn|bun)[[:space:]]+([^;&|]*[[:space:]])?([^[:space:];&|]*/)?drizzle-kit[[:space:]]+(generate|push|drop|migrate)"; then
+       || quoted_db_run "$CMD" '[[:space:]{!](pnpm|npm|yarn|bun)[[:space:]]+([^[:space:]]+[[:space:]]+)*\$?db:generate' '[[:space:]/{!]drizzle-kit(/[^[:space:]]*)?[[:space:]]+(generate|push|drop|migrate)'; then
       decide deny "db:generate / drizzle-kit writes migrations or the DB, both off-limits (root AGENTS.md)."
     fi
     P='(server/src/db/migrations|pnpm-lock\.yaml|package-lock\.json|skills-lock\.json|\.claude/)'
