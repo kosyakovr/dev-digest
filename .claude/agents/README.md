@@ -14,32 +14,45 @@ prompt. A session that started before this folder existed does not see it at all
 | Agent | Responsibility | Not its job | Model |
 |---|---|---|---|
 | [`researcher`](researcher.md) | Answers **one concrete question** with evidence — from the repo (code, config, docs, git history), external sources, or both | Changing anything; many-source narrative reports (`/deep-research`) | `sonnet` |
+| [`brainstormer`](brainstormer.md) | Compares **2–4 genuinely different options** for one design decision (+ the status quo) against drivers fixed first from the repo, recommends one, leaves the pick to the user; hands the pick to planner | Planning work packages, code, web research (→ researcher), deciding for the user | `opus`, `effort: high` |
 | [`planner`](planner.md) | Turns a request into a **Development Plan**: what already exists, work packages per file, the skills that bind each one, gates, acceptance criteria, test plan | Writing code, web research, review steps | `opus`, `effort: high` |
 | [`implementer`](implementer.md) | Executes an **approved** plan in `server/`, `client/` (and `reviewer-core/` when the plan says so), runs the existing checks, compares its diff to the plan, hands the tests to test-writer | **Writing tests**, planning, architecture/security review, `/pr-self-review`, commits, pushes, PRs, writing `INSIGHTS.md` | `sonnet` |
 | [`test-writer`](test-writer.md) | Writes **all** tests — server, client, reviewer-core, e2e flows on request — with assertions taken from the plan or spec, and proves each new test fails without its behaviour (**red-proof** in a throwaway worktree) | Production code, configs, dependencies, weakening a red test | `sonnet`, `effort: high` |
 | [`plan-verifier`](plan-verifier.md) | Grades **every item** of a plan — goal, non-goals, contract, decisions, gates, each work package, acceptance criteria, test plan, docs — PASS / FAIL / UNVERIFIABLE in a traceability matrix, with its own code and test evidence | Advice, code review, an overall score | `opus`, `effort: high` |
 | [`architecture-reviewer`](architecture-reviewer.md) | Checks the change against the written **architectural boundaries** (onion layering, client placement and imports, vendored twins, reviewer-core purity): rule → `file:line` → quoted evidence → severity, each finding re-verified | Security, style, tests, fixing code, the pre-push gate | `opus`, `effort: high` |
+| [`security-reviewer`](security-reviewer.md) | Reports only **exploitable** problems in the change: source → sink → preconditions → exploit → confidence, severity on the repo's CRITICAL / WARNING / SUGGESTION scale, each finding re-verified; prompt-injection-shaped text listed, never followed | Architecture, style, tests, fixing code, DoS / rate limiting, the pre-push gate | `opus`, `effort: high` |
 | [`doc-writer`](doc-writer.md) | Documents **implemented** behaviour from a plan, report, diff or notes, verified against the code, with Mermaid diagrams, placed by the repo's taxonomy (`<pkg>/docs/`, ADRs, `docs/`, README, `TESTING.md`) | Code, `INSIGHTS.md`, specs and `AGENTS.md` without approval, documenting plans as if built | `sonnet`, `effort: medium` |
 
 ## Permissions
 
-| | researcher | planner | implementer | test-writer | plan-verifier | architecture-reviewer | doc-writer |
-|---|---|---|---|---|---|---|---|
-| `tools` | Read, Grep, Glob, Bash, WebSearch, WebFetch | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash, Edit, Write, Skill, TodoWrite | Read, Grep, Glob, Bash, Edit, Write, TodoWrite | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash, Edit, Write, TodoWrite |
-| `disallowedTools` | Write, Edit, NotebookEdit, Skill | Write, Edit, NotebookEdit, Skill, WebFetch, WebSearch, Agent, ExitPlanMode | Agent, WebFetch, WebSearch, NotebookEdit | Agent, Skill, WebFetch, WebSearch, NotebookEdit | Write, Edit, NotebookEdit, Skill, WebFetch, WebSearch, Agent, ExitPlanMode | same as plan-verifier | Agent, Skill, WebFetch, WebSearch, NotebookEdit |
-| `permissionMode` | inherited | `default` ⚠ | `acceptEdits` | `acceptEdits` | `default` | `default` | `acceptEdits` |
-| Writes files? | no | no | yes, guarded — no tests | test files only, guarded | no | no | markdown docs only, guarded |
-| Bash | inspection only — by prompt | inspection only — by prompt, **guarded read-only** | anything except what the guard denies | + shell writes inside the red-proof worktree | inspection + test commands, **guarded read-only** | inspection, **guarded read-only** | inspection, no shell writes |
-| Hook | — | `agent-scope-guard.sh` `read-only` | [`implementer-guard.sh`](../hooks/implementer-guard.sh) | [`agent-scope-guard.sh`](../hooks/agent-scope-guard.sh) `test-writer` | `agent-scope-guard.sh` `read-only` | `agent-scope-guard.sh` `read-only` | `agent-scope-guard.sh` `doc-writer` |
+| | researcher | brainstormer | planner | implementer | test-writer | plan-verifier | architecture-reviewer | security-reviewer | doc-writer |
+|---|---|---|---|---|---|---|---|---|---|
+| `tools` | Read, Grep, Glob, Bash, WebSearch, WebFetch | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash, Edit, Write, Skill, TodoWrite | Read, Grep, Glob, Bash, Edit, Write, TodoWrite | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash, Edit, Write, TodoWrite |
+| `disallowedTools` | Write, Edit, NotebookEdit, Skill | same as planner | Write, Edit, NotebookEdit, Skill, WebFetch, WebSearch, Agent, ExitPlanMode | Agent, WebFetch, WebSearch, NotebookEdit | Agent, Skill, WebFetch, WebSearch, NotebookEdit | Write, Edit, NotebookEdit, Skill, WebFetch, WebSearch, Agent, ExitPlanMode | same as plan-verifier | same as plan-verifier | Agent, Skill, WebFetch, WebSearch, NotebookEdit |
+| `permissionMode` | inherited | `default` | `default` ⚠ | `acceptEdits` | `acceptEdits` | `default` | `default` | `default` | `acceptEdits` |
+| Writes files? | no | no | no | yes, guarded — no tests | test files only, guarded | no | no | no | markdown docs only, guarded |
+| Bash | inspection only — by prompt | inspection only, **guarded read-only** | inspection only — by prompt, **guarded read-only** | anything except what the guard denies | + shell writes inside the red-proof worktree | inspection + test commands, **guarded read-only** | inspection, **guarded read-only** | inspection, **guarded read-only** | inspection, no shell writes |
+| Hook | — | `agent-scope-guard.sh` `read-only` | `agent-scope-guard.sh` `read-only` | [`implementer-guard.sh`](../hooks/implementer-guard.sh) | [`agent-scope-guard.sh`](../hooks/agent-scope-guard.sh) `test-writer` | `agent-scope-guard.sh` `read-only` | `agent-scope-guard.sh` `read-only` | `agent-scope-guard.sh` `read-only` | `agent-scope-guard.sh` `doc-writer` |
 
 Read-only for researcher is **two layers**: no write tools in frontmatter, and
-a prompt rule against writing through Bash. planner, plan-verifier and
-architecture-reviewer get a **third** layer — they need Bash for real work
-(`git log --all`, `git grep` at two revisions, running the test plan): the
+a prompt rule against writing through Bash. brainstormer, planner,
+plan-verifier, architecture-reviewer and security-reviewer get a **third**
+layer — they need Bash for real work (`git log --all`, `git grep` at two
+revisions, `git diff` of an uncommitted change, running the test plan): the
 `read-only` guard profile, which denies redirects, `rm`/`mv`/`cp`/`tee`/`sed -i`, installs and git
 state changes. A subagent's Bash cannot be narrowed by `disallowedTools` — a
 command-specific entry there removes the whole tool — so a hook is the only
 per-command control ([subagent docs](https://code.claude.com/docs/en/sub-agents)).
+
+**No web tools for security-reviewer or brainstormer.** security-reviewer
+reads diff text an attacker can shape and can read private repo data; a web
+tool would give it the third leg of the lethal trifecta (untrusted input +
+private data + a way out — `docs/agent-prompts/security-reviewer.md` § Lethal
+trifecta, [OWASP LLM01/LLM06](https://genai.owasp.org/llm-top-10/)). The
+guard's matcher does not cover web tools, so `disallowedTools` is the control.
+The guard also denies `curl`, `wget` and `gh api`, but it matches text and is
+not a sandbox. brainstormer leaves external questions to researcher, which
+keeps one agent's source discipline for the web.
 
 ⚠ **`permissionMode: plan` overrides `model: opus`.** Measured 2026-09-24 on
 2.1.281: two otherwise identical subagents with `model: opus` ran on
@@ -61,22 +74,27 @@ reports only the name arrives; the four newer agents instead **Read** the
 | Agent | Input (the delegation prompt) | Output (its final message) | Stops early with |
 |---|---|---|---|
 | researcher | A question with scope and an expected answer shape (yes/no, location, list, comparison) | **Repo research** or **External research** report: answer + confidence, findings with `path:line` / URL evidence, inferences, a **Not found** table, open questions | `NEEDS CLARIFICATION` — up to 5 questions and a default assumption |
-| planner | A feature request or change with an outcome and a scope; optionally a researcher report | **Development Plan**: goal, non-goals, what already exists, contract, decisions, **Gates**, work packages (files · skills by § · constraints · steps · done when · tests as Given/When/Then for test-writer), order, acceptance criteria, test plan, docs to update, risks | `NEEDS CLARIFICATION` |
-| implementer | The Development Plan **verbatim**, plus which Gates the user approved | **Implementation Report**: status, changes per work package, deviations, verification table with exit codes, acceptance criteria, **Handoff to test-writer** (plan test items + intended breaks), out-of-scope observations, **Insight candidates**. Code change left **uncommitted** | `BLOCKED` report — no plan, unapproved gate, a plan that breaks a rule |
-| test-writer | The plan (or the WP ids / Test plan rows to cover) + the implementer's handoff; or a target behaviour and its source of truth | **Test Report**: tests with their oracle source, verification (3 runs per new file), **Red-proof** table, suspected defects (left red), not covered, insight candidates. Test files left **uncommitted** | `NEEDS CLARIFICATION` (no behaviour or no source of truth); `blocked` (needs a dependency, config or production change) |
-| plan-verifier | The plan **verbatim** + approved Gates; optionally the implementation and test reports and the files modified before work started | **Plan Verification**: `PASS / FAIL / INCOMPLETE`, a traceability matrix (ID · requirement verbatim · code evidence · test evidence · verdict), failures with "to pass", unverifiable items, scope, commands run | `NEEDS CLARIFICATION` (no plan); `BLOCKED` (no change) |
-| architecture-reviewer | Nothing, a commit range, or paths; optionally the plan | **Architecture Review**: verdict, scope by group, deterministic checks (greps, twin, registration, reviewer-core purity), findings `AR-n` with rule · location · evidence · mechanism, dropped candidates, not checked | `NEEDS CLARIFICATION` (nothing to review) |
+| brainstormer | One design decision with its scope and the outcome wanted; optionally a researcher report | **Options** report: a ≤8-line **Summary**, context, **decision drivers** (each with its source), considered options (O0 = status quo), each option in detail, a comparison relative to O0 (`++ … −−`, `✗`), eliminated options, a Y-statement **recommendation** ending "Decision: awaiting the user's choice", "Needs research", **Handoff to planner** | `NEEDS CLARIFICATION` (no decision, scope or outcome); a two-line "only one reasonable design" note |
+| planner | A feature request or change with an outcome and a scope; optionally a researcher report, or a brainstormer report plus the user's pick | **Development Plan**: a ≤12-line **Summary** for the user, goal, non-goals, what already exists, contract, decisions, **Gates**, work packages (files · skills by § · constraints · steps · done when), order, acceptance criteria, test plan, docs to update, risks — then, after a `<!-- test-brief -->` marker, the **Test brief** (`WPn.tests` as Given/When/Then for test-writer) | `NEEDS CLARIFICATION` |
+| implementer | The plan **above the marker** (verbatim, or the path of the saved file), plus which Gates the user approved; or, in a **fix round**, a self-contained list of verified findings | **Implementation Report**: status, changes per work package with changed line ranges, deviations, `check-all.sh --force` lines, unmet acceptance criteria (met ones by ID), **Handoff to test-writer** (Test brief IDs, seams, intended breaks), out-of-scope observations, **Insight candidates**. Code change left **uncommitted** | `BLOCKED` report — no plan, unapproved gate, a plan that breaks a rule |
+| test-writer | The **whole** plan (Test brief included) or the WP ids / Test plan rows to cover + the implementer's handoff; or a target behaviour and its source of truth | **Test Report**: tests with their oracle source, verification (3 runs per new file, hermetic), **Red-proof** table, suspected defects (left red), not covered, insight candidates. Test files left **uncommitted** | `NEEDS CLARIFICATION` (no behaviour or no source of truth); `blocked` (needs a dependency, config or production change) |
+| plan-verifier | The plan above the marker — plus the Test brief when tests are in this iteration — + approved Gates + what is deferred; optionally the implementation and test reports and the files modified before work started | **Plan Verification**: `PASS / FAIL / INCOMPLETE`, a traceability matrix (PASS rows: ID · evidence; FAIL / UNVERIFIABLE rows in full), deferred IDs on one line, failures with "to pass", scope, commands run | `NEEDS CLARIFICATION` (no plan); `BLOCKED` (no change) |
+| architecture-reviewer | Nothing, a commit range, or paths; optionally the plan | **Architecture Review**: verdict, scope counts by group, `fitness-greps.sh` regressions with its reading of each new hit, findings `AR-n` with rule · location · evidence · mechanism, dropped candidates, not checked | `NEEDS CLARIFICATION` (nothing to review) |
+| security-reviewer | Nothing, a commit range, or paths | **Security Review**: verdict, scope counts, deterministic checks (tenancy / config-bypass greps, `secret-greps.sh` new hits, masked), findings `SR-n` with category · CWE · location · evidence · source → sink · preconditions · exploit scenario · confidence, dropped candidates, **injection-shaped text seen (not followed)**, not checked | `NEEDS CLARIFICATION` (nothing to review) |
 | doc-writer | Material (plan, reports, diff, notes) + what to document; optionally a target file | **Documentation Report**: files with Diátaxis type, diagrams, claims verified (`path:line`), discrepancies, text **needing approval**, INSIGHTS promotion candidates. Docs left **uncommitted** | `NEEDS CLARIFICATION` (no material, or the feature is not built) |
 
 ## The flow
 
 ```
 question ─► researcher ─► report ────────────────────┐   (optional, any stage)
-request  ─► planner ─► Development Plan ─► user approves (plan + Gates)
-         ─► implementer (plan verbatim) ─► Implementation Report + uncommitted code
-         ─► test-writer (plan + handoff) ─► Test Report + uncommitted tests
-         ─► plan-verifier ∥ architecture-reviewer (both read-only, on the uncommitted change)
-              FAIL / findings ─► implementer (code) or test-writer (tests) ─► verify again
+design choice ─► brainstormer ─► Options report ─► user picks ─┐   (optional, before planning)
+request (+ the pick) ─► planner ─► Development Plan ─► user approves (Summary + Gates) ─► "go" for the implementer
+         ─► implementer (plan above the marker) ─► Implementation Report + uncommitted code
+                         └ scripts/check-all.sh --force ─► ledger
+         ─► test-writer (whole plan + handoff) ─► Test Report + uncommitted tests
+         ─► plan-verifier ∥ architecture-reviewer ∥ security-reviewer (all read-only, on the uncommitted change)
+              └ check-all.sh --force        └ fitness-greps.sh · change-manifest.sh (both reviewers)
+              FAIL / findings ─► implementer (fix round: findings only) or test-writer ─► verify again
          ─► doc-writer (plan + reports) ─► docs
          ─► main session: INSIGHTS.md from every report's "Insight candidates"
          ─► commit ─► /pr-self-review ─► push
@@ -86,7 +104,9 @@ Subagents cannot ask the user anything (`AskUserQuestion` is never given to a
 subagent), so each one returns a `NEEDS CLARIFICATION` or `BLOCKED` block
 instead, and the main session relays it. Subagents do not see the conversation
 either: the plan reaches each agent only through the delegation prompt, so pass
-it **verbatim**, together with which Gates the user approved.
+it **verbatim** or as the path of the file it was saved to, together with which
+Gates the user approved. See [§ Token budget](#token-budget) for which part of
+the plan each agent gets.
 
 **Why tests are a separate agent.** A model that writes the code and its tests
 tends to shape the expected values to whatever the code returns — up to 68% of
@@ -106,6 +126,30 @@ security, and writes the report the push gate reads. The reviewer reuses the
 gate's `routing.md`, `greps.md` and `reviewer-prompt.md` by reference, so both
 calibrate the same way; a clean architecture review does not replace the gate.
 
+**security-reviewer vs `/pr-self-review` group E vs the built-in
+`/security-review`.** The same split again. security-reviewer runs before the
+commit, on the working tree, writes nothing and blocks nothing; group E runs
+on the committed branch and its CRITICALs block the push. Both grade with
+`docs/agent-prompts/security-reviewer.md` (the product's own prompt) and the
+same CRITICAL bar, so a finding does not change severity between the two.
+security-reviewer adds what a pre-commit pass can afford: exploitability
+fields on every finding, an exclusion list and a confidence threshold after
+Anthropic's [`claude-code-security-review`](https://github.com/anthropics/claude-code-security-review),
+and a second pass that tries to break each finding. The built-in
+`/security-review` is generic — it knows neither this stack nor this repo's
+scale — and neither replaces nor is replaced by the other two. A tenancy
+hit (`onion-13-tenancy-guard`) may be reported by both reviewers; the main
+session merges them when relaying.
+
+**brainstormer vs researcher vs planner.** researcher answers one question
+with evidence; brainstormer makes the options for one decision comparable;
+planner plans one chosen design. brainstormer goes first only when there is
+a real choice (planner's Step 0 otherwise stops at "a decision between A and
+B"), has no web tools and hands external unknowns to researcher, and ends
+with a **Handoff to planner** block: the decision, the user's pick, the
+drivers to honour and each rejected option — which planner copies into its
+Decisions table as the rejected alternatives.
+
 **plan-verifier vs the implementer's own check.** The implementer's "check the
 diff against the plan" is a self-assessment and its report is a claim;
 plan-verifier re-derives every verdict from the code and from commands it runs
@@ -115,11 +159,114 @@ holistic score because it agrees with human judgement markedly better
 [arXiv 2410.03608](https://arxiv.org/abs/2410.03608); Anthropic,
 [develop tests](https://platform.claude.com/docs/en/test-and-evaluate/develop-tests)).
 
+## Token budget
+
+Measured on the L03 Intent Layer run, 2026-09-24 (subagent totals from the
+harness's task notifications — compare stages with each other, not as bills):
+
+| Stage | Model | Tokens | Tool calls |
+|---|---|---|---|
+| researcher | sonnet | 38k | 14 |
+| planner | opus | 235k | 68 |
+| implementer, WP0–WP8, three packages | sonnet | **417k** | **222** |
+| architecture-reviewer | opus | 108k | 34 |
+| plan-verifier | opus | 155k | 44 |
+| implementer, fix round | sonnet | 192k | 80 |
+
+First runs of the two newer agents, 2026-09-28 (behaviour probes, not a
+feature run): security-reviewer on a one-file, 9-line change — opus, 27k, 7
+calls; brainstormer on a five-option `.claude/` decision — opus, 67k, 19 calls.
+
+Where it went: a ~25–30k-token plan, a quarter of it test cases nobody in that
+iteration needed, was read by five agents and the main session; every full
+report landed in the main session's context and rode along on each later turn;
+the same code was explored from scratch five times; the same typecheck and
+tests ran four times on one tree; one implementer carried server **and**
+client reads through 222 calls; and an `.it.test` run against real stored keys
+cost billed calls plus a debugging round. The changes below remove the
+repetition, not a check.
+
+**What each agent reads**
+
+| Agent | Gets | Does not get |
+|---|---|---|
+| implementer | plan above `<!-- test-brief -->`; approved Gates | Test brief; in a fix round, the plan at all — only the findings |
+| test-writer | the whole plan + the implementer's handoff | — |
+| plan-verifier | plan above the marker (+ Test brief when tests are in the iteration), what is deferred | reports as evidence (they are claims) |
+| architecture-reviewer | nothing or a range; `change-manifest.sh` → hunks, `fitness-greps.sh` → hits | whole modified files, typecheck/test runs |
+| security-reviewer | nothing or a range; `change-manifest.sh` → hunks, two `fitness-greps.sh` rows, `secret-greps.sh` new hits; follows data beyond the hunk only to a source or sink | the plan, typecheck/test runs |
+| brainstormer | the decision, its scope and outcome; optionally a researcher report | a plan (it comes before one) |
+
+**Rules for the main session**
+
+1. **Do not re-type a plan.** Save it to a file once and hand agents the
+   **paths**. An over-limit message is already saved by the harness. An
+   inline one arrives as the `message` input of the agent's `SubagentHandback`
+   tool call — extract it from the agent's `output_file` with a script that
+   writes the file and prints only its size, never by reading the transcript
+   (measured 2026-09-24: the transcript's last plain assistant text was a
+   3.8k-char fragment, the handback held the 39k-char plan). Relay its
+   `## Summary` (`sed -n '/^## Summary/,/^## Goal/p' <file>`) and cut it at
+   the marker (`awk '/<!-- test-brief -->/{exit} {print}' <file> > plan-core.md`).
+2. **Ask before launching the implementer**, even after the Gates are
+   answered — it is the most expensive stage, and a stop after it started
+   wastes everything it read.
+3. **A fix round gets a self-contained brief** — each finding with `file:line`,
+   the rule and what must hold — and no plan (`implementer.md` Step 1).
+4. **One ledger for checks.** `scripts/check-all.sh --force` runs in the
+   implementer, at the end of test-writer and in plan-verifier (its evidence
+   must be its own). The main session, architecture-reviewer and
+   security-reviewer reuse the ledger: `scripts/check-all.sh` without `--force` prints recorded results for
+   an unchanged tree. Editing docs, specs or `.claude/` does not invalidate it.
+5. **Relay, do not re-read.** Report counts and non-PASS items to the user;
+   open the full report only when asked.
+6. **Stable prefix first.** When the same agent type is spawned more than once,
+   start each delegation prompt with the identical constant block (paths,
+   approved Gates, constraints) and put the variable instruction last — the
+   prompt cache matches on prefixes. Whether a subagent's system prompt stays
+   byte-identical between spawns (it may embed git status) is **unverified**:
+   check `cache_read_input_tokens` in the agents' transcripts before relying
+   on it.
+7. **One agent per context.** Split the implementer by package when server and
+   client work do not share files (the client run then does not carry server
+   reads); keep sequential stages that share context in one agent.
+8. **Bundled artifacts:** do not `Artifact read` a bundler page into the main
+   context (it returns base64) — save it and unpack with a script, then grep.
+
+**Deliberately not done**
+
+- **No model downgrades.** plan-verifier stays on opus: its value is
+  re-deriving the implementer's (sonnet) claims on a different model (see
+  "plan-verifier vs the implementer's own check" above). The mechanical work
+  moved to scripts instead, which costs no model tokens at all.
+- **Read-only agents still do not write report files.** Letting planner,
+  plan-verifier or architecture-reviewer write under `.git/devdigest/` would
+  weaken the `read-only` guard; their reports got shorter instead (PASS rows
+  as ID + evidence, deferred items as one line, scope as counts).
+
 ## Where the rules come from
 
 Most of the rules in these agents are not new policy. They restate
 project rules, recorded traps and skills so a subagent cannot miss them. When a
 source changes, the agent that restates it is now stale — this table says which.
+
+### brainstormer
+
+External sources were read on 2026-09-28; *(M)* marks what the research rated
+medium confidence.
+
+| Rule in [`brainstormer.md`](brainstormer.md) | Source |
+|---|---|
+| Output as context → drivers → considered options → pros and cons → outcome | [MADR](https://github.com/adr/madr); Nygard's ADR rejected as the shape (one decision, no side-by-side options) — [cognitect.com](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions) |
+| Drivers first, each with its source; justify every rejection; no strawmen | Zimmermann, [Ten common ADR mistakes](https://ozimmer.ch/practices/2026/09/12/ADRMistakes.html) ("criteria reverse-engineered from a preferred option", "a decision without alternatives is not a decision") |
+| Titles before details; options from distinct angles; each detailed on its own | LLM idea fixation, [arXiv 2602.20408](https://arxiv.org/abs/2602.20408) *(M, preprint)*; [self-consistency](https://arxiv.org/abs/2203.11171); [Tree of Thoughts](https://arxiv.org/abs/2305.10601) (generate, then evaluate) |
+| O0 status quo as the baseline; `++ … −−` relative to it, no weighted totals | Pugh / [decision matrix](https://en.wikipedia.org/wiki/Decision-matrix_method) *(M — a matrix practice, not an ADR rule)* |
+| Options in generation order, ties allowed | Position bias in LLM judges, [IJCNLP 2025](https://aclanthology.org/2025.ijcnlp-long.18.pdf) *(M for Claude)* |
+| 2–4 options | Anthropic, [multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system) ("direct comparisons … 2-4 subagents") *(M — an analogy)* |
+| Recommendation as a Y-statement | [Y-statements](https://medium.com/olzzio/y-statements-10eb07b5a177) |
+| No web; external unknowns → researcher | [`researcher.md`](researcher.md) § External research — method (one agent's source discipline) |
+| `git log --all` for reverted lesson work, and say so | Root [`INSIGHTS.md`](../../INSIGHTS.md) 2026-09-23 |
+| Handoff to planner | [`planner.md`](planner.md) Step 0 ("a decision between A and B") — the two files are coupled |
 
 ### planner
 
@@ -146,13 +293,15 @@ source changes, the agent that restates it is now stale — this table says whic
 |---|---|
 | Never touch migrations, lock files, dependencies; only `--frozen-lockfile` / `npm ci` | Root [`AGENTS.md`](../../AGENTS.md) § Do not touch |
 | Never create `CLAUDE.md` / `CLAUDE.local.md` | Root [`INSIGHTS.md`](../../INSIGHTS.md) 2026-09-20 (one such file silently drops every `AGENTS.md`) |
-| A guard denial is final; the guard decides `ask` when it cannot parse input | [`implementer-guard.sh`](../hooks/implementer-guard.sh); root `INSIGHTS.md` 2026-09-21 (a hook that errors fails **open**) |
+| A guard denial is final; the guard decides `ask` when it cannot parse input | [`implementer-guard.sh`](../hooks/implementer-guard.sh); [`../hooks/README.md`](../hooks/README.md) § The `node` resolution problem (a hook that errors fails **open**) |
 | Load skills per file, following `routing.md` over its own table | [`pr-self-review/routing.md`](../skills/pr-self-review/routing.md) § Groups — so implementation and pre-PR review apply the same rules |
 | Spec first; update listed docs in the same change | Root `AGENTS.md` § Workflow 2, 4 |
 | Contracts in both copies, checked with `diff -r` | Root `AGENTS.md` § Cross-package invariants; `routing.md` § Vendored-contract twin check |
 | No tests — hand them to test-writer, including intended breaks; `mocks.ts` stays the implementer's | User decision 2026-09-24; [arXiv 2412.14137](https://arxiv.org/abs/2412.14137) (one model writing both validates its own bugs); enforced by `implementer-guard.sh` |
 | Step 3 verification commands per package | `server/AGENTS.md` § Commands, `client/AGENTS.md`, `reviewer-core/AGENTS.md`, `TESTING.md` |
 | A green `.it.test` run without Docker is "skipped", not "passed" | `TESTING.md` § server-integration (the tests self-skip) |
+| Rule 7 + Step 3: checks through `scripts/check-all.sh`, `.it.test` only via `scripts/hermetic.sh` | [`server/INSIGHTS.md`](../../server/INSIGHTS.md) 2026-09-24 (real stored keys → billed calls, 10 s timeouts); [§ Token budget](#token-budget) (one ledger instead of four runs) |
+| Fix round works from the findings, not the plan; report restates nothing | [§ Token budget](#token-budget) |
 | Check `command -v agent-browser` before trusting an e2e run | [`e2e/INSIGHTS.md`](../../e2e/INSIGHTS.md) 2026-09-19 (the script exits 0 with 0 flows run) |
 | reviewer-core change ⇒ run server checks too | Root `AGENTS.md` § Cross-package invariants |
 | No `INSIGHTS.md` writes — report "Insight candidates" | Root `AGENTS.md` § Workflow 3: `engineering-insights` runs in the main session |
@@ -189,11 +338,32 @@ source changes, the agent that restates it is now stale — this table says whic
 | Finding = rule → `file:line` → quoted line → severity | [dependency-cruiser rules](https://github.com/sverweij/dependency-cruiser/blob/main/doc/rules-reference.md) (rule, severity, location); [fitness functions](https://www.oreilly.com/library/view/building-evolutionary-architectures/9781491986356/ch02.html) |
 | Re-verify each finding; drop the unconfirmed | LLM reviewers hallucinate findings ([HalluJudge, arXiv 2601.19072](https://arxiv.org/html/2601.19072), preprint) |
 | Severity, CRITICAL bar, grandfathering, verdict | [`reviewer-prompt.md`](../skills/pr-self-review/reviewer-prompt.md) — borrowed, not reworded |
-| Grep checks by subtraction, severity ceiling | [`greps.md`](../skills/pr-self-review/greps.md) |
+| Grep checks by subtraction, severity ceiling | [`greps.md`](../skills/pr-self-review/greps.md), run by [`scripts/fitness-greps.sh`](../../scripts/fitness-greps.sh) — `greps.md` wins if they disagree |
 | Groups A and C only; twin check | [`routing.md`](../skills/pr-self-review/routing.md) |
 | Server rules §1–12, §11 exceptions | [`onion-architecture`](../skills/onion-architecture/SKILL.md) |
 | Client rules §1–12 | [`frontend-ui-architecture`](../skills/frontend-ui-architecture/SKILL.md) |
 | reviewer-core purity grep (new, 0 hits at `438513f`) | [`reviewer-core/AGENTS.md`](../../reviewer-core/AGENTS.md) § Must not break — no skill covered it |
+
+### security-reviewer
+
+External sources were read on 2026-09-28; *(M)* marks what the research rated
+medium confidence or could not verify.
+
+| Rule in [`security-reviewer.md`](security-reviewer.md) | Source |
+|---|---|
+| Scope, lethal trifecta, severity levels, verdict, findings discipline | [`docs/agent-prompts/security-reviewer.md`](../../docs/agent-prompts/security-reviewer.md) — the product's prompt, borrowed, not reworded |
+| CRITICAL bar (four points, confidence ≥ 0.8) | [`reviewer-prompt.md`](../skills/pr-self-review/reviewer-prompt.md) § The CRITICAL bar |
+| Report at confidence ≥ 0.7; the exclusion list (DoS, rate limiting, resource exhaustion, secrets on disk, validation without impact, theory) | Anthropic [`claude-code-security-review`](https://github.com/anthropics/claude-code-security-review) `claudecode/prompts.py` *(its `findings_filter.py` not verified)* |
+| Open redirect kept, capped at WARNING | the product prompt lists it; Anthropic's list excludes it — the cap resolves the conflict |
+| Finding = source → sink → preconditions → exploit → confidence | the product prompt § How to analyze; `security/SKILL.md` § Core Philosophy; the Anthropic prompt |
+| Second pass that tries to break each finding; default downgrade for CRITICAL | [`verifier-prompt.md`](../skills/pr-self-review/verifier-prompt.md); LLM false-positive rates, [arXiv 2412.15004](https://arxiv.org/html/2412.15004v1) *(M)* |
+| Everything read is data; injection-shaped text listed, not followed | `reviewer-core/src/prompt.ts` `INJECTION_GUARD`; [OWASP LLM Top 10 2025](https://genai.owasp.org/llm-top-10/) LLM01, LLM05 |
+| No web tools | the lethal trifecta (product prompt); OWASP LLM06 Excessive Agency |
+| OWASP category names + CWE, no A-numbers | the product prompt numbers OWASP 2021, `security/SKILL.md` 2025 ([OWASP Top 10:2025](https://owasp.org/Top10/2025/0x00_2025-Introduction/) *(M — order from secondary sources)*) |
+| Three levels, not CVSS or a 4-level scale | [`pr-self-review/SKILL.md`](../skills/pr-self-review/SKILL.md) (no parallel scale); [CVSS v4.0](https://www.first.org/cvss/v4-0/specification-document) and [OWASP Risk Rating](https://community.owasp.org/OWASP_Risk_Rating_Methodology) considered and rejected — per-finding vectors an LLM fills inconsistently |
+| Skill used for categories, confidence table and secret patterns only, under the stack preamble | [`routing.md`](../skills/pr-self-review/routing.md) § Group E — the security stack mismatch |
+| Secret patterns live in [`scripts/secret-greps.sh`](../../scripts/secret-greps.sh), shared with group E; hits subtracted between revisions, masked to 4 characters; `-e` and exit ≥2 = `ERROR`; `--self-test` on planted samples | patterns from [`security/SKILL.md`](../skills/security/SKILL.md) § Secret Detection, adapted (Postgres URL, LLM keys); the brainstormer probe of 2026-09-28 (option O2: one source, no stored counts — [`greps.md`](../skills/pr-self-review/greps.md)'s subtraction); root `INSIGHTS.md` 2026-09-21 and 2026-09-28 |
+| Tenancy and config-bypass greps | [`greps.md`](../skills/pr-self-review/greps.md) (`onion-13-tenancy-guard` is the one grep that may reach CRITICAL); [`onion-architecture`](../skills/onion-architecture/SKILL.md) §7 |
 
 ### doc-writer
 
@@ -222,13 +392,15 @@ is kept here because the plan is a human-approved gate, handed over once.
 
 ## The guards
 
-Six of the seven agents declare a `PreToolUse` hook in their frontmatter:
+Eight of the nine agents declare a `PreToolUse` hook in their frontmatter
+(researcher, which has no Bash guard, is the ninth):
 
 - `implementer` → [`../hooks/implementer-guard.sh`](../hooks/implementer-guard.sh)
   turns the "do not touch" rules of the root `AGENTS.md` into denials, denies
   test files (test-writer owns them), and asks the user before a
   `server/src/db/schema*` or `package.json` edit.
-- `planner`, `test-writer`, `doc-writer`, `plan-verifier`, `architecture-reviewer` →
+- `brainstormer`, `planner`, `test-writer`, `doc-writer`, `plan-verifier`,
+  `architecture-reviewer`, `security-reviewer` →
   [`../hooks/agent-scope-guard.sh`](../hooks/agent-scope-guard.sh) with a
   profile argument (`test-writer`, `doc-writer`, `read-only`): the same deny
   core plus an allowlist of what that agent may write.
@@ -248,7 +420,14 @@ do run their hooks; that is how the guards are verified end to end.)
   - `planner.md` Step 5 ↔ `implementer.md` hard rules ↔ `test-writer.md`
     (who writes tests, and the shape of a WP's Tests line);
   - `planner.md` § Output format ↔ `plan-verifier.md` Step 1 (item IDs per
-    plan section);
+    plan section) ↔ `test-writer.md` Step 0 (the `<!-- test-brief -->`
+    marker and the `WPn.tests` blocks after it);
+  - [`scripts/fitness-greps.sh`](../../scripts/fitness-greps.sh) ↔ `greps.md`
+    § The patterns, `routing.md` § Vendored-contract twin check and
+    `architecture-reviewer.md` Step 3 (reviewer-core purity);
+    [`scripts/check-all.sh`](../../scripts/check-all.sh) ↔ the commands in
+    `.github/workflows/*.yml` ↔ `implementer.md` Step 3, `plan-verifier.md`
+    Step 4, `test-writer.md` Step 4;
   - `implementer.md` report ↔ `test-writer.md` input ("Handoff to
     test-writer") ↔ `plan-verifier.md` rule 2;
   - `implementer.md` skill table, `test-writer.md` Step 1 and
@@ -257,6 +436,18 @@ do run their hooks; that is how the guards are verified end to end.)
   - `implementer.md` rules 2 and 5 ↔ `implementer-guard.sh`; each new agent's
     hard rules ↔ its `agent-scope-guard.sh` profile; both guards' deny core
     ↔ root `AGENTS.md` § Do not touch;
+  - `security-reviewer.md` ↔ `docs/agent-prompts/security-reviewer.md`
+    (scale, verdict, trifecta) ↔ `reviewer-prompt.md` § The CRITICAL bar ↔
+    `routing.md` § Group E (the stack preamble, quoted verbatim) ↔
+    `reviewer-core/src/prompt.ts` `INJECTION_GUARD` ↔ `greps.md` /
+    `fitness-greps.sh` row ids `onion-13-tenancy-guard`,
+    `onion-13-config-bypass`;
+  - [`scripts/secret-greps.sh`](../../scripts/secret-greps.sh) (the only copy
+    of the secret patterns; its header holds the expected output — re-run it
+    and `--self-test` after changing a pattern) ↔ `security-reviewer.md` Step 2
+    ↔ `routing.md` § Groups row E and `pr-self-review/SKILL.md` § 3;
+  - `brainstormer.md` § Handoff to planner ↔ `planner.md` Step 0 (brainstormer
+    report + the user's pick) and § Decisions taken (rejected alternatives);
   - `test-writer.md` rule 3 ↔ `client/INSIGHTS.md` 2026-09-23 (remove the
     override if `user-event` / `msw` are ever installed).
 - **Check that it loaded — from a fresh session.** No `claude` is on `PATH` in a
