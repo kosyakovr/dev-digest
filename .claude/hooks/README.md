@@ -105,7 +105,7 @@ other agents. It makes the root `AGENTS.md` "do not touch" list mechanical.
 | File | Role |
 |---|---|
 | `implementer-guard.sh` | The guard. POSIX `sh`, no `node`; `jq` when present, `sed` fallback otherwise. |
-| `test-implementer-guard.sh` | 186 offline checks (92 cases × jq/sed, plus 2 under `env -i`). |
+| `test-implementer-guard.sh` | 196 offline checks (97 cases × jq/sed, plus 2 under `env -i`). |
 
 | Tool call | Decision |
 |---|---|
@@ -142,7 +142,7 @@ agents — it runs **only while one of them is active**:
 | File | Role |
 |---|---|
 | `agent-scope-guard.sh` | The guard. POSIX `sh`, no `node`; `jq` when present, `sed` fallback otherwise — the same parser as `implementer-guard.sh`. |
-| `test-agent-scope-guard.sh` | 330 offline checks (163 cases × jq/sed, plus 4 outside that loop: no `CLAUDE_PROJECT_DIR`, three under `env -i`). |
+| `test-agent-scope-guard.sh` | 346 offline checks (171 cases × jq/sed, plus 4 outside that loop: no `CLAUDE_PROJECT_DIR`, three under `env -i`). |
 
 One script rather than four: the Bash rules are identical, and separate copies
 would drift. `implementer-guard.sh` stays separate because it is already

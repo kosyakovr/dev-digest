@@ -115,6 +115,12 @@ run_case deny  "bunx quoted drizzle-kit"   "$(bash_ "bunx 'drizzle-kit' generate
 run_case deny  "node drizzle-kit bin"      "$(bash_ 'node node_modules/drizzle-kit/bin.cjs generate')"
 run_case allow "git log --grep db:generate" "$(bash_ "git log --oneline --grep 'pnpm db:generate'")"
 run_case allow "rg drizzle-kit generate"   "$(bash_ "rg -n 'drizzle-kit generate' docs")"
+# round-4 self-review: git global options / ugrep stay data; pipes into a shell do not
+run_case allow "git -C x grep db:generate" "$(bash_ "git -C server grep -n 'pnpm db:generate'")"
+run_case allow "ugrep for db:generate"     "$(bash_ "ugrep -n 'pnpm db:generate' docs")"
+run_case deny  "printf db:generate | sh"   "$(bash_ "printf 'pnpm db:generate' | sh")"
+run_case deny  "echo db:generate | xargs"  "$(bash_ "echo 'db:generate' | xargs pnpm")"
+run_case deny  "versioned drizzle-kit"     "$(bash_ 'npx drizzle-kit@0.31.4 generate')"
 run_case deny  "redirect into migrations"  "$(bash_ 'echo x > server/src/db/migrations/0013.sql')"
 run_case deny  "sed -i lock file"          "$(bash_ 'sed -i s/a/b/ client/pnpm-lock.yaml')"
 run_case deny  "rm a hook"                 "$(bash_ 'rm .claude/hooks/implementer-guard.sh')"
