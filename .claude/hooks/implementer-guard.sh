@@ -90,13 +90,14 @@ case "$TOOL" in
       decide deny "this repo uses pnpm/npm; yarn would write a new lock file."
     fi
     # BARE drops quoted spans, so `pnpm 'db:generate'` would slip through it: also
-    # read the command with only the quote CHARACTERS removed, but there demand a
-    # package manager (or command position) in front, so git grep 'db:generate'
-    # stays allowed (2026-10-02 self-review, generic-2).
-    UNQ=$(printf '%s' "$CMD" | tr -d "'\"")
+    # read the command with quote and backslash CHARACTERS removed (`db\:generate`),
+    # but there demand drizzle-kit or a package manager at COMMAND position (after
+    # ;&|( or env assignments), so git grep 'db:generate' and grep 'pnpm db:generate'
+    # stay data (2026-10-02 self-review, generic-2 / generic-EF-1, -2).
+    UNQ=$(printf '%s' "$CMD" | tr -d "'\"\\\\")   # quote AND backslash escapes
     if matches "$BARE" "db:generate|drizzle-kit[[:space:]]+(generate|push|drop|migrate)" \
-       || matches "$UNQ" "${B}(pnpm|npm|yarn|bun)[[:space:]]+([^;&|]*[[:space:]])?db:generate" \
-       || matches "$UNQ" "(^|[;&|(\`])[[:space:]]*drizzle-kit[[:space:]]+(generate|push|drop|migrate)|${B}(npx|pnpx|pnpm|npm|yarn|bun)[[:space:]]+([^;&|]*[[:space:]])?drizzle-kit[[:space:]]+(generate|push|drop|migrate)"; then
+       || matches "$UNQ" "(^|[;&|(\`])[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*(pnpm|npm|yarn|bun)[[:space:]]+([^;&|]*[[:space:]])?db:generate" \
+       || matches "$UNQ" "(^|[;&|(\`])[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*([^[:space:];&|]*/)?drizzle-kit[[:space:]]+(generate|push|drop|migrate)|(^|[;&|(\`])[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*(npx|pnpx|pnpm|npm|yarn|bun)[[:space:]]+([^;&|]*[[:space:]])?([^[:space:];&|]*/)?drizzle-kit[[:space:]]+(generate|push|drop|migrate)"; then
       decide deny "db:generate / drizzle-kit writes migrations or the DB, both off-limits (root AGENTS.md)."
     fi
     P='(server/src/db/migrations|pnpm-lock\.yaml|package-lock\.json|skills-lock\.json|\.claude/)'

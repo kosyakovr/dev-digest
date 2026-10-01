@@ -207,6 +207,10 @@ ro deny  "quoted db:generate"          "$(bash_ "pnpm 'db:generate'")"
 ro deny  "run \"db:migrate\""          '{"tool_name":"Bash","tool_input":{"command":"pnpm run \"db:migrate\"","description":"x"}}'
 ro deny  "quoted drizzle-kit"          "$(bash_ "npx 'drizzle-kit' push")"
 ro allow "git grep drizzle-kit push"   "$(bash_ "git grep -n 'drizzle-kit push' -- docs")"
+ro deny  "backslash db:generate"       '{"tool_name":"Bash","tool_input":{"command":"pnpm db\\:generate","description":"x"}}'
+ro deny  "path to drizzle-kit"         "$(bash_ "node_modules/.bin/'drizzle-kit' push")"
+ro allow "grep for pnpm db:generate"   "$(bash_ "grep -rn 'pnpm db:generate' docs")"
+ro allow "git log --grep pnpm db:"     "$(bash_ "git log --oneline --grep 'pnpm db:migrate'")"
 ro deny  "docker compose down"         "$(bash_ 'docker compose down -v')"
 # ---- what brainstormer and security-reviewer depend on
 ro allow "diff hunks range"            "$(bash_ 'git diff -U0 HEAD~1 HEAD')"

@@ -187,12 +187,10 @@ describe("DiffTab", () => {
     {
       name: "smart-diff failed",
       state: () => setSmart({ data: undefined, isError: true }),
-      flat: true,
     },
     {
       name: "a failed refresh with stale data",
       state: () => setSmart({ data: smartResponse(), isError: true }),
-      flat: true,
     },
     {
       name: "smart-diff path set differs from the PR's files",
@@ -202,23 +200,22 @@ describe("DiffTab", () => {
             groups: [{ role: "core", files: [{ path: "a.ts", additions: 3, deletions: 0, finding_lines: [] }] }],
           }),
         }),
-      flat: true,
     },
-    {
-      name: "smart-diff still loading",
-      state: () => setSmart({ data: undefined, isLoading: true }),
-      flat: false,
-    },
-  ])("$name: no group headers (flat list with the notice, or nothing and no notice while loading)", ({ state, flat }) => {
+  ])("$name: flat list in original order with the notice, no group headers", ({ state }) => {
     state();
     renderTab();
     expect(screen.queryByRole("button", { name: ROLE_RE })).toBeNull();
-    for (const p of PATHS) {
-      if (flat) expect(screen.getByText(p)).toBeInTheDocument();
-      else expect(screen.queryByText(p)).toBeNull();
-    }
-    if (flat) expect(screen.getByText(UNAVAILABLE)).toBeInTheDocument();
-    else expect(screen.queryByText(UNAVAILABLE)).toBeNull();
+    for (const p of PATHS) expect(screen.getByText(p)).toBeInTheDocument();
+    expect(screen.getByText(UNAVAILABLE)).toBeInTheDocument();
+  });
+
+  it("while smart-diff loads: a loading status, no files, no headers, no notice", () => {
+    setSmart({ data: undefined, isLoading: true });
+    renderTab();
+    expect(screen.getByRole("status", { name: "Loading the smart diff…" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: ROLE_RE })).toBeNull();
+    for (const p of PATHS) expect(screen.queryByText(p)).toBeNull();
+    expect(screen.queryByText(UNAVAILABLE)).toBeNull();
   });
 
   it("no review yet (review_ids = []): the 'No review yet' note is shown above the groups", () => {

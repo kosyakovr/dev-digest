@@ -169,13 +169,14 @@ case "$TOOL" in
       decide deny "npx can fetch and run an arbitrary package - use the package's own scripts (pnpm test, npm test, pnpm typecheck)."
     fi
     # BARE drops quoted spans, so `pnpm 'db:generate'` would slip through it: also
-    # read the command with only the quote CHARACTERS removed, but there demand a
-    # package manager (or command position) in front, so git grep 'db:generate'
-    # stays allowed (2026-10-02 self-review, generic-2).
-    UNQ=$(printf '%s' "$CMD" | tr -d "'\"")
+    # read the command with quote and backslash CHARACTERS removed (`db\:generate`),
+    # but there demand drizzle-kit or a package manager at COMMAND position (after
+    # ;&|( or env assignments), so git grep 'db:generate' and grep 'pnpm db:generate'
+    # stay data (2026-10-02 self-review, generic-2 / generic-EF-1, -2).
+    UNQ=$(printf '%s' "$CMD" | tr -d "'\"\\\\")   # quote AND backslash escapes
     if matches "$BARE" "db:(generate|migrate|seed|push)|drizzle-kit[[:space:]]+(generate|push|drop|migrate)" \
-       || matches "$UNQ" "${B}(pnpm|npm|yarn|bun)[[:space:]]+([^;&|]*[[:space:]])?db:(generate|migrate|seed|push)" \
-       || matches "$UNQ" "(^|[;&|(\`])[[:space:]]*drizzle-kit[[:space:]]|${B}(npx|pnpx|pnpm|npm|yarn|bun)[[:space:]]+([^;&|]*[[:space:]])?drizzle-kit[[:space:]]+(generate|push|drop|migrate)"; then
+       || matches "$UNQ" "(^|[;&|(\`])[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*(pnpm|npm|yarn|bun)[[:space:]]+([^;&|]*[[:space:]])?db:(generate|migrate|seed|push)" \
+       || matches "$UNQ" "(^|[;&|(\`])[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*([^[:space:];&|]*/)?drizzle-kit[[:space:]]|(^|[;&|(\`])[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*(npx|pnpx|pnpm|npm|yarn|bun)[[:space:]]+([^;&|]*[[:space:]])?([^[:space:];&|]*/)?drizzle-kit[[:space:]]+(generate|push|drop|migrate)"; then
       decide deny "db:* / drizzle-kit write migrations or the database, both off-limits (root AGENTS.md)."
     fi
     if matches "$CMD" "${B}docker[[:space:]]+(rm|rmi|kill|stop|volume|system|network[[:space:]]+rm)|${B}docker[[:space:]]+compose[^;&|]*[[:space:]]down"; then

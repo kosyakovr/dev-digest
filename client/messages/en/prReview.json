@@ -71,6 +71,7 @@
     "filesWithFindings": "{count, plural, one {# file with findings} other {# files with findings}}",
     "unavailable": "Smart grouping is unavailable — showing files in original order.",
     "noReview": "No review yet — findings will appear here after a review.",
+    "loading": "Loading the smart diff…",
     "largeTitle": "This PR is large ({lines} changed lines)",
     "largeBody": "Consider splitting it into smaller, focused PRs for easier review:",
     "filesCount": "{count, plural, one {# file} other {# files}}",

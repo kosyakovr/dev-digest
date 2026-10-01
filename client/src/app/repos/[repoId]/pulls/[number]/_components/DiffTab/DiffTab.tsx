@@ -66,7 +66,11 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
   if (files.length === 0) {
     body = <DiffViewer files={files} commenting={commenting} />;
   } else if (smart.isLoading) {
-    body = <Skeleton />;
+    body = (
+      <div role="status" aria-label={t("smartDiff.loading")}>
+        <Skeleton />
+      </div>
+    );
   } else if (smart.isError || !smart.data || !groups) {
     body = (
       <>

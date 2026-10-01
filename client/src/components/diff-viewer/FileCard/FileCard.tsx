@@ -59,7 +59,7 @@ export function FileCard({
     if (!comments) return { matched: new Map<string, CommentThread[]>(), outdated: [] };
     const fileThreads = buildThreads(comments.filter((c) => c.path === file.path));
     return partitionThreads(fileThreads, renderedKeys);
-  }, [comments, file.path, lines, renderedKeys]);
+  }, [comments, file.path, renderedKeys]);
 
   // Findings of the latest review for this file, anchored on the same rendered
   // keys as threads; the rest are listed on top so none is silently dropped.
@@ -68,7 +68,7 @@ export function FileCard({
     const fileFindings = (allFindings ?? []).filter((f) => f.file === file.path);
     const { matched, outside } = partitionFindings(fileFindings, renderedKeys);
     return { matchedFindings: matched, outsideFindings: outside, hasFindings: fileFindings.length > 0 };
-  }, [allFindings, file.path, lines, renderedKeys]);
+  }, [allFindings, file.path, renderedKeys]);
 
   const commentCount = commenting
     ? commenting.comments.filter((c) => c.path === file.path).length

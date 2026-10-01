@@ -99,6 +99,10 @@ run_case deny  "drizzle-kit generate"      "$(bash_ 'npx drizzle-kit generate')"
 run_case deny  "quoted db:generate"        "$(bash_ "pnpm 'db:generate'")"
 run_case deny  "run \"db:generate\""       '{"tool_name":"Bash","tool_input":{"command":"pnpm run \"db:generate\"","description":"x"}}'
 run_case deny  "quoted drizzle-kit"        "$(bash_ "npx 'drizzle-kit' generate")"
+run_case deny  "backslash db:generate"     '{"tool_name":"Bash","tool_input":{"command":"pnpm db\\:generate","description":"x"}}'
+run_case deny  "path to drizzle-kit"       "$(bash_ "node_modules/.bin/'drizzle-kit' generate")"
+run_case deny  "cd then quoted db:gen"     "$(bash_ "cd server && FOO=1 pnpm 'db:generate'")"
+run_case allow "grep for pnpm db:generate" "$(bash_ "grep -rn 'pnpm db:generate' docs")"
 run_case deny  "redirect into migrations"  "$(bash_ 'echo x > server/src/db/migrations/0013.sql')"
 run_case deny  "sed -i lock file"          "$(bash_ 'sed -i s/a/b/ client/pnpm-lock.yaml')"
 run_case deny  "rm a hook"                 "$(bash_ 'rm .claude/hooks/implementer-guard.sh')"
