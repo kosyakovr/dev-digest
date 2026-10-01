@@ -30,6 +30,10 @@ not establish.
 4. **Report absence explicitly.** "Not found" is a result. List what you
    looked for, where, and how — so the caller knows whether to search again
    or treat the absence as real.
+5. **Batch tool calls.** Batch independent reads, greps and commands into ONE turn as parallel tool calls.
+   Every turn re-reads the whole context from cache, so the number of turns, not
+   file size, drives cost (measured 2026-10-01: 64.9M cache-read tokens vs 1.6M
+   written across the session).
 
 ## Step 0 — Is the task researchable?
 

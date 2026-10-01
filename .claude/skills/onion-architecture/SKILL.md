@@ -44,7 +44,7 @@ Onion's rings already exist here under different names. Use the repo's names.
 | Ring | Lives in | May import |
 |---|---|---|
 | ① Domain model + ports | `src/vendor/shared/` | `zod`, and nothing else |
-| ② Use cases | `src/modules/<name>/{service,helpers,findings}.ts` | ①, own `repository.ts`, `platform/errors`, ports via `Container` |
+| ② Use cases | `src/modules/<name>/{service,helpers,findings}.ts` | ①, own `repository.ts`, `platform/errors`, `platform/prompt-log`, ports via `Container` |
 | ③ Infrastructure | `src/db/`, `src/adapters/`, `src/modules/<name>/repository.ts` | ①, ②, and the real libraries (`drizzle-orm`, `octokit`, `openai`, …) |
 | ④ Boundary + composition | `src/modules/<name>/routes.ts`, `src/app.ts`, `src/platform/container.ts` | everything |
 
@@ -55,8 +55,10 @@ Two things this table is saying that are easy to miss:
   *from*, not a foundation it is built *on*.
 - **`src/platform/` is not a ring.** It is cross-cutting infrastructure
   (`config`, `errors`, `jobs`, `sse`, `container`). `errors.ts` is safe to
-  import from anywhere; `container.ts` belongs to ④ and must never be imported
-  by a repository.
+  import from anywhere; so is `prompt-log.ts` (pure helpers that shape log
+  payloads onto a logger they are handed — no I/O of their own, so routing them
+  through the container would be ceremony); `container.ts` belongs to ④ and
+  must never be imported by a repository.
 
 [`reviewer-core/`](../../../reviewer-core/) is what ring ① looks like when it is
 taken seriously: its only dependencies are `zod` and an injected `LLMProvider`,

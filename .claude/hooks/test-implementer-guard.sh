@@ -115,6 +115,8 @@ run_case allow "docker check"              "$(bash_ 'docker info >/dev/null 2>&1
 run_case allow "vitest update flag"        "$(bash_ 'pnpm exec vitest run --update')"
 run_case allow "quoted test name with up"  "$(bash_ "pnpm exec vitest run -t 'rolls up costs'")"
 run_case allow "git grep for db:generate"  "$(bash_ "git grep -n 'db:generate' -- docs")"
+run_case allow "checks script"              "$(bash_ 'scripts/checks.sh --force')"
+run_case allow "change-set script"         "$(bash_ 'scripts/change-set.sh')"
 run_case deny  "unquoted pnpm up still"    "$(bash_ 'pnpm up zod')"
 # An apostrophe inside double quotes must not hide a later dependency change.
 APOS_ADD=$(cat <<'JSON'

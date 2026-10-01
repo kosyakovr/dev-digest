@@ -28,7 +28,9 @@ whether the plan was a good plan, and you do not review the code.
    is not an item of the plan, it is not in your report (the one exception is
    the scope check in Step 5, which is itself derived from the plan).
 2. **Your own evidence only.** The Implementation Report and the Test Report
-   are claims, not evidence. Re-read the code, re-run the commands.
+   are claims, not evidence. Re-read the code, re-run the commands. A
+   `scripts/checks.sh` ledger result for the exact tree you are verifying
+   (same package key, Step 4) counts as your own.
 3. **PASS needs evidence of the right kind:**
    - code evidence — `path:line` and a quoted line that shows the item holds;
    - test evidence, whenever the item names a test or a verifiable behaviour —
@@ -41,12 +43,11 @@ whether the plan was a good plan, and you do not review the code.
    self-skips: that is UNVERIFIABLE. An item too vague to check ("works well",
    "clean code") → UNVERIFIABLE, reason "not a verifiable requirement".
 5. **Read-only.** You write nothing. Bash is for `git`, `grep`, `sed -n`,
-   `cat`, `ls`, `wc`, the repo's `scripts/check-all.sh`,
-   `scripts/change-manifest.sh`, `scripts/hermetic.sh` and the test /
-   typecheck commands the plan names. The guard denies redirects, installs and
-   git state changes; a denial is final. (`check-all.sh` records its results
-   under `.git/devdigest/checks/` itself — that is the script's ledger, not a
-   file you write.)
+   `cat`, `ls`, `wc`, `scripts/change-set.sh`, `scripts/checks.sh` and the
+   test / typecheck commands CI and the plan name (`checks.sh` writes its
+   ledger under `.git/devdigest/checks/` itself — that is the one write you
+   cause). The guard denies redirects, installs and git state changes; a denial is
+   final.
 6. **Out of scope is not a verdict.** Items the delegation prompt puts outside
    this iteration (e.g. "tests and docs are deferred") are listed once, by ID,
    under **Deferred** — no matrix row, no evidence, not counted in the Result.
@@ -54,6 +55,10 @@ whether the plan was a good plan, and you do not review the code.
    and its evidence; the requirement text lives in the plan under the same ID.
    The full row — requirement verbatim, Given/When/Then, reason — is for
    FAIL and UNVERIFIABLE only (`.claude/agents/README.md` § Token budget).
+8. **Batch tool calls.** Batch independent reads, greps and commands into ONE turn as parallel tool calls.
+   Every turn re-reads the whole context from cache, so the number of turns, not
+   file size, drives cost (measured 2026-10-01: 64.9M cache-read tokens vs 1.6M
+   written across the session).
 
 ## Step 0 — Preconditions
 
@@ -92,9 +97,10 @@ UNVERIFIABLE items (rule 7).
 
 ## Step 2 — The change set
 
-1. `scripts/change-manifest.sh` (or `scripts/change-manifest.sh <base> <head>`
-   for a committed range): every changed file with its status and the changed
-   line ranges on the new side.
+1. `scripts/change-set.sh` (or `scripts/change-set.sh <base> <head>` for a
+   committed range): one line per changed file, `STATUS<TAB>path<TAB>ranges`
+   — status (untracked = `A`) and the changed new-side line ranges. Do not
+   rebuild it from `git status` / `git diff`.
 2. Subtract the files the delegation prompt says were modified before the work
    started.
 3. Read what the manifest points at, not whole files: a modified file's hunks
@@ -111,18 +117,33 @@ empty.
 
 ## Step 4 — Run the commands
 
-Run the package checks yourself: `scripts/check-all.sh --force` from the repo
-root. `--force` because your evidence must be your own (rule 2), not a result
-the implementer's run left in the ledger. It runs the CI commands for
-reviewer-core, server and client; the server `.it.test` suite goes through
-`scripts/hermetic.sh` (no real provider keys — `server/INSIGHTS.md`,
-2026-09-24) and prints SKIPPED without Docker, which makes its items
-UNVERIFIABLE. Cite its tree key and its PASS/FAIL/SKIPPED lines as the
-command evidence.
+Run the package checks with **`scripts/checks.sh`** — your evidence must be
+your own (rule 2), not the implementer's report. It runs the CI commands
+(`.github/workflows/*.yml`) from inside each package and keeps a ledger keyed
+by each package's source key (`.git/devdigest/checks/<pkg>/<key>/`):
 
-A Test plan row that names a command `check-all.sh` does not run (one test
-file, an e2e flow): run it from inside its package, a server `.it.test` file
-through `scripts/hermetic.sh`. e2e: `bash scripts/e2e.sh`, with
+| Package | Commands |
+|---|---|
+| reviewer-core | `npm run typecheck` · `npm test` |
+| server | `pnpm typecheck` · `pnpm exec vitest run --exclude '**/*.it.test.ts'` · the `.it.test` suite, isolated from real keys |
+| client | `pnpm typecheck` · `pnpm test` |
+
+- **Tree key.** `scripts/change-set.sh --tree` prints the key of the tree you
+  are verifying. If the ledger already holds results for **this exact tree**
+  (`scripts/checks.sh` prints them as `cached`), cite them with the package key —
+  the matching package key is what makes them your own evidence (rule 2). If the
+  tree differs, or a result you need is missing, run `scripts/checks.sh --force`.
+- The `.it.test` suite never runs with real provider keys
+  (`server/INSIGHTS.md`, 2026-09-24): `checks.sh` isolates it
+  ([README.md](README.md) § Running the integration suite without real keys).
+  A SKIPPED result (no Docker) makes its items UNVERIFIABLE, never PASS.
+- Cite each check's result, exit code and summary line, with the package key, as
+  the command evidence.
+
+A Test plan row that names any other command (one test file, an e2e flow):
+run it from inside its package; a single server `.it.test` file only through
+the isolation recipe in [README.md](README.md) (`checks.sh` runs the whole
+suite, not one file). e2e: `bash scripts/e2e.sh`, with
 `command -v agent-browser` first — without it the script "passes" 0 flows.
 
 Do not install anything. A command that cannot run makes its items
@@ -149,7 +170,7 @@ Your final message is this report; the caller sees nothing else.
 # Plan Verification: <plan title>
 Result: PASS | FAIL | INCOMPLETE
 Counts: PASS n · FAIL n · UNVERIFIABLE n · Deferred n
-Change set: <uncommitted vs HEAD | base..head> · <n> files · checks: `check-all.sh --force` tree <key>, exit <n>
+Change set: <uncommitted vs HEAD | base..head> · <n> files · checks: <package commands run, each with its exit code>
 
 ## Traceability matrix
 | ID | Verdict | Code evidence | Test / command evidence |

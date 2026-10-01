@@ -25,8 +25,8 @@ finding.
 
 1. **Read-only.** You write nothing — no fixes, no report files, nothing under
    `.git/devdigest/`. Bash is for `git`, `grep`, `sed -n`, `cat`, `ls`, `wc`,
-   `find` and the read-only `scripts/fitness-greps.sh` and
-   `scripts/change-manifest.sh`. You do not run typecheck or tests — builds
+   `find`, plus `scripts/change-set.sh` and `scripts/review-greps.sh` (they
+   write only unreferenced git objects, never a file or a ref). You do not run typecheck or tests — builds
    and tests are plan-verifier's evidence, not yours. The guard denies
    redirects, installs and git state changes; a denial is final.
 2. **Every finding = rule + location + evidence.** The rule is a section of a
@@ -46,6 +46,10 @@ finding.
    the grep rules from `.claude/skills/pr-self-review/greps.md`; the file →
    skill routing from `.claude/skills/pr-self-review/routing.md`. Read them;
    do not paraphrase them into your own scale.
+6. **Batch tool calls.** Batch independent reads, greps and commands into ONE turn as parallel tool calls.
+   Every turn re-reads the whole context from cache, so the number of turns, not
+   file size, drives cost (measured 2026-10-01: 64.9M cache-read tokens vs 1.6M
+   written across the session).
 
 ## Step 0 — Is there something to review?
 
@@ -65,9 +69,21 @@ If you want me to proceed without an answer, I will assume: the branch, merge-ba
 
 ## Step 1 — Scope
 
-- `scripts/change-manifest.sh` (uncommitted) or
-  `scripts/change-manifest.sh <base> <head>` (range): every path with its
-  status (untracked = `A`) and its changed line ranges.
+- `scripts/change-set.sh` (uncommitted vs `HEAD`, untracked included) or
+  `scripts/change-set.sh <base> <head>` (range): one line per file,
+  `STATUS<TAB>path<TAB>ranges` — status (untracked = `A`) and the changed
+  new-side line ranges. Do not rebuild it from `git status` / `git diff`.
+
+**Re-review round.** When the delegation prompt names a snapshot id from the
+previous round (`scripts/change-set.sh --snapshot`), take the change set from
+`scripts/change-set.sh --since <snapshot>` instead — the delta since your last
+review — and review that delta **plus the direct callers of every changed
+function** (`git grep -n '<function>'`). The callers are not optional: a
+delta-only re-review misses a pre-existing line that a fix newly exposes (on
+2026-10-01 round 1 dropped a finding that round 2 then raised). Run
+`scripts/review-greps.sh` unchanged — it already diffs against `HEAD`. End your
+report with the snapshot id of the tree you reviewed
+(`scripts/change-set.sh --snapshot`), so the next round can start from it.
 
 Drop what `routing.md` § Excluded lists. Keep each path's status (`A` / `M`
 / `R`): the CRITICAL bar depends on it.
@@ -89,27 +105,34 @@ goes into "Not checked".
 
 ## Step 3 — Deterministic checks first
 
-These produce evidence without judgement. Run them with one command —
-`scripts/fitness-greps.sh` (uncommitted) or `scripts/fitness-greps.sh <base>
-<head>` (range) — instead of by hand. It runs, by `greps.md`'s subtraction
-method (compared by `(file, normalised match)`, never by line number):
+These produce evidence without judgement. Run **`scripts/review-greps.sh`**
+(`[base [head]]`, default `HEAD` vs the working tree): it parses `greps.md` and
+runs every pattern whose trigger path is in the change, by `greps.md`'s
+subtraction method (both revisions, compared by `(file, normalised match)`,
+never by line number), plus the two structural checks. One line per new hit:
+`CLASS<TAB>id<TAB>path:line<TAB>match`. Exit 0 = none, 1 = new hits, 2 = a
+check errored (`ERROR <id>`, which is not a clean result: say so under "Not
+checked"). It covers:
 
-1. **Grep fitness checks** — every pattern in `greps.md` whose trigger path is
-   in the change.
-2. **Vendored twin check** — `routing.md` § Vendored-contract twin check.
-3. **Module registration** — a new `server/src/modules/<name>/` must be
-   registered in `server/src/modules/index.ts` (`server/AGENTS.md`).
-4. **reviewer-core purity** — `reviewer-core/src` imports no DB, GitHub,
-   filesystem or process APIs. Pattern (0 hits at `438513f`):
-   `from '(pg|postgres|drizzle-orm[^']*|simple-git|@octokit/[^']*|node:fs[^']*|fs|fs/promises|node:child_process|child_process)'`.
+1. **Grep fitness checks** — every `greps.md` row whose trigger path is in the
+   change, including `rc-purity` (reviewer-core imports no DB, GitHub,
+   filesystem or process APIs — `reviewer-core/AGENTS.md` § Must not break;
+   the pattern lives in that row, not here).
+2. **Vendored twin check** — `routing.md` § Vendored-contract twin check
+   (each changed vendored file's twin must change with identical +/- lines).
+3. **Module registration** — a new `server/src/modules/<name>/` with a
+   `routes.ts` must be registered in `server/src/modules/index.ts`
+   (`server/AGENTS.md`).
 
-It prints each new hit already classed by `greps.md` § Scoping a new hit
-(A-file → WARNING, M-file → SUGGESTION, test/fixture → SUGGESTION, outside the
-diff → drift). That class is a ceiling, not a verdict: **read every hit before
-reporting it** — two onion rules are heuristics with known benign hits, and a
-comment can match. `onion-13-tenancy-guard` on an A-file is the only grep
-that may reach CRITICAL. If the script and `greps.md` ever disagree on a
-pattern, `greps.md` wins — report the drift under "Not checked".
+The secret-pattern lines it also prints belong to security-reviewer: ignore them.
+
+Class each new hit by `greps.md` § Scoping a new hit (A-file → WARNING,
+M-file → SUGGESTION, test/fixture → SUGGESTION, outside the diff → drift).
+That class is a ceiling, not a verdict: **read every hit before reporting
+it** — two onion rules are heuristics with known benign hits, and a comment
+can match. `onion-13-tenancy-guard` on an A-file is the only grep that may
+reach CRITICAL. A baseline count in `greps.md` that no longer matches HEAD is
+drift — report it under "Not checked".
 
 ## Step 4 — Read the changed code against the rules
 
@@ -159,12 +182,12 @@ Verdict: approve | comment | request_changes
 Findings: CRITICAL n · WARNING n · SUGGESTION n
 
 ## Scope
-Reviewed: A <n> files · C <n> · reviewer-core <n> · shared <n> (paths: `scripts/change-manifest.sh`)
+Reviewed: A <n> files · C <n> · reviewer-core <n> · shared <n> (paths: `git status` + `git diff`)
 Excluded: <paths and why> · Not in my scope: <paths → group B/D/E/F>
 
 ## Deterministic checks
-`scripts/fitness-greps.sh` — <n> checks pass; regressions and what you made of each new hit:
-| Check | New hit | Class (script) | Your reading |
+`greps.md` patterns by subtraction — <n> checks pass; regressions and what you made of each new hit:
+| Check | New hit | Class (greps.md) | Your reading |
 |---|---|---|---|
 | fe-15-wildcard-barrels | `client/src/lib/hooks/x.ts` | WARNING (A-file) | dropped — `export *` is in a comment |
 

@@ -48,6 +48,10 @@ shaped to pass against whatever it just wrote, bugs included.
    calling the code under test, and never copy it from the implementation's
    output.
 5. **Do not write `INSIGHTS.md`**; report "Insight candidates".
+6. **Batch tool calls.** Batch independent reads, greps and commands into ONE turn as parallel tool calls.
+   Every turn re-reads the whole context from cache, so the number of turns, not
+   file size, drives cost (measured 2026-10-01: 64.9M cache-read tokens vs 1.6M
+   written across the session).
 
 ## Step 0 — Preconditions
 
@@ -149,22 +153,22 @@ From inside each package you touched:
 
 | Package | Commands |
 |---|---|
-| server | `pnpm typecheck` · `pnpm exec vitest run --exclude '**/*.it.test.ts'`; for `.it.test.ts`: `docker info` first, then **always through** `scripts/hermetic.sh` — `../scripts/hermetic.sh pnpm exec vitest run <file>` — green **without** Docker is "skipped", not "passed" |
+| server | `pnpm typecheck` · `pnpm exec vitest run --exclude '**/*.it.test.ts'`; for a **single** `.it.test.ts` file (the three runs, the red-proof): `docker info` first, then **always isolated from real keys** — the [README.md](README.md) § Running the integration suite without real keys recipe, with `<file>` in place of `.it.test` — green **without** Docker is "skipped", not "passed". The full suite goes through `scripts/checks.sh` (below) |
 | client | `pnpm typecheck` · `pnpm test` |
 | reviewer-core | `npm run typecheck` · `npm test` |
 | e2e | `bash scripts/e2e.sh` from the repo root; without the `agent-browser` binary use the npx shim from `e2e/INSIGHTS.md` 2026-09-22, writing it to `$TMPDIR/devdigest-redproof-ab.sh`. A flow that was not executed is reported as not run |
 
-**Why hermetic.** A developer machine may store real provider keys in
+**Why isolated.** A developer machine may store real provider keys in
 `~/.devdigest/secrets.json`; an `.it.test` that does not override `secrets`
 or `llm.<provider>` then makes billed calls and times out — and you run each
 new file three times, plus the red-proof (`server/INSIGHTS.md`, 2026-09-24).
-In the red-proof worktree use the real repo's script by its absolute path:
-`W` is at `HEAD` and may not contain it.
+The same isolation applies inside the red-proof worktree.
 
 Run each **new** test file three times; a test that is not green three times
-out of three is flaky — fix it or delete it. Finish with one
-`scripts/check-all.sh --force` from the repo root: the full suites of every
-package, hermetic, recorded in the ledger the stages after you reuse. A new test that is red against the
+out of three is flaky — fix it or delete it. **Finish with
+`scripts/checks.sh --force`** (all three packages; it isolates the `.it.test`
+suite itself and reports it SKIPPED without Docker) and paste its summary
+table, package key included, into your report. A new test that is red against the
 current code is either your mistake (fix the test) or a suspected defect
 (rule 2) — decide by re-reading the source of truth, not the code.
 
@@ -191,7 +195,8 @@ packages, and `git worktree remove --force` leaves the real ones intact (verifie
 `pnpm exec` treats the symlinked `node_modules` as a workspace to reinstall and
 dies with "workspace hoist directory is not a real directory" (verified
 2026-09-26; the binary works in all three packages). For a server `.it.test`,
-wrap it the same way: `../scripts/hermetic.sh ./node_modules/.bin/vitest run <file>`.
+isolate it the same way (README.md § Running the integration suite without
+real keys), with `./node_modules/.bin/vitest run <file>` as the command.
 
 - **Method A — the behaviour is new in this change.** `W` is at `HEAD`, i.e.
   without the uncommitted change (if the change is already committed, create
