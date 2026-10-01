@@ -1,12 +1,9 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { PrIntentRecord } from "@devdigest/shared";
 import messages from "../../../../../../../../../../messages/en/intent.json";
 import { IntentCard } from "./IntentCard";
-
-// pr-self-review D-1 (a failed derive is announced) and D-2 (a failed refetch
-// must not hide the cached intent).
 
 interface QueryState {
   data: { intent: PrIntentRecord | null } | undefined;
@@ -23,9 +20,10 @@ vi.mock("@/lib/hooks", () => ({
   useDeriveIntent: () => ({ ...derive, mutate }),
 }));
 
+const STATEMENT = "Add rate limiting to the public API";
 const RECORD: PrIntentRecord = {
   pr_id: "p1",
-  intent: "Add rate limiting to the public API",
+  intent: STATEMENT,
   in_scope: ["middleware"],
   out_of_scope: ["billing"],
   confidence: "high",
@@ -40,13 +38,11 @@ const RECORD: PrIntentRecord = {
   derived_at: "2026-10-01T10:00:00.000Z",
 };
 
-function renderCard() {
-  render(
-    <NextIntlClientProvider locale="en" messages={{ intent: messages }}>
-      <IntentCard prId="p1" />
-    </NextIntlClientProvider>,
-  );
-}
+const tree = () => (
+  <NextIntlClientProvider locale="en" messages={{ intent: messages }}>
+    <IntentCard prId="p1" />
+  </NextIntlClientProvider>
+);
 
 beforeEach(() => {
   query = { data: { intent: RECORD }, isLoading: false, isError: false };
@@ -56,40 +52,48 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe("IntentCard — a failed derive is announced (D-1)", () => {
-  it("empty state: role=alert carries the message", () => {
+describe("IntentCard", () => {
+  it("a PR with no intent: the user derives it, and a failed derive is announced", () => {
     query = { data: { intent: null }, isLoading: false, isError: false };
-    derive = { isPending: false, isError: true, error: new Error("model unavailable") };
-    renderCard();
-    expect(screen.getByRole("alert")).toHaveTextContent("Could not derive the intent: model unavailable");
-  });
-
-  it("card state: role=alert carries the message and the intent stays visible", () => {
-    derive = { isPending: false, isError: true, error: new Error("model unavailable") };
-    renderCard();
-    expect(screen.getByRole("alert")).toHaveTextContent("Could not derive the intent: model unavailable");
-    expect(screen.getByText("Add rate limiting to the public API")).toBeInTheDocument();
-  });
-
-  it("no alert when the derive did not fail", () => {
-    renderCard();
+    const { rerender } = render(tree());
+    expect(screen.getByText("No intent derived yet.")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
-  });
-});
 
-describe("IntentCard — load error only replaces the card when there is nothing cached (D-2)", () => {
-  it("isError with cached data still renders the card, no error state", () => {
+    fireEvent.click(screen.getByRole("button", { name: "Derive intent" }));
+    expect(mutate).toHaveBeenCalledTimes(1);
+
+    derive = { isPending: false, isError: true, error: new Error("model unavailable") };
+    rerender(tree());
+    expect(screen.getByRole("alert")).toHaveTextContent("Could not derive the intent: model unavailable");
+  });
+
+  it("a PR with an intent: re-derive works, a failed derive is announced, and a failed background refetch keeps the card", () => {
+    const { rerender } = render(tree());
+    expect(screen.getByText(STATEMENT)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Re-derive intent" }));
+    expect(mutate).toHaveBeenCalledTimes(1);
+
+    derive = { isPending: false, isError: true, error: new Error("model unavailable") };
+    rerender(tree());
+    expect(screen.getByRole("alert")).toHaveTextContent("Could not derive the intent: model unavailable");
+    expect(screen.getByText(STATEMENT)).toBeInTheDocument();
+
+    // The query refetch fails while the cached intent is still there: the card stays.
     query = { data: { intent: RECORD }, isLoading: false, isError: true };
-    renderCard();
-    expect(screen.getByText("Add rate limiting to the public API")).toBeInTheDocument();
+    rerender(tree());
+    expect(screen.getByText(STATEMENT)).toBeInTheDocument();
     expect(screen.queryByText("Could not load the intent.")).toBeNull();
   });
 
-  it("isError without data renders the error state with a retry", () => {
+  it("the intent cannot be loaded and nothing is cached: an error with Retry, and Retry refetches", () => {
     query = { data: undefined, isLoading: false, isError: true };
-    renderCard();
+    render(tree());
     expect(screen.getByText("Could not load the intent.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
-    expect(screen.queryByText("Add rate limiting to the public API")).toBeNull();
+    expect(screen.queryByText(STATEMENT)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 });
