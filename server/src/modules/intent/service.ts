@@ -225,7 +225,7 @@ export class IntentService implements PrIntentFacade {
       specIgnored,
     });
 
-    const values: NewPrIntentRow = {
+    const values: Required<NewPrIntentRow> = {
       prId: pull.id,
       intent: clamped.intent,
       inScope: clamped.inScope,

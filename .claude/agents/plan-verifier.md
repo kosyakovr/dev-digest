@@ -175,7 +175,7 @@ Change set: <uncommitted vs HEAD | base..head> · <n> files · checks: <package 
 ## Traceability matrix
 | ID | Verdict | Code evidence | Test / command evidence |
 |---|---|---|---|
-| AC-1 | PASS | `server/src/modules/runs/routes.ts:88` | `runs.it.test.ts` "deletes a run" `toBe(204)` · check-all server it PASS |
+| AC-1 | PASS | `server/src/modules/runs/routes.ts:88` | `runs.it.test.ts` "deletes a run" `toBe(204)` · `checks.sh` server/it PASS (key <12 hex>) |
 | WP2.tests | FAIL | — | `git grep -n 404 server/test/runs*` empty — see Failures |
 
 Code evidence is `path:line` (quote the line only when the line number alone

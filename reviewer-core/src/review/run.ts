@@ -9,7 +9,7 @@ import type {
 import { Review as ReviewSchema } from '@devdigest/shared';
 import { assemblePrompt, type ReviewIntent } from '../prompt.js';
 import type { PromptSectionMeta } from '../prompt-meta.js';
-import { groundFindings, groundingSummary } from '../grounding.js';
+import { groundFindings, groundingSummary, type DroppedFinding } from '../grounding.js';
 import { reduceReviews, scoreFromFindings, sliceDiff } from './reduce.js';
 
 /**
@@ -122,7 +122,7 @@ export interface ReviewOutcome {
   /** Human-readable grounding summary, e.g. "3/4 passed". */
   grounding: string;
   /** Findings dropped by grounding, with reasons (for logs / "never go silent"). */
-  dropped: { finding: Finding; reason: string }[];
+  dropped: DroppedFinding[];
   /** Which path ran. */
   mode: ReviewMode;
   /** Prompt assembly (for the run trace). Single-pass: the one call; map-reduce: the whole-diff assembly. */
@@ -237,7 +237,7 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
   for (const d of ground.dropped) {
     // The title is model-generated: the live log keeps it, the pino mirror gets
     // only a count and a generic reason (the raw reason embeds a model-chosen path).
-    const why = d.reason.includes('not present in diff') ? 'file not in diff' : 'line not in diff';
+    const why = d.code === 'file_not_in_diff' ? 'file not in diff' : 'line not in diff';
     emit(
       'info',
       `grounding dropped "${d.finding.title}": ${d.reason}`,

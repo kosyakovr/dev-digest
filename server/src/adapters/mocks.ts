@@ -33,6 +33,8 @@ import type {
   SecretKey,
 } from '@devdigest/shared';
 import { parseUnifiedDiff } from './git/diff-parser.js';
+import type { ReviewIntent } from '@devdigest/reviewer-core';
+import type { PrIntentFacade } from '../modules/intent/types.js';
 
 /**
  * Deterministic MOCK adapters for tests/dev — NO real network. Each mirrors the
@@ -330,6 +332,19 @@ export class MockCodeIndex implements CodeIndex {
   }
   async references(_repo: RepoRef, symbol: string): Promise<CodeReference[]> {
     return [{ fromPath: 'src/api/public/index.ts', toSymbol: symbol, line: 23 }];
+  }
+}
+
+// ---------- Mock PR intent ----------
+/** Stub for `overrides.intent`: returns a fixed intent (or `undefined`) and records calls. */
+export class MockPrIntent implements PrIntentFacade {
+  readonly calls: Parameters<PrIntentFacade['resolveForReview']>[0][] = [];
+  constructor(private readonly intent?: ReviewIntent) {}
+  async resolveForReview(
+    a: Parameters<PrIntentFacade['resolveForReview']>[0],
+  ): Promise<ReviewIntent | undefined> {
+    this.calls.push(a);
+    return this.intent;
   }
 }
 

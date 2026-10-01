@@ -2,6 +2,7 @@ import type { IntentSource, RepoRef, UnifiedDiff } from '@devdigest/shared';
 import type { ReviewIntent } from '@devdigest/reviewer-core';
 import type { PullRow } from '../../db/rows.js';
 import type { RunLogger } from '../../platform/run-logger.js';
+import type { ChildableLogger } from '../../platform/prompt-log.js';
 
 /**
  * L03 — intent module types (ring ②). `PrIntentFacade` is the one thing other
@@ -9,14 +10,8 @@ import type { RunLogger } from '../../platform/run-logger.js';
  * by importing this folder.
  */
 
-/** pino-compatible logger; same shape as the one in `reviews/run-executor.ts` (not imported from there). */
-export type IntentLogger = {
-  info: (obj: unknown, msg?: string) => void;
-  warn: (obj: unknown, msg?: string) => void;
-  error: (obj: unknown, msg?: string) => void;
-  debug: (obj: unknown, msg?: string) => void;
-  child?: (bindings: Record<string, unknown>) => IntentLogger;
-};
+/** pino-compatible logger; the shared platform shape. */
+export type IntentLogger = ChildableLogger;
 
 export interface PrIntentFacade {
   /**

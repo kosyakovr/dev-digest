@@ -128,7 +128,7 @@ export class ReviewRepository {
   // ---- intent -------------------------------------------------------------
 
   /** Insert or overwrite the single `pr_intent` row of a PR (every column is set). */
-  upsertIntent(row: NewPrIntentRow): Promise<void> {
+  upsertIntent(row: Required<NewPrIntentRow>): Promise<void> {
     return pullRepo.upsertIntent(this.db, row);
   }
 

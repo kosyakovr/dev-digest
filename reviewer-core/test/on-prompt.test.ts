@@ -219,7 +219,7 @@ describe('grounding drops: mirrorMsg (AM2)', () => {
     const dropped = await dropEvents(finding('SPEC-SENTINEL-42 phantom', 'src/MODEL-CHOSEN-PATH.ts', 1));
     expect(dropped).toHaveLength(1);
     expect(dropped[0]!.msg).toContain('SPEC-SENTINEL-42 phantom');
-    expect(dropped[0]!.mirrorMsg).toMatch(/^grounding dropped 1 finding\(s\) \(reason: [^"]+\)$/);
+    expect(dropped[0]!.mirrorMsg).toBe('grounding dropped 1 finding(s) (reason: file not in diff)');
     expect(dropped[0]!.mirrorMsg).not.toContain('SPEC-SENTINEL-42');
     expect(dropped[0]!.mirrorMsg).not.toContain('MODEL-CHOSEN-PATH');
   });

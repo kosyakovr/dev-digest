@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, integer, jsonb, timestamp, doublePrecision } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, jsonb, timestamp, doublePrecision, check } from 'drizzle-orm/pg-core';
 import type { IntentSource } from '@devdigest/shared';
 import { now } from './_shared';
 import { workspaces } from './core';
@@ -66,7 +66,10 @@ export const prIntent = pgTable('pr_intent', {
   /** null = unknown (never 0-as-unknown). */
   costUsd: doublePrecision('cost_usd'),
   derivedAt: timestamp('derived_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  // Migration 0014: the enum above narrows only the TS type; the DB enforces it here.
+  check('pr_intent_confidence_check', sql`${t.confidence} in ('high', 'medium', 'low')`),
+]);
 
 export const prBrief = pgTable('pr_brief', {
   prId: uuid('pr_id')

@@ -2,7 +2,7 @@ import type { IntentSource, IntentSourceKind, IntentUnresolvedReason } from "@de
 
 /** A source the intent was derived from, as shown in "Sources: …". */
 export interface UsedSource {
-  kind: "title" | "description" | "ticket" | "spec" | "commits" | "diff";
+  kind: Exclude<IntentSourceKind, "branch" | "files" | "link">;
   ref: string | null;
 }
 
@@ -16,7 +16,7 @@ export interface UnresolvedSource {
 const ORDER: UsedSource["kind"][] = ["title", "description", "ticket", "spec", "commits", "diff"];
 
 /** `branch` and `files` are folded into `diff` for display. */
-const DISPLAY_KIND: Partial<Record<IntentSourceKind, UsedSource["kind"]>> = {
+const DISPLAY_KIND: Record<IntentSourceKind, UsedSource["kind"] | null> = {
   title: "title",
   description: "description",
   ticket: "ticket",
@@ -25,6 +25,7 @@ const DISPLAY_KIND: Partial<Record<IntentSourceKind, UsedSource["kind"]>> = {
   diff: "diff",
   branch: "diff",
   files: "diff",
+  link: null,
 };
 
 /**
@@ -51,9 +52,17 @@ export function sourcesSummary(sources: IntentSource[]): UsedSource[] | "diffOnl
 export function unresolvedSummary(sources: IntentSource[]): UnresolvedSource[] {
   const out: UnresolvedSource[] = [];
   for (const src of sources) {
-    if (src.status === "unresolved" && src.reason) {
+    if (src.status === "unresolved") {
       out.push({ kind: src.kind, ref: src.ref, reason: src.reason });
     }
   }
   return out;
+}
+
+/** "Not used" text: `name (reason)` joined by " · "; a source with no ref shows its translated kind. */
+export function unresolvedList(
+  items: UnresolvedSource[],
+  labels: { kind: (kind: IntentSourceKind) => string; reason: (reason: IntentUnresolvedReason) => string },
+): string {
+  return items.map((u) => `${u.ref ?? labels.kind(u.kind)} (${labels.reason(u.reason)})`).join(" · ");
 }

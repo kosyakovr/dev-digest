@@ -20,6 +20,17 @@
     "diffOnly": "Sources: diff only"
   },
   "unresolved": "Not used: {list}",
+  "kind": {
+    "title": "title",
+    "description": "description",
+    "ticket": "ticket",
+    "spec": "spec",
+    "commits": "commits",
+    "branch": "branch name",
+    "files": "changed files",
+    "diff": "diff",
+    "link": "link"
+  },
   "reason": {
     "external_not_fetched": "external link, never fetched",
     "cross_repo": "other repository",

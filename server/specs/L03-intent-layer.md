@@ -169,6 +169,7 @@ differs from it.
 Not written in this iteration (deliberate: the user deferred tests). When added:
 reviewer-core `test/prompt.test.ts` (slot, omit rule, escaping, cap, both caution
 lines); server unit tests for `helpers.ts` and `sources.ts`; a temp-git-repo test
-for `readFileAtRef`; `server/test/intent.it.test.ts` (Docker, run through the
-hermetic script) for the routes and review wiring; client `IntentCard.test.tsx` and
+for `readFileAtRef`; `server/test/intent.it.test.ts` (Docker, isolated from real
+keys: `scripts/checks.sh`, or for one file the recipe in `.claude/agents/README.md`
+§ Running the integration suite without real keys) for the routes and review wiring; client `IntentCard.test.tsx` and
 a `RunTraceDrawer` case. Existing review `.it` tests must stub `overrides.intent`.

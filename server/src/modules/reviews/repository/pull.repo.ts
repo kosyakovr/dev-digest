@@ -45,7 +45,7 @@ export async function markReviewed(db: Db, prId: string, sha: string): Promise<v
 
 // ---- intent ---------------------------------------------------------------
 
-export async function upsertIntent(db: Db, row: NewPrIntentRow): Promise<void> {
+export async function upsertIntent(db: Db, row: Required<NewPrIntentRow>): Promise<void> {
   const { prId: _prId, ...set } = row;
   await db
     .insert(t.prIntent)
@@ -78,6 +78,6 @@ export async function getPrCommits(
     .from(t.prCommits)
     .innerJoin(t.pullRequests, eq(t.pullRequests.id, t.prCommits.prId))
     .where(and(eq(t.prCommits.prId, prId), eq(t.pullRequests.workspaceId, workspaceId)))
-    .orderBy(asc(t.prCommits.committedAt));
+    .orderBy(asc(t.prCommits.committedAt), asc(t.prCommits.sha));
   return rows.map((r) => r.commit);
 }

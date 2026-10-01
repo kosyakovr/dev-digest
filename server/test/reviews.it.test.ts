@@ -4,7 +4,7 @@ import { waitForPrRuns } from './helpers/runs.js';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
-import { MockLLMProvider, MockEmbedder, MockGitClient } from '../src/adapters/mocks.js';
+import { MockLLMProvider, MockEmbedder, MockGitClient, MockPrIntent } from '../src/adapters/mocks.js';
 import * as t from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { Review } from '@devdigest/shared';
@@ -117,6 +117,8 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
       overrides: {
         embedder: new MockEmbedder(),
         git: new MockGitClient({ diff: DIFF }),
+        // A review test is not an intent test: no intent LLM / GitHub call here.
+        intent: new MockPrIntent(),
         llm: {
           [provider]: new MockLLMProvider(provider, { structured }),
         },
@@ -717,6 +719,46 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     ).json();
     // seed has 2 enabled agents; we may have created more above in this PR's ws.
     expect(body.runs.length).toBeGreaterThanOrEqual(2);
+    await app.close();
+  });
+
+  it('a review batch resolves the intent ONCE and every agent prompt carries the same ## Stated intent', async () => {
+    const llm = new MockLLMProvider('openai', { structured: REVIEW_FIXTURE });
+    const intent = new MockPrIntent({
+      statement: 'Add rate limiting to the public API',
+      inScope: ['api'],
+      outOfScope: ['billing'],
+      confidence: 'high',
+    });
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: {
+        embedder: new MockEmbedder(),
+        git: new MockGitClient({ diff: DIFF }),
+        intent,
+        llm: { openai: llm },
+      },
+    });
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    const body = (
+      await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { all: true } })
+    ).json();
+    const expected = body.runs.length as number;
+    expect(expected).toBeGreaterThanOrEqual(2);
+    await waitForPrRuns(pg.handle.db, pr.id, { expected });
+
+    expect(intent.calls).toHaveLength(1);
+    expect(intent.calls[0]!.pull.id).toBe(pr.id);
+    const users = llm.calls
+      .filter((c) => c.method === 'completeStructured')
+      .map((c) => (c.req as { messages: { role: string; content: string }[] }).messages.find((m) => m.role === 'user')!.content);
+    // (agents created by earlier tests may use a provider this app does not mock; they fail on their own)
+    expect(users.length).toBeGreaterThanOrEqual(2);
+    for (const u of users) {
+      expect(u).toContain('## Stated intent');
+      expect(u).toContain('Intent: Add rate limiting to the public API');
+    }
     await app.close();
   });
 });

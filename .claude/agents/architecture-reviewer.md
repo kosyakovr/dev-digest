@@ -182,7 +182,7 @@ Verdict: approve | comment | request_changes
 Findings: CRITICAL n · WARNING n · SUGGESTION n
 
 ## Scope
-Reviewed: A <n> files · C <n> · reviewer-core <n> · shared <n> (paths: `git status` + `git diff`)
+Reviewed: A <n> files · C <n> · reviewer-core <n> · shared <n> (paths: `scripts/change-set.sh`)
 Excluded: <paths and why> · Not in my scope: <paths → group B/D/E/F>
 
 ## Deterministic checks

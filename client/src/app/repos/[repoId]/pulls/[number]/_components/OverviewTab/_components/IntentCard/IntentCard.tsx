@@ -8,7 +8,7 @@ import { Badge, EmptyState, ErrorState, Icon, IconBtn, SectionLabel, Skeleton } 
 import { useDeriveIntent, usePrIntent } from "@/lib/hooks";
 import { formatCost } from "@/lib/format";
 import { CONFIDENCE_COLOR } from "./constants";
-import { sourcesSummary, unresolvedSummary, type UsedSource } from "./helpers";
+import { sourcesSummary, unresolvedList, unresolvedSummary, type UsedSource } from "./helpers";
 import { s } from "./styles";
 
 type Translate = ReturnType<typeof useTranslations>;
@@ -56,7 +56,7 @@ export function IntentCard({ prId }: { prId: string | null | undefined }) {
   const derive = useDeriveIntent(prId);
 
   if (isLoading) return <Skeleton height={140} />;
-  if (isError) return <ErrorState title={t("loadError")} retryLabel={t("retry")} onRetry={() => refetch()} />;
+  if (isError && !data) return <ErrorState title={t("loadError")} retryLabel={t("retry")} onRetry={() => refetch()} />;
 
   const intent = data?.intent ?? null;
   if (!intent) {
@@ -70,7 +70,7 @@ export function IntentCard({ prId }: { prId: string | null | undefined }) {
           onCta={() => derive.mutate()}
           ctaLoading={derive.isPending}
         />
-        {derive.isError && <div style={s.error}>{t("deriveError", { message: derive.error.message })}</div>}
+        {derive.isError && <div role="alert" style={s.error}>{t("deriveError", { message: derive.error.message })}</div>}
       </>
     );
   }
@@ -119,11 +119,14 @@ export function IntentCard({ prId }: { prId: string | null | undefined }) {
         {unresolved.length > 0 && (
           <span style={s.muted}>
             {t("unresolved", {
-              list: unresolved.map((u) => `${u.ref ?? u.kind} (${t(`reason.${u.reason}`)})`).join(" · "),
+              list: unresolvedList(unresolved, {
+                kind: (k) => t(`kind.${k}`),
+                reason: (r) => t(`reason.${r}`),
+              }),
             })}
           </span>
         )}
-        {derive.isError && <div style={s.error}>{t("deriveError", { message: derive.error.message })}</div>}
+        {derive.isError && <div role="alert" style={s.error}>{t("deriveError", { message: derive.error.message })}</div>}
         <div style={s.footer}>
           {cost ? t("meta", { model: intent.model, cost }) : intent.model}
         </div>

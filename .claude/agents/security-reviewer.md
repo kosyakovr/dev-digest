@@ -241,7 +241,7 @@ Verdict: approve | comment | request_changes
 Findings: CRITICAL n · WARNING n · SUGGESTION n
 
 ## Scope
-Reviewed: E-routed <n> files · other code <n> · docs scanned for secrets <n> (paths: `git status` + `git diff`)
+Reviewed: E-routed <n> files · other code <n> · docs scanned for secrets <n> (paths: `scripts/change-set.sh`)
 Excluded: <paths and why>
 
 ## Deterministic checks

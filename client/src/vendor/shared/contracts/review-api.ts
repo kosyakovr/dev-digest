@@ -88,13 +88,22 @@ export const IntentUnresolvedReason = z.enum([
 ]);
 export type IntentUnresolvedReason = z.infer<typeof IntentUnresolvedReason>;
 
-export const IntentSource = z.object({
-  kind: IntentSourceKind,
-  /** '#471' | 'docs/specs/x.md' | URL | null */
-  ref: z.string().nullable(),
-  status: z.enum(['used', 'unresolved']),
-  reason: IntentUnresolvedReason.nullable(),
-});
+/** `used` carries no reason; `unresolved` always carries one. */
+export const IntentSource = z.discriminatedUnion('status', [
+  z.object({
+    kind: IntentSourceKind,
+    /** '#471' | 'docs/specs/x.md' | URL | null */
+    ref: z.string().nullable(),
+    status: z.literal('used'),
+    reason: z.null(),
+  }),
+  z.object({
+    kind: IntentSourceKind,
+    ref: z.string().nullable(),
+    status: z.literal('unresolved'),
+    reason: IntentUnresolvedReason,
+  }),
+]);
 export type IntentSource = z.infer<typeof IntentSource>;
 
 /** Intent persisted for a PR (the Intent plus the pr_id it scopes). */

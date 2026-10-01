@@ -65,6 +65,7 @@ emit() { # base head
     }
     /^\+\+\+ / {                      # pass 2: diff -> current file
       cur = $0; sub(/^\+\+\+ /, "", cur)
+      sub(/\t$/, "", cur)             # git appends a TAB to the header when the path has a space
       if (cur == "/dev/null") cur = ""; else sub(/^b\//, "", cur)
       next
     }
