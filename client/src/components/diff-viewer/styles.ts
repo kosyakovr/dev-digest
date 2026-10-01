@@ -90,3 +90,42 @@ export function lineSignFor(kind: Line["kind"]): CSSProperties {
     flexShrink: 0,
   };
 }
+
+/** Left stripe on a diff row that carries findings (colour = worst severity, from SEV). */
+export function findingStripeFor(color: string): CSSProperties {
+  return { boxShadow: `inset 3px 0 0 ${color}` };
+}
+
+/** The per-line label button that toggles the stacked finding cards. */
+export function findingLabelFor(color: string): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "center",
+    flexShrink: 0,
+    margin: "0 8px",
+    padding: "0 6px",
+    fontSize: 11,
+    fontWeight: 600,
+    lineHeight: "18px",
+    color,
+    background: "transparent",
+    border: `1px solid ${color}`,
+    borderRadius: 4,
+    cursor: "pointer",
+  };
+}
+
+/** Heading + list wrapper for findings that have no rendered line. */
+export const outsideStyles = {
+  wrap: { padding: "8px 0", borderBottom: "1px solid var(--border)" } satisfies CSSProperties,
+  heading: {
+    padding: "0 12px",
+    fontSize: 12,
+    fontWeight: 700,
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
+  /** The inline card's left margin is sized for diff rows; reset it here. */
+  item: { marginLeft: -44 } satisfies CSSProperties,
+} as const;

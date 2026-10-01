@@ -28,6 +28,14 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## What Doesn't Work
 
+- 2026-10-02 — A TanStack Query result can be `{ data: <stale>, isError: true }`
+  at once (a failed REFETCH keeps the last good data), so mocking only
+  `{ isError: true, data: undefined }` lets a fallback written as `!data` pass
+  while it ignores the error: a red-proof mutation dropping `isError` from
+  DiffTab's smart-diff fallback survived until a stale-data case was added →
+  every hook-mocked error test needs a second case with `isError: true` AND
+  `data` set. (ref: client/src/app/repos/[repoId]/pulls/[number]/_components/DiffTab/DiffTab.test.tsx)
+
 - 2026-09-23 — `kit/Checkbox`'s `label` is VISIBLE text, not an accessible name:
   it renders `{label}` inside the wrapping `<label>` (Checkbox.tsx:12, no
   `aria-label` prop), so passing a whole sentence for `getByLabelText` to find —

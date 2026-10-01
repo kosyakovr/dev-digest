@@ -64,6 +64,14 @@ export class ReviewRepository {
     return reviewRepo.reviewsForPull(this.db, prId);
   }
 
+  /** Reviews (+ findings) of the newest run batch, falling back to the newest review. */
+  latestReviewSet(
+    workspaceId: string,
+    prId: string,
+  ): Promise<{ reviewIds: string[]; findings: FindingRow[] }> {
+    return reviewRepo.latestReviewSet(this.db, workspaceId, prId);
+  }
+
   getReview(reviewId: string): Promise<ReviewRow | undefined> {
     return reviewRepo.getReview(this.db, reviewId);
   }

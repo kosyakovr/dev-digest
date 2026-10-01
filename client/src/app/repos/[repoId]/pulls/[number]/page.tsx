@@ -57,6 +57,8 @@ export default function PRDetailPage() {
     if (prId) qc.invalidateQueries({ queryKey: ["pr-runs", prId] });
     // A settled run may have (re)derived the PR intent.
     if (prId) qc.invalidateQueries({ queryKey: ["pr-intent", prId] });
+    // …and its findings change the Files-changed tab's grouping + inline cards.
+    if (prId) qc.invalidateQueries({ queryKey: ["smart-diff", prId] });
   };
 
   const tab = search.get("tab") ?? "overview";

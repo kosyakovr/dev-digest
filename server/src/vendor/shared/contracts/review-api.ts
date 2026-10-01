@@ -127,6 +127,9 @@ export type PrIntentRecord = z.infer<typeof PrIntentRecord>;
 export const PrIntentResponse = z.object({ intent: PrIntentRecord.nullable() });
 export type PrIntentResponse = z.infer<typeof PrIntentResponse>;
 
-/** Smart-diff response for a PR (the SmartDiff). */
-export const SmartDiffResponse = SmartDiff;
+/** Smart-diff response for a PR (the SmartDiff + the reviews its finding_lines came from). */
+export const SmartDiffResponse = SmartDiff.extend({
+  /** Reviews the finding_lines were built from; [] = no review yet. */
+  review_ids: z.array(z.string()),
+});
 export type SmartDiffResponse = z.infer<typeof SmartDiffResponse>;

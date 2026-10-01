@@ -46,6 +46,15 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 
 ## What Doesn't Work
 
+- 2026-10-02 — The isolated `.it.test` recipe in `.claude/agents/README.md:328`
+  creates its fake `HOME` with `mktemp -d` and removes it with `rm -rf`, and the
+  agent scope guard DENIES both for subagents (writes are allowed only when the
+  command contains `devdigest-redproof-`), so a test-writer following the doc
+  verbatim cannot run one DB-backed file → inside an agent use
+  `mkdir -p /tmp/devdigest-redproof-home<N>` as `FAKE_HOME` (and `rm -rf` that
+  path); the main session or `scripts/checks.sh` can run the recipe as written.
+  (ref: .claude/hooks/README.md:179, Smart Diff L03)
+
 - 2026-09-24 — Writing a markdown file through a Bash heredoc (or `python3 - <<EOF`)
   gets DENIED by the pr-self-review gate whenever the prose merely mentions a
   push, e.g. a table cell quoting the command: the gate regex-tests the whole
@@ -128,6 +137,9 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 
 ## Session Notes
 
+- 2026-10-02 — L03 Smart Diff: path-only `classifyFile` + `GET /pulls/:id/smart-diff`
+  (no migration, `SmartDiffRole` widened to 5 in both vendored copies), role
+  groups and inline findings on Files changed (spec: server/specs/L03-smart-diff.md).
 - 2026-10-01 — L03 Intent Layer: cheap-model PR intent (migration 0013 on
   `pr_intent`, contracts in both vendored copies, `## Stated intent` review slot,
   one live call at $0.00013) (spec: server/specs/L03-intent-layer.md).

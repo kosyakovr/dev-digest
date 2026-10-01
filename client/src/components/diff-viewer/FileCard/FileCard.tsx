@@ -4,7 +4,7 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Icon } from "@devdigest/ui";
+import { Icon, SEV } from "@devdigest/ui";
 import type { PrFile } from "@/lib/types";
 import { AUTO_EXPAND_MAX_LINES } from "../constants";
 import { parsePatch, type Line } from "../helpers";
@@ -15,7 +15,9 @@ import {
   type CommentThread,
   type DiffCommentApi,
 } from "../comments";
-import { s, chevronFor } from "../styles";
+import { partitionFindings, type DiffFindingApi } from "../findings";
+import { s, chevronFor, outsideStyles } from "../styles";
+import { InlineFinding } from "../InlineFinding";
 import { CodeLine } from "../CodeLine";
 import { OutdatedComments } from "../OutdatedComments";
 
@@ -30,7 +32,15 @@ function threadsForLine(ln: Line, matched: Map<string, CommentThread[]>): Commen
   return out;
 }
 
-export function FileCard({ file, commenting }: { file: PrFile; commenting?: DiffCommentApi }) {
+export function FileCard({
+  file,
+  commenting,
+  findings,
+}: {
+  file: PrFile;
+  commenting?: DiffCommentApi;
+  findings?: DiffFindingApi;
+}) {
   const t = useTranslations("shell");
   const [open, setOpen] = React.useState(
     (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
@@ -48,6 +58,17 @@ export function FileCard({ file, commenting }: { file: PrFile; commenting?: Diff
     return partitionThreads(fileThreads, renderedKeys);
   }, [comments, file.path, lines]);
 
+  // Findings of the latest review for this file, anchored on the same rendered
+  // keys as threads; the rest are listed on top so none is silently dropped.
+  const allFindings = findings?.findings;
+  const { matchedFindings, outsideFindings, hasFindings } = React.useMemo(() => {
+    const fileFindings = (allFindings ?? []).filter((f) => f.file === file.path);
+    const renderedKeys = new Set<string>();
+    for (const ln of lines) for (const k of keysForLine(ln)) renderedKeys.add(k);
+    const { matched, outside } = partitionFindings(fileFindings, renderedKeys);
+    return { matchedFindings: matched, outsideFindings: outside, hasFindings: fileFindings.length > 0 };
+  }, [allFindings, file.path, lines]);
+
   const commentCount = commenting
     ? commenting.comments.filter((c) => c.path === file.path).length
     : 0;
@@ -64,6 +85,13 @@ export function FileCard({ file, commenting }: { file: PrFile; commenting?: Diff
           <span style={s.addText}>+{file.additions}</span>{" "}
           <span style={s.delText}>−{file.deletions}</span>
         </span>
+        {hasFindings && (
+          <span
+            role="img"
+            aria-label={t("diffViewer.fileHasFindings")}
+            style={{ width: 6, height: 6, borderRadius: "50%", background: SEV.CRITICAL.c, flexShrink: 0 }}
+          />
+        )}
         {commentCount > 0 && (
           <span
             style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--text-muted)" }}
@@ -75,6 +103,20 @@ export function FileCard({ file, commenting }: { file: PrFile; commenting?: Diff
       </div>
       {open && (
         <div style={s.fileBody}>
+          {findings && outsideFindings.length > 0 && (
+            <div style={outsideStyles.wrap}>
+              <div style={outsideStyles.heading}>{t("diffViewer.findingsOutsideDiff")}</div>
+              {outsideFindings.map((f) => (
+                <div key={f.id} style={outsideStyles.item}>
+                  <InlineFinding
+                    f={f}
+                    pending={findings.pendingId === f.id}
+                    onAction={(action) => findings.onAction(f.id, action)}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
           {lines.length === 0 ? (
             <div style={s.noDiff}>{t("diffViewer.noDiffText")}</div>
           ) : (
@@ -85,6 +127,12 @@ export function FileCard({ file, commenting }: { file: PrFile; commenting?: Diff
                 path={file.path}
                 threads={threadsForLine(ln, matched)}
                 commenting={commenting}
+                findings={
+                  ln.kind === "del" || ln.kind === "hunk"
+                    ? undefined
+                    : matchedFindings.get(`RIGHT:${ln.newNo}`)
+                }
+                findingApi={findings}
               />
             ))
           )}

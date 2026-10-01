@@ -73,6 +73,62 @@ export async function reviewsForPull(
   }));
 }
 
+/**
+ * The "latest review set" of a PR: the `kind='review'` reviews of the newest
+ * `agent_runs` batch (every run sharing the newest `ran_at`); when that batch
+ * produced no review (or the PR has no runs — seeded data), the single newest
+ * `kind='review'` review; else empty. Findings of those reviews come with it.
+ * At most four queries, no N+1.
+ */
+export async function latestReviewSet(
+  db: Db,
+  workspaceId: string,
+  prId: string,
+): Promise<{ reviewIds: string[]; findings: FindingRow[] }> {
+  const runs = await db
+    .select({ id: t.agentRuns.id, ranAt: t.agentRuns.ranAt })
+    .from(t.agentRuns)
+    .where(and(eq(t.agentRuns.workspaceId, workspaceId), eq(t.agentRuns.prId, prId)))
+    .orderBy(desc(t.agentRuns.ranAt));
+  const newest = runs[0]?.ranAt.getTime();
+  const batchRunIds = runs.filter((r) => r.ranAt.getTime() === newest).map((r) => r.id);
+
+  let reviewIds: string[] = [];
+  if (batchRunIds.length > 0) {
+    const batch = await db
+      .select({ id: t.reviews.id })
+      .from(t.reviews)
+      .where(
+        and(
+          eq(t.reviews.workspaceId, workspaceId),
+          eq(t.reviews.prId, prId),
+          eq(t.reviews.kind, 'review'),
+          inArray(t.reviews.runId, batchRunIds),
+        ),
+      );
+    reviewIds = batch.map((r) => r.id);
+  }
+  if (reviewIds.length === 0) {
+    const [latest] = await db
+      .select({ id: t.reviews.id })
+      .from(t.reviews)
+      .where(
+        and(
+          eq(t.reviews.workspaceId, workspaceId),
+          eq(t.reviews.prId, prId),
+          eq(t.reviews.kind, 'review'),
+        ),
+      )
+      .orderBy(desc(t.reviews.createdAt))
+      .limit(1);
+    if (latest) reviewIds = [latest.id];
+  }
+  if (reviewIds.length === 0) return { reviewIds: [], findings: [] };
+
+  const findings = await db.select().from(t.findings).where(inArray(t.findings.reviewId, reviewIds));
+  return { reviewIds, findings };
+}
+
 export async function getReview(db: Db, reviewId: string): Promise<ReviewRow | undefined> {
   const [row] = await db.select().from(t.reviews).where(eq(t.reviews.id, reviewId));
   return row;

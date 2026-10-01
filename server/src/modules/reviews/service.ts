@@ -1,5 +1,7 @@
 import type { Container } from '../../platform/container.js';
-import type { FindingActionKind, RunEventKind, RunTrace } from '@devdigest/shared';
+import type { FindingActionKind, RunEventKind, RunTrace, SmartDiffResponse } from '@devdigest/shared';
+import type { ChildableLogger } from '../../platform/prompt-log.js';
+import { buildSmartDiff } from './smart-diff/helpers.js';
 import { AppError, NotFoundError } from '../../platform/errors.js';
 import type { AgentRow } from '../../db/rows.js';
 import { ReviewRepository } from './repository.js';
@@ -179,6 +181,37 @@ export class ReviewService {
     return rows.map(({ review, findings }) =>
       reviewToDto(review, findings, review.agentId ? names.get(review.agentId) : null),
     );
+  }
+
+  /** Smart diff: PR files grouped by role + the finding lines of the latest review set. */
+  async smartDiff(
+    workspaceId: string,
+    prId: string,
+    logger?: ChildableLogger,
+  ): Promise<SmartDiffResponse> {
+    const pull = await this.repo.getPull(workspaceId, prId);
+    if (!pull) throw new NotFoundError('Pull request not found');
+    const files = await this.repo.getPrFiles(prId);
+    const { reviewIds, findings } = await this.repo.latestReviewSet(workspaceId, prId);
+    const open = findings.filter((f) => f.dismissedAt == null);
+    const { diff, stats } = buildSmartDiff(
+      files.map((f) => ({ path: f.path, additions: f.additions, deletions: f.deletions })),
+      open.map((f) => ({ file: f.file, startLine: f.startLine })),
+    );
+    logger?.info(
+      {
+        prId,
+        files: files.length,
+        roles: stats.roles,
+        reviews: reviewIds.length,
+        findings: open.length,
+        dismissedExcluded: findings.length - open.length,
+        unmatchedFindings: stats.unmatchedFindings,
+        filesWithFindings: stats.filesWithFindings,
+      },
+      'smart-diff built',
+    );
+    return { ...diff, review_ids: reviewIds };
   }
 
   async getRunTrace(runId: string): Promise<RunTrace | undefined> {

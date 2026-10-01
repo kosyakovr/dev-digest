@@ -3,9 +3,15 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
+import { Icon, SEV } from "@devdigest/ui";
+import type { FindingRecord } from "@devdigest/shared";
+import { SEVERITY_LINE_LABEL_KEY } from "../constants";
+import { worstSeverity, type DiffFindingApi } from "../findings";
+import { InlineFinding } from "../InlineFinding";
 import { commentTargetFor, type CommentThread, type DiffCommentApi, cs } from "../comments";
 import { type Line } from "../helpers";
-import { s, lineRowFor, lineSignFor } from "../styles";
+import { s, lineRowFor, lineSignFor, findingStripeFor, findingLabelFor } from "../styles";
 import { CommentThreadView } from "../CommentThreadView";
 import { InlineComposer } from "../InlineComposer";
 
@@ -14,14 +20,21 @@ export function CodeLine({
   path,
   threads,
   commenting,
+  findings = [],
+  findingApi,
 }: {
   ln: Line;
   path: string;
   threads: CommentThread[];
   commenting?: DiffCommentApi;
+  /** Findings anchored to this line, already sorted (see findings.ts). */
+  findings?: FindingRecord[];
+  findingApi?: DiffFindingApi;
 }) {
+  const t = useTranslations("shell");
   const [hover, setHover] = React.useState(false);
   const [composing, setComposing] = React.useState(false);
+  const [findingsOpen, setFindingsOpen] = React.useState(true);
 
   if (ln.kind === "hunk") {
     return (
@@ -34,6 +47,8 @@ export function CodeLine({
   const sign = ln.kind === "add" ? "+" : ln.kind === "del" ? "−" : "";
   const target = commenting?.canComment ? commentTargetFor(ln) : null;
   const showAdd = hover && !!target && !composing;
+  const worst = findings.length > 0 ? worstSeverity(findings) : null;
+  const WorstIcon = worst ? Icon[SEV[worst].icon] : null;
 
   return (
     <div
@@ -41,7 +56,7 @@ export function CodeLine({
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <div style={lineRowFor(ln.kind)}>
+      <div style={{ ...lineRowFor(ln.kind), ...(worst ? findingStripeFor(SEV[worst].c) : {}) }}>
         <span className="mono tnum" style={{ ...s.lineNo, position: "relative" }}>
           {showAdd && target && (
             <button
@@ -62,7 +77,29 @@ export function CodeLine({
         <span className="mono" style={s.lineText}>
           {ln.text || " "}
         </span>
+        {worst && WorstIcon && (
+          <button
+            type="button"
+            aria-expanded={findingsOpen}
+            onClick={() => setFindingsOpen((o) => !o)}
+            style={findingLabelFor(SEV[worst].c)}
+          >
+            <WorstIcon size={12} />
+            {t(SEVERITY_LINE_LABEL_KEY[worst])}
+          </button>
+        )}
       </div>
+
+      {findingApi &&
+        findingsOpen &&
+        findings.map((f) => (
+          <InlineFinding
+            key={f.id}
+            f={f}
+            pending={findingApi.pendingId === f.id}
+            onAction={(action) => findingApi.onAction(f.id, action)}
+          />
+        ))}
 
       {commenting &&
         commenting.showComments &&

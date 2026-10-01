@@ -1,11 +1,20 @@
 "use client";
 
 import React from "react";
-import { SectionLabel, Button } from "@devdigest/ui";
-import { DiffViewer, type DiffCommentApi } from "@/components/diff-viewer";
-import { usePrComments, useCreatePrComment } from "@/lib/hooks/reviews";
+import { useTranslations } from "next-intl";
+import { SectionLabel, Button, Skeleton } from "@devdigest/ui";
+import { DiffViewer, type DiffCommentApi, type DiffFindingApi } from "@/components/diff-viewer";
+import {
+  usePrComments,
+  useCreatePrComment,
+  usePrReviews,
+  useSmartDiff,
+  useFindingAction,
+} from "@/lib/hooks/reviews";
 import { notify } from "@/lib/toast";
 import type { PrFile } from "@devdigest/shared";
+import { RoleGroup } from "./_components/RoleGroup";
+import { planGroups, visibleFindings } from "./helpers";
 
 interface DiffTabProps {
   prId: string | null;
@@ -16,7 +25,11 @@ interface DiffTabProps {
 }
 
 export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
+  const t = useTranslations("prReview");
   const { data: comments } = usePrComments(prId);
+  const smart = useSmartDiff(prId);
+  const { data: reviews } = usePrReviews(prId);
+  const action = useFindingAction();
   const create = useCreatePrComment(prId);
   // Comments start hidden so the diff is clean by default — toggle to reveal.
   const [showComments, setShowComments] = React.useState(false);
@@ -40,6 +53,53 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
     },
   };
 
+  const findingApi: DiffFindingApi = {
+    findings: visibleFindings(reviews, smart.data?.review_ids ?? []),
+    pendingId: action.isPending ? (action.variables?.findingId ?? null) : null,
+    onAction: (findingId, act) => action.mutate({ findingId, action: act, prId: prId ?? undefined }),
+  };
+
+  const groups = smart.data ? planGroups(smart.data, files) : null;
+
+  let body: React.ReactNode;
+  if (files.length === 0) {
+    body = <DiffViewer files={files} commenting={commenting} />;
+  } else if (smart.isLoading) {
+    body = <Skeleton />;
+  } else if (smart.isError || !smart.data || !groups) {
+    body = (
+      <>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 10px" }}>
+          {t("smartDiff.unavailable")}
+        </p>
+        <DiffViewer files={files} commenting={commenting} />
+      </>
+    );
+  } else {
+    body = (
+      <>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 10px" }}>
+          {t("smartDiff.groupedByRole")}
+        </p>
+        {smart.data.review_ids.length === 0 && (
+          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 10px" }}>
+            {t("smartDiff.noReview")}
+          </p>
+        )}
+        {groups.map((g) => (
+          <RoleGroup
+            key={g.role}
+            role={g.role}
+            files={g.files}
+            filesWithFindings={g.filesWithFindings}
+            commenting={commenting}
+            findings={findingApi}
+          />
+        ))}
+      </>
+    );
+  }
+
   return (
     <section>
       <SectionLabel
@@ -59,7 +119,7 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
       >
         Files changed · {filesCount} files
       </SectionLabel>
-      <DiffViewer files={files} commenting={commenting} />
+      {body}
     </section>
   );
 }

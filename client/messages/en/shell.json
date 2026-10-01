@@ -40,6 +40,15 @@
     "reply": "Reply",
     "viewOnGitHub": "View on GitHub",
     "postedToGitHub": "Posts to GitHub immediately",
-    "outdatedTitle": "{count} comment(s) on older revisions"
+    "outdatedTitle": "{count} comment(s) on older revisions",
+    "findingLine": {
+      "critical": "blocker",
+      "warning": "warning",
+      "suggestion": "suggestion"
+    },
+    "fileHasFindings": "Has findings",
+    "findingsOutsideDiff": "Findings outside the visible diff",
+    "lineSingle": "line {start}",
+    "lineRange": "line {start}–{end}"
   }
 }
