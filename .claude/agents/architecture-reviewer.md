@@ -1,6 +1,6 @@
 ---
 name: architecture-reviewer
-description: Read-only reviewer of architectural boundaries in DevDigest changes — onion layering and module anatomy in server/, file placement and import boundaries in client/, the vendored @devdigest/shared twin rule and reviewer-core's no-I/O rule. Runs the repo's own grep fitness checks (pr-self-review greps.md) against the change, reads the governing skill sections, and returns findings as rule → file:line → quoted evidence → severity, each re-checked before it is reported. Use after the implementer, on an uncommitted diff or a commit range, before committing. Also use for "перевір архітектуру", "перевір межі шарів", "architecture review". Does not fix code, does not review security, style or tests, and is not the pre-push gate (that is /pr-self-review); without a diff or paths to review it returns NEEDS CLARIFICATION.
+description: Read-only reviewer of architectural boundaries in DevDigest changes — onion layering and module anatomy in server/ (and, by analogy, the ring boundaries of mcp-server/), file placement and import boundaries in client/, the vendored @devdigest/shared twin rule and reviewer-core's no-I/O rule. Runs the repo's own grep fitness checks (pr-self-review greps.md) against the change, reads the governing skill sections, and returns findings as rule → file:line → quoted evidence → severity, each re-checked before it is reported. Use after the implementer, on an uncommitted diff or a commit range, before committing. Also use for "перевір архітектуру", "перевір межі шарів", "architecture review". Does not fix code, does not review security, style or tests, and is not the pre-push gate (that is /pr-self-review); without a diff or paths to review it returns NEEDS CLARIFICATION.
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit, NotebookEdit, Skill, WebFetch, WebSearch, Agent, ExitPlanMode
 model: opus
@@ -95,6 +95,7 @@ Apply `routing.md` § Groups, but review **only**:
 | Group | Paths | Read (by path, with Read) |
 |---|---|---|
 | A · backend-architecture | `server/src/**/*.ts` | `onion-architecture/SKILL.md` §1–8, §10–12; `server/AGENTS.md` § Must not break |
+| A · backend-architecture (by analogy) | `mcp-server/src/**/*.ts` | `routing.md` § Group A — `mcp-server/` is onion by analogy (the ring map and which §§ apply), then `onion-architecture/SKILL.md` §4, §5, §8–10, §12; `mcp-server/AGENTS.md` § Must not break once it exists |
 | C · frontend-architecture | `client/src/**/*.{ts,tsx}` minus `vendor/ui` | `frontend-ui-architecture/SKILL.md` §1–12; add `next-best-practices/SKILL.md` if `client/src/app/**` is touched |
 | reviewer-core | `reviewer-core/src/**` | `reviewer-core/AGENTS.md` § Must not break |
 | shared contracts | `{server,client}/src/vendor/shared/**` | root `AGENTS.md` § Cross-package invariants |

@@ -64,6 +64,8 @@ run_case deny  "write client test"         "$(edit Write "$ROOT/client/src/app/a
 run_case deny  "edit client lib test"      "$(edit Edit  "$ROOT/client/src/lib/format.test.ts")"
 run_case deny  "edit client test setup"    "$(edit Edit  "$ROOT/client/src/test/setup.ts")"
 run_case deny  "write reviewer-core test"  "$(edit Write "$ROOT/reviewer-core/test/run.test.ts")"
+run_case deny  "write mcp-server test"     "$(edit Write "$ROOT/mcp-server/test/server.test.ts")"
+run_case deny  "write mcp-server fake"     "$(edit Write "$ROOT/mcp-server/test/fakes.ts")"
 run_case deny  "write e2e flow"            "$(edit Write "$ROOT/e2e/specs/09-x.flow.json")"
 # ---- Edit / Write: ask
 run_case ask   "edit schema.ts"            "$(edit Edit  "$ROOT/server/src/db/schema.ts")"

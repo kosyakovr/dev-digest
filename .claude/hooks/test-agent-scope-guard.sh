@@ -58,6 +58,8 @@ tw allow "server fixture"              "$(edit Write "$ROOT/server/test/fixtures
 tw allow "client colocated test"       "$(edit Write "$ROOT/client/src/app/a/_components/B/B.test.tsx")"
 tw allow "client lib test"             "$(edit Edit  "$ROOT/client/src/lib/format.test.ts")"
 tw allow "reviewer-core test"          "$(edit Write "$ROOT/reviewer-core/test/y.test.ts")"
+tw allow "mcp-server test"             "$(edit Write "$ROOT/mcp-server/test/z.test.ts")"
+tw allow "mcp-server test fake"        "$(edit Write "$ROOT/mcp-server/test/fakes.ts")"
 tw allow "e2e flow"                    "$(edit Write "$ROOT/e2e/specs/09-x.flow.json")"
 tw allow "red-proof worktree file"     "$(edit Edit  "$RP/server/src/modules/reviews/service.ts")"
 # ---- Edit / Write: ask

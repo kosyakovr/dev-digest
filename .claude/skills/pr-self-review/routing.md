@@ -25,12 +25,35 @@ it is not invisible.
 
 | Group | Skills to read | Matches |
 |---|---|---|
-| **A · backend-architecture** | `onion-architecture`, `fastify-best-practices` | `server/src/**/*.ts` |
+| **A · backend-architecture** | `onion-architecture`; add `fastify-best-practices` iff `server/src/**` is touched; for `mcp-server/**` add `zod` and the preamble in § Group A below | `server/src/**/*.ts`, `mcp-server/src/**/*.ts` |
 | **B · backend-data** | `drizzle-orm-patterns`, `postgresql-table-design`, `zod` | `server/src/db/schema.ts`, `server/src/db/schema/**`, `server/src/**/repository.ts`, `server/src/**/*.repo.ts`, `{server,client}/src/vendor/shared/**` |
 | **C · frontend-architecture** | `frontend-ui-architecture`; add `next-best-practices` iff `client/src/app/**` is touched | `client/src/**/*.{ts,tsx}` minus `client/src/vendor/ui/**` |
 | **D · frontend-react** | `react-best-practices`; add `react-testing-library` iff a `client/src/**/*.test.tsx` is in the diff | `client/src/app/**/_components/**/*.tsx`, `client/src/components/**/*.tsx`, `client/src/lib/hooks/**/*.ts` |
 | **E · security** | `docs/agent-prompts/security-reviewer.md` **as the prompt**, `.claude/skills/security/SKILL.md` **as a checklist only** | `server/src/modules/**/routes.ts`, `server/src/app.ts`, `server/src/adapters/{auth,secrets,github,llm}/**`, `server/src/platform/**`, `server/src/vendor/shared/**`, `client/src/lib/api.ts`, `.github/workflows/**`, plus **any** file whose diff adds `process.env`, `exec(`, `spawn(`, `dangerouslySetInnerHTML`, or a secret-shaped literal |
 | **F · generic** | `docs/agent-prompts/general-reviewer.md` | everything routed nowhere else — `reviewer-core/**`, `e2e/**`, `scripts/*.sh`, `docs/**`, `*.md`, `.claude/**`, `.github/**`, `package.json` |
+
+### Group A — `mcp-server/` is onion by analogy
+
+`onion-architecture` is written for `server/` (Fastify, Drizzle, `Container`).
+`mcp-server/` is a stdio MCP server that is a thin client of the DevDigest HTTP
+API: no Fastify, no database, no `Container`. Only the dependency-direction rules
+carry over. When the A agent's file list contains an `mcp-server/` path, include
+this preamble verbatim:
+
+> For `mcp-server/src/**`, apply `onion-architecture` **by analogy**, with these
+> rings: ① `src/core/**` — the `DevDigestApi` port, `z.infer` types, domain errors;
+> imports `zod` only. ② `src/usecases/**`, `src/format/**` — import ① only; no
+> MCP SDK, no `fetch`, no `process.env`, no HTTP status codes. ③ `src/adapters/**`
+> — implements ①; `src/adapters/http/http.ts` is the ONLY file that calls `fetch`.
+> ④ `src/tools/**`, `src/server.ts`, `src/index.ts` — the MCP SDK and the
+> composition root; only `src/index.ts` constructs adapters and reads
+> `process.env` (through `src/config.ts`). Apply §4, §5 (port named after the
+> conversation; the test double is declared `implements DevDigestApi` — read
+> `Container`/`mocks.ts` as the factory's injected deps and `test/fakes.ts`),
+> §8, §9 (no network instead of no Postgres), §10 where a row has an analogue,
+> and §12. Do **not** apply §6, §7, §11 or the §13 greps — they name Fastify,
+> Drizzle and `server/` paths. Importing from `../server` or `../reviewer-core`
+> is a CRITICAL boundary violation.
 
 ### Group E — the security stack mismatch
 

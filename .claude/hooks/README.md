@@ -110,7 +110,7 @@ other agents. It makes the root `AGENTS.md` "do not touch" list mechanical.
 | Tool call | Decision |
 |---|---|
 | Edit/Write under `server/src/db/migrations/`, any lock file, anything under `.claude/`, a `CLAUDE.md` / `CLAUDE.local.md` | `deny` |
-| Edit/Write of a test — `*.test.ts(x)`, `server/test/**`, `reviewer-core/test/**`, `client/src/test/**`, `e2e/specs/*.flow.json` | `deny` — the [`test-writer`](../agents/test-writer.md) agent owns tests (`server/src/adapters/mocks.ts` stays allowed: it is production code) |
+| Edit/Write of a test — `*.test.ts(x)`, `server/test/**`, `reviewer-core/test/**`, `mcp-server/test/**`, `client/src/test/**`, `e2e/specs/*.flow.json` | `deny` — the [`test-writer`](../agents/test-writer.md) agent owns tests (`server/src/adapters/mocks.ts` stays allowed: it is production code) |
 | Edit/Write of `server/src/db/schema*` or a `package.json` | `ask` — only for a change an approved plan Gate names |
 | Bash: `git commit/push/reset/checkout/stash/…`, `gh pr`, `pnpm/npm add/remove/update`, `install` without `--frozen-lockfile`, `yarn`, `db:generate`, `drizzle-kit generate/push`, a write (`>`, `rm`, `mv`, `sed -i`, `tee`, …) into a protected path | `deny` |
 | Anything else — including reading lock files and migrations, `git status/diff/log`, every test and typecheck command | silent exit 0 |
@@ -158,7 +158,7 @@ variable an absolute path cannot be placed, so the answer is `ask`.
 | anything | — | — | `deny` |
 | contains `..`, or outside the project | `deny` (except a path containing `devdigest-redproof-`) | `deny` | `deny` |
 | migrations, lock files, `.claude/**`, `CLAUDE.md`, `INSIGHTS.md`, `package.json`, `*vitest.config.*`, `tsconfig*.json`, `next.config.*`, `drizzle.config.*`, `*/src/vendor/**` | `deny` | `deny` | `deny` |
-| `server/test/**`, `reviewer-core/test/**`, `client/src/**/*.test.{ts,tsx}`, `e2e/specs/*.flow.json` | allow | `deny` | `deny` |
+| `server/test/**`, `reviewer-core/test/**`, `mcp-server/test/**`, `client/src/**/*.test.{ts,tsx}`, `e2e/specs/*.flow.json` | allow | `deny` | `deny` |
 | `server/test/*.test.ts` (not `.it.test.ts`) whose content mentions `helpers/pg` | `deny` — rename to `.it.test.ts` | — | — |
 | `server/test/helpers/**`, `client/src/test/**`, `server/src/adapters/mocks.ts` | `ask` | `deny` | `deny` |
 | `AGENTS.md`, `*/specs/*.md`, `docs/agent-prompts/*.md` (not its README) | `deny` | `ask` | `deny` |
