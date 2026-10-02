@@ -14,16 +14,23 @@ client-specific.
   every file even when `files` is capped), and a Smart order / Original order
   toggle (`role="group"` "File order", buttons with `aria-pressed`; Smart order
   by default, not persisted). Original order is the flat `DiffViewer` in the
-  PR's own file order, does not wait for the smart diff and never shows the
-  "unavailable" notice. Finding cards render under their line in both orders.
+  PR's own file order; its files do not wait for the smart diff and it never
+  shows the "unavailable" grouping notice.
+- **Findings come from the smart diff in both orders:** the cards are the
+  findings of the reviews in `review_ids`, so none render until the smart diff
+  has loaded. Once it has, they render under their line in either order. When
+  it failed with no data, Original order says findings are unavailable
+  (`smartDiff.findingsUnavailable`); a failed refresh that kept stale data keeps
+  showing the findings of those stale `review_ids`.
 - **Smart order (`DiffTab`)** groups files by server-provided role in the
   order core, tests, wiring, docs, boilerplate. `RoleGroup` header is a button
   (`aria-expanded`): chevron, role label, `● N` (files with findings, shown
   always when N>0, `aria-label` "N files with findings"), "N files". Docs and
   Boilerplate start collapsed.
 - **States (Smart order):** loading → `Skeleton`; smart-diff error or path-set
-  mismatch → flat `DiffViewer` (with the findings it can resolve) + a muted
-  note; no review yet → muted note (in both orders).
+  mismatch → flat `DiffViewer` + the muted "unavailable" note — with findings
+  on a path-set mismatch (the data and its `review_ids` are there), without
+  them on an error with no data; no review yet → muted note (in both orders).
 - **File card** shows a dot ("Has findings") next to the GitHub comment counter.
 - **Line:** several findings on one line → stripe and a badge button on the
   right (severity icon + text of the WORST severity: CRITICAL "Blocker", WARNING

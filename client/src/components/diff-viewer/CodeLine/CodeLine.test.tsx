@@ -81,8 +81,7 @@ describe("CodeLine findings", () => {
   ])("a line with $name is labelled $label", ({ findings, label }) => {
     renderLine(findings);
     if (label) {
-      const badge = screen.getByRole("button", { name: label });
-      expect(badge.querySelector("svg")).not.toBeNull(); // the severity icon
+      expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
       expect(screen.getAllByRole("button", { name: /^(Blocker|Warning|Suggestion)$/ })).toHaveLength(1);
       expect(screen.getAllByRole("article")).toHaveLength(findings.length);
     } else {

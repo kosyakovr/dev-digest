@@ -100,25 +100,33 @@ function setSmart(s: Partial<SmartState>) {
   h.smart = { data: undefined, isLoading: false, isError: false, ...s };
 }
 
-function renderTab() {
-  return render(
+/** PR-level file count — deliberately NOT FILES.length, so the toolbar provably reads it. */
+const FILES_COUNT = 12;
+
+function tab() {
+  return (
     <NextIntlClientProvider locale="en" messages={{ shell, prReview }}>
       <DiffTab
         prId="pr1"
-        filesCount={FILES.length}
+        filesCount={FILES_COUNT}
         additions={120}
         deletions={7}
         files={FILES}
         canComment={false}
       />
-    </NextIntlClientProvider>,
+    </NextIntlClientProvider>
   );
+}
+
+function renderTab() {
+  return render(tab());
 }
 
 const ROLE_RE = /^(Core|Tests|Wiring|Docs|Boilerplate)\b/;
 const header = (label: string) => screen.getByRole("button", { name: new RegExp(`^${label}\\b`) });
 const UNAVAILABLE = "Smart grouping is unavailable — showing files in original order.";
 const NO_REVIEW = "No review yet — findings will appear here after a review.";
+const FINDINGS_UNAVAILABLE = "Review findings are unavailable right now — showing the diff without them.";
 const PATH_RE = /^(pnpm-lock\.yaml|README\.md|a\.test\.ts|b\.ts|a\.ts)$/;
 /** File-card paths on screen, in DOM order. */
 const shownPaths = () => screen.queryAllByText(PATH_RE).map((e) => e.textContent);
@@ -240,7 +248,7 @@ describe("DiffTab", () => {
 
   it("the toolbar shows the PR's file count and +/- totals, and Smart order is selected by default", () => {
     renderTab();
-    expect(screen.getByText("5 files", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("12 files", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("+120")).toBeInTheDocument();
     expect(screen.getByText("−7")).toBeInTheDocument();
     expect(orderButton("Smart order")).toHaveAttribute("aria-pressed", "true");
@@ -264,21 +272,34 @@ describe("DiffTab", () => {
     expect(screen.getAllByRole("article").map((a) => a.getAttribute("aria-label"))).toEqual(["New"]);
   });
 
-  it("Original order does not wait for the smart diff and shows no 'unavailable' notice when it fails", () => {
+  it("Original order: files do not wait for the smart diff; cards appear once it loads; a failure with no data says findings are unavailable; stale data keeps its cards", () => {
+    h.reviews = [review("R2", [finding("New")])];
+    const cards = () => screen.queryAllByRole("article").map((a) => a.getAttribute("aria-label"));
+
     setSmart({ data: undefined, isLoading: true });
     const { rerender } = renderTab();
     fireEvent.click(orderButton("Original order"));
     expect(screen.queryByRole("status", { name: "Loading the smart diff…" })).toBeNull();
     expect(shownPaths()).toEqual(PATHS);
+    expect(cards()).toEqual([]); // no review_ids yet
+    expect(screen.queryByText(FINDINGS_UNAVAILABLE)).toBeNull();
+
+    setSmart({ data: smartResponse() });
+    rerender(tab());
+    expect(cards()).toEqual(["New"]);
+    expect(screen.queryByText(FINDINGS_UNAVAILABLE)).toBeNull();
 
     setSmart({ data: undefined, isError: true });
-    rerender(
-      <NextIntlClientProvider locale="en" messages={{ shell, prReview }}>
-        <DiffTab prId="pr1" filesCount={5} additions={120} deletions={7} files={FILES} canComment={false} />
-      </NextIntlClientProvider>,
-    );
+    rerender(tab());
     expect(shownPaths()).toEqual(PATHS);
+    expect(cards()).toEqual([]);
+    expect(screen.getByText(FINDINGS_UNAVAILABLE)).toBeInTheDocument();
     expect(screen.queryByText(UNAVAILABLE)).toBeNull();
+
+    setSmart({ data: smartResponse(), isError: true }); // failed refresh, stale data kept
+    rerender(tab());
+    expect(cards()).toEqual(["New"]);
+    expect(screen.queryByText(FINDINGS_UNAVAILABLE)).toBeNull();
   });
 
   it("the Smart-order fallback (path sets differ) still shows the finding cards of the latest review", () => {

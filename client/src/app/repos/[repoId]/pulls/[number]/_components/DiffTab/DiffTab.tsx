@@ -77,8 +77,11 @@ export function DiffTab({ prId, filesCount, additions, deletions, files, canComm
   if (files.length === 0) {
     body = <DiffViewer files={files} commenting={commenting} />;
   } else if (order === "original") {
+    // Findings are the reviews the smart diff names (review_ids), so without its
+    // data there are none to show — say so rather than render a silently bare diff.
     body = (
       <>
+        {smart.isError && !smart.data && <p style={note}>{t("smartDiff.findingsUnavailable")}</p>}
         {noReview}
         {flat}
       </>
