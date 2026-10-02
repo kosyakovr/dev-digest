@@ -205,7 +205,7 @@ describe("BlastCard — empty and degraded", () => {
     resync = { start, running: false, timedOut: true, error: null };
     render(tree());
     expect(
-      screen.getByText("Still re-indexing — the card will update once the index lands; reload later."),
+      screen.getByText("Re-indexing is taking longer than expected — reload the page later to see the result."),
     ).toBeInTheDocument();
   });
 });

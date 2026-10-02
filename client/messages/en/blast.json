@@ -42,7 +42,7 @@
   "resync": "Re-index repo",
   "resyncing": "Re-indexing…",
   "resyncError": "Re-index failed: {message}",
-  "resyncTimeout": "Still re-indexing — the card will update once the index lands; reload later.",
+  "resyncTimeout": "Re-indexing is taking longer than expected — reload the page later to see the result.",
   "history": {
     "title": "Prior PRs touching these files",
     "count": "{count, plural, one {# prior PR} other {# prior PRs}}",

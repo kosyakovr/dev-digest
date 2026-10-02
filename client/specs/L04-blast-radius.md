@@ -21,7 +21,7 @@ what is client-specific.
 - **`HistoryAccordion`**: collapsed by default, count badge, rows `#N` (link), title, author · merged date, overlap count (files in `title`), notes as plain text; empty / degraded / error states. (AC-14)
 
 ## Data
-`lib/hooks/blast.ts`: `usePrBlast` (query `["pr-blast", prId]`), `usePrHistory` (query `["pr-history", prId]`, `staleTime` 5 min), `useBlastResync(repoId, prId)` (POSTs `/repos/:id/resync` via `useResyncRepoIntel`, polls `useRepoIntelStatus` until `updatedAt` changes, invalidates `["pr-blast", prId]`, gives up after 120 s).
+`lib/hooks/blast.ts`: `usePrBlast` (query `["pr-blast", prId]`), `usePrHistory` (query `["pr-history", prId]`, `staleTime` 5 min), `useBlastResync(repoId, prId)` (POSTs `/repos/:id/resync` via `useResyncRepoIntel`, polls `useRepoIntelStatus` until `updatedAt` changes, invalidates `["pr-blast", prId]`; a `start()` made before the state loaded takes the first state seen as its baseline; after 120 s it stops polling, reloads the blast once and returns `timedOut`, which `BlastCard` renders as `resyncTimeout`). Returns `{ start, running, timedOut, error }`.
 
 ## i18n
 All visible strings come from `messages/en/blast.json` (namespace `blast`): `title`, `loadError`, `retry`, `count.*`, `via`, `degraded.*`, `resync*`, `graph.*`, `history.*` plus the pre-existing `stat.*`, `view.*`, `callerCount`, `noDownstream`. (AC-15)
