@@ -75,8 +75,9 @@ export function BlastGraph({
   sha,
 }: LinkProps & { downstream: DownstreamImpact[] }) {
   const t = useTranslations("blast");
-  const [picked, setPicked] = React.useState(0);
-  const item = downstream[picked] ?? downstream[0];
+  // The picked symbol by name: a refetch can reorder or shorten `downstream`.
+  const [picked, setPicked] = React.useState<string | null>(null);
+  const item = downstream.find((d) => d.symbol === picked) ?? downstream[0];
   if (!item) return <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{t("graph.empty")}</div>;
 
   const layout = layoutBlastGraph(item);
@@ -86,20 +87,20 @@ export function BlastGraph({
     <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
         <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{t("graph.symbolPicker")}</span>
-        {downstream.map((d, i) => (
+        {downstream.map((d) => (
           <button
             key={d.symbol}
             type="button"
             className="mono"
-            aria-pressed={i === picked}
-            onClick={() => setPicked(i)}
+            aria-pressed={d.symbol === item.symbol}
+            onClick={() => setPicked(d.symbol)}
             style={{
               fontSize: 12,
               padding: "2px 8px",
               borderRadius: 5,
               border: "1px solid var(--border)",
               cursor: "pointer",
-              background: i === picked ? "var(--bg-hover)" : "transparent",
+              background: d.symbol === item.symbol ? "var(--bg-hover)" : "transparent",
               color: "var(--text-primary)",
             }}
           >
@@ -109,7 +110,7 @@ export function BlastGraph({
       </div>
       <div style={{ overflowX: "auto", minWidth: 0 }}>
         <svg
-          role="img"
+          role="group"
           aria-label={t("graph.ariaLabel")}
           width={layout.width}
           height={layout.height}

@@ -17,14 +17,14 @@ what is client-specific.
   - no downstream and not degraded → `noDownstream`;
   - a divider, then `HistoryAccordion`.
 - **`BlastTree`**: one collapsible row per changed symbol (first open), callers indented `depth × 18px` with `via <name>` at depth >= 2, `file:line` links to `githubBlobUrl(repo, indexed_sha ?? head_sha, file, line)`, then endpoint badges (Globe) and cron badges (Clock). (AC-11)
-- **`BlastGraph`**: own SVG, one symbol at a time (picker buttons), columns root → callers → indirect callers → endpoints & crons; endpoint/cron edges leave the root dashed; `role="img"`, legend, `graph.empty` when nothing to draw. (AC-12)
+- **`BlastGraph`**: own SVG, one symbol at a time (picker buttons), columns root → callers → indirect callers → endpoints & crons; endpoint/cron edges leave the root dashed; `role="group"` with an aria-label (the caller nodes are links), legend, `graph.empty` when nothing to draw. (AC-12)
 - **`HistoryAccordion`**: collapsed by default, count badge, rows `#N` (link), title, author · merged date, overlap count (files in `title`), notes as plain text; empty / degraded / error states. (AC-14)
 
 ## Data
 `lib/hooks/blast.ts`: `usePrBlast` (query `["pr-blast", prId]`), `usePrHistory` (query `["pr-history", prId]`, `staleTime` 5 min), `useBlastResync(repoId, prId)` (POSTs `/repos/:id/resync` via `useResyncRepoIntel`, polls `useRepoIntelStatus` until `updatedAt` changes, invalidates `["pr-blast", prId]`, gives up after 120 s).
 
 ## i18n
-All visible strings come from `messages/en/blast.json` (namespace `blast`): `title`, `loadError`, `retry`, `count.*`, `via`, `openLine`, `degraded.*`, `resync*`, `graph.*`, `history.*` plus the pre-existing `stat.*`, `view.*`, `callerCount`, `noDownstream`. (AC-15)
+All visible strings come from `messages/en/blast.json` (namespace `blast`): `title`, `loadError`, `retry`, `count.*`, `via`, `degraded.*`, `resync*`, `graph.*`, `history.*` plus the pre-existing `stat.*`, `view.*`, `callerCount`, `noDownstream`. (AC-15)
 
 ## Tests
 `BlastCard`, `BlastGraph/helpers`, `BlastCard/helpers`, `HistoryAccordion`, `OverviewTab`, `hooks/blast`; hooks are mocked with `vi.mock("@/lib/hooks", …)`, interaction via `fireEvent`.

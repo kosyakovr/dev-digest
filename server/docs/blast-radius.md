@@ -52,7 +52,7 @@ Not rendered here; syntax checked by hand.
 
 - The route has its own limit of 20 requests per minute (`routes.ts:33`).
 - Files are sorted by additions + deletions (desc), then path; the first
-  `MAX_HISTORY_FILES` = 20 are used (`history.ts:53-58`, `constants.ts:9`). No
+  `MAX_HISTORY_FILES` = 20 are used (`history.ts:53-58`, `constants.ts:8`). No
   files gives `{ history: [] }` with no GitHub call.
 - Commits come from GitHub (`commits?path=` on the repo's default branch,
   `HISTORY_COMMITS_PER_FILE` = 30), never from the shallow clone

@@ -124,4 +124,49 @@ describe("useBlastResync", () => {
     });
     expect(result.current.running).toBe(false);
   });
+
+  it("on the 120 s ceiling it reloads the blast once and reports timedOut; a new start() clears it", async () => {
+    const { result } = await mountResync();
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+    vi.useFakeTimers();
+    act(() => result.current.start());
+    expect(result.current.timedOut).toBe(false);
+    act(() => {
+      vi.advanceTimersByTime(120_500);
+    });
+    expect(result.current.timedOut).toBe(true);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["pr-blast", "p1"] });
+    act(() => result.current.start());
+    expect(result.current.timedOut).toBe(false);
+  });
+
+  it("start() before the index state loaded: the first state seen is the baseline, not a completion", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    get.mockImplementation(async (path: string) => {
+      if (path === "/repos/r1/index-state") {
+        await gate;
+        return stateOf(serverUpdatedAt);
+      }
+      throw new Error(`unexpected GET ${path}`);
+    });
+    const { result } = renderHook(() => useBlastResync("r1", "p1"), { wrapper });
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+    act(() => result.current.start()); // index state not loaded yet
+    await act(async () => {
+      release();
+      await gate;
+    });
+    await waitFor(() => expect(qc.getQueryData(["repo-intel-state", "r1"])).toBeDefined());
+    // The old state (t1) arrived after start(): still running, blast not reloaded.
+    expect(result.current.running).toBe(true);
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ["pr-blast", "p1"] });
+
+    serverUpdatedAt = "t2";
+    await act(async () => {
+      await qc.refetchQueries({ queryKey: ["repo-intel-state", "r1"] });
+    });
+    await waitFor(() => expect(result.current.running).toBe(false));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["pr-blast", "p1"] });
+  });
 });

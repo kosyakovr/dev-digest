@@ -32,7 +32,6 @@
     "crons": "{count, plural, one {# cron/job} other {# cron/jobs}}"
   },
   "via": "via {name}",
-  "openLine": "Open {location} on GitHub",
   "degraded": {
     "flag_off": "Repo intelligence is turned off (REPO_INTEL_ENABLED).",
     "no_data": "This repo has not been indexed yet.",
@@ -43,6 +42,7 @@
   "resync": "Re-index repo",
   "resyncing": "Re-indexing…",
   "resyncError": "Re-index failed: {message}",
+  "resyncTimeout": "Still re-indexing — the card will update once the index lands; reload later.",
   "history": {
     "title": "Prior PRs touching these files",
     "count": "{count, plural, one {# prior PR} other {# prior PRs}}",

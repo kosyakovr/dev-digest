@@ -13,7 +13,7 @@ interface BlastQuery {
   isError: boolean;
 }
 let blastQuery: BlastQuery;
-let resync: { start: () => void; running: boolean; error: Error | null };
+let resync: { start: () => void; running: boolean; timedOut: boolean; error: Error | null };
 const start = vi.fn();
 const refetch = vi.fn();
 
@@ -61,7 +61,7 @@ const symbolButton = (name: string) => screen.getByText(name, { selector: "span.
 
 beforeEach(() => {
   blastQuery = { data: BLAST, isLoading: false, isError: false };
-  resync = { start, running: false, error: null };
+  resync = { start, running: false, timedOut: false, error: null };
   start.mockReset();
   refetch.mockReset();
 });
@@ -117,14 +117,30 @@ describe("BlastCard — data", () => {
   it("the Graph switch shows the SVG for the first symbol; Tree switches back", () => {
     render(tree());
     expect(screen.getByRole("button", { name: "tree" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.queryByRole("img", { name: "Blast radius graph" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Blast radius graph" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "graph" }));
-    expect(screen.getByRole("img", { name: "Blast radius graph" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Blast radius graph" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "graph" })).toHaveAttribute("aria-pressed", "true");
 
     fireEvent.click(screen.getByRole("button", { name: "tree" }));
-    expect(screen.queryByRole("img", { name: "Blast radius graph" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Blast radius graph" })).toBeNull();
+  });
+
+  it("the Graph keeps the picked symbol by name when a refetch reorders downstream", () => {
+    const { rerender } = render(tree());
+    fireEvent.click(screen.getByRole("button", { name: "graph" }));
+    fireEvent.click(screen.getByRole("button", { name: "B" }));
+    expect(screen.getByRole("button", { name: "B" })).toHaveAttribute("aria-pressed", "true");
+
+    blastQuery = { ...blastQuery, data: { ...BLAST, downstream: [...BLAST.downstream].reverse() } };
+    rerender(tree());
+    expect(screen.getByRole("button", { name: "B" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "A" })).toHaveAttribute("aria-pressed", "false");
+
+    blastQuery = { ...blastQuery, data: { ...BLAST, downstream: BLAST.downstream.filter((d) => d.symbol === "A") } };
+    rerender(tree());
+    expect(screen.getByRole("button", { name: "A" })).toHaveAttribute("aria-pressed", "true");
   });
 });
 
@@ -140,7 +156,7 @@ describe("BlastCard — empty and degraded", () => {
     render(tree());
     fireEvent.click(screen.getByRole("button", { name: "graph" }));
     expect(screen.getByText("No downstream callers to graph.")).toBeInTheDocument();
-    expect(screen.queryByRole("img", { name: "Blast radius graph" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Blast radius graph" })).toBeNull();
   });
 
   it("degraded no_data: shows the reason and a Re-index button that starts the resync", () => {
@@ -175,13 +191,22 @@ describe("BlastCard — empty and degraded", () => {
 
   it("while re-indexing the button reads 'Re-indexing…'; a failed resync is shown with its message", () => {
     blastQuery = { ...blastQuery, data: { ...BLAST, degraded: true, reason: "index_failed" } };
-    resync = { start, running: true, error: null };
+    resync = { start, running: true, timedOut: false, error: null };
     const { rerender } = render(tree());
     expect(screen.getByRole("button", { name: /Re-indexing…/ })).toBeInTheDocument();
 
-    resync = { start, running: false, error: new Error("boom") };
+    resync = { start, running: false, timedOut: false, error: new Error("boom") };
     rerender(tree());
     expect(screen.getByText("Re-index failed: boom")).toBeInTheDocument();
+  });
+
+  it("a re-index that outlived the poll ceiling says so instead of going silent", () => {
+    blastQuery = { ...blastQuery, data: { ...BLAST, degraded: true, reason: "no_data" } };
+    resync = { start, running: false, timedOut: true, error: null };
+    render(tree());
+    expect(
+      screen.getByText("Still re-indexing — the card will update once the index lands; reload later."),
+    ).toBeInTheDocument();
   });
 });
 

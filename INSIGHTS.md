@@ -57,6 +57,7 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
   no-op, so a "red-proof" that stashes the new component and re-runs its test
   passes against the very code it meant to remove → for a new file, mutate a
   copy (`cp` to the scratchpad, edit, run, `cp` back) instead of stashing.
+- 2026-10-02 (ref for the entry above) — (ref: client/src/app/repos/[repoId]/pulls/[number]/_components/OverviewTab/_components/BlastCard/BlastCard.test.tsx, the graph.empty red-proof in L04 Blast radius)
 
 - 2026-10-02 — The isolated `.it.test` recipe in `.claude/agents/README.md:328`
   creates its fake `HOME` with `mktemp -d` and removes it with `rm -rf`, and the

@@ -41,6 +41,7 @@ function DegradedNotice({
           {resync.running ? t("resyncing") : t("resync")}
         </Button>
       )}
+      {resync.timedOut && <span style={s.noticeText}>{t("resyncTimeout")}</span>}
       {resync.error && <span style={s.error}>{t("resyncError", { message: resync.error.message })}</span>}
     </div>
   );

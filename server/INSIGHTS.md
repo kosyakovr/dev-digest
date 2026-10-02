@@ -51,6 +51,7 @@ Non-obvious findings a future session needs. **Read this before working here.**
   a caller's `file:line` from the clone showed the wrong lines (and the shallow
   clone lacks `8c283a0`) → check index rows with `git show <last_indexed_sha>:<file>`
   in a full checkout; this is also why blast links use `indexed_sha`, not head_sha.
+- 2026-10-02 (ref for the entry above) — (ref: server/src/modules/repo-intel/service.ts getBlastRadius `indexedSha`; client/src/app/repos/[repoId]/pulls/[number]/_components/OverviewTab/_components/BlastCard/helpers.ts `linkSha`)
 
 - 2026-09-22 — A foreign key proves EXISTENCE, not tenancy: `agent_skills.
   skill_id` references `skills.id` with no workspace predicate, so
