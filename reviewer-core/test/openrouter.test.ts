@@ -52,16 +52,29 @@ const request = {
 };
 
 describe('OpenRouterProvider.completeStructured', () => {
-  it('fails at once, without a reprompt, when the reply was cut off at max_tokens', async () => {
+  it('retries a reply cut off at max_tokens as a fresh draw, without feeding the cut-off text back', async () => {
     const { provider, calls } = providerReplaying([
-      { content: '', finish_reason: 'length', completion_tokens: 800, reasoning_tokens: 800 },
+      { content: '{"intent":"x","sour', finish_reason: 'length', completion_tokens: 800, reasoning_tokens: 700 },
       { content: '{"intent":"x","sources_conflict":false}', finish_reason: 'stop' },
     ]);
 
+    const res = await provider.completeStructured(request);
+
+    expect(res.data).toEqual({ intent: 'x', sources_conflict: false });
+    expect(res.attempts).toBe(2);
+    expect((calls[1] as { messages: unknown[] }).messages).toEqual(request.messages);
+  });
+
+  it('says the reply was cut off at max_tokens when every attempt was cut off', async () => {
+    const { provider, calls } = providerReplaying([
+      { content: '', finish_reason: 'length', completion_tokens: 800, reasoning_tokens: 800 },
+      { content: '', finish_reason: 'length', completion_tokens: 800, reasoning_tokens: 800 },
+    ]);
+
     await expect(provider.completeStructured(request)).rejects.toThrow(
-      'OpenRouter output for PrIntentClassification was cut off at max_tokens (800): 800 completion tokens, 800 of them reasoning — raise maxTokens',
+      'OpenRouter output for PrIntentClassification was cut off at max_tokens (800): 800 completion tokens, 800 of them reasoning — raise maxTokens (2 attempts)',
     );
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
   });
 
   it('still accepts a reply flagged as cut off when its JSON is complete', async () => {

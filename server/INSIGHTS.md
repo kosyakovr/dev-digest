@@ -115,8 +115,7 @@ Non-obvious findings a future session needs. **Read this before working here.**
   constructor (90 s, SDK `maxRetries` 2) and the container passes none, so
   intent's "20 s per attempt" is really 90 s → do not rely on `timeoutMs` for
   OpenRouter calls until the provider forwards it per request.
-  (ref: reviewer-core/src/llm/openrouter.ts:54, server/src/platform/container.ts:216)
-- 2026-10-02 (ref for the entry above) — (ref: reviewer-core/src/llm/openrouter.ts:56)
+  (ref: reviewer-core/src/llm/openrouter.ts:56, server/src/platform/container.ts:216)
 
 - 2026-09-23 — A second API server on `:3001` exits with `EADDRINUSE` while your
   `curl localhost:3001` keeps returning 200, served by the developer's already

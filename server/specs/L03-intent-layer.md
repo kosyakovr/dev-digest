@@ -82,8 +82,9 @@ The adapter rejects a `ref` that is not `/^[0-9a-f]{7,40}$/`.
    `maxTokens` was 800 until 2026-10-02: the default reasoning model spends its
    hidden reasoning from the same budget, so half the calls were cut off mid-JSON
    and failed as "structured output failed schema validation". On OpenRouter a
-   reply cut off at `maxTokens` now fails at once with "cut off at max_tokens"
-   instead of reprompting with the same budget.
+   reply cut off at `maxTokens` is now retried as a fresh, identical request
+   (no reprompt with the cut-off text); if every attempt is cut off the error
+   says "cut off at max_tokens".
 
 ### Confidence (deterministic, `modules/intent/helpers.ts`)
 - `ticket` = an issue resolved (not a PR); `spec` = a non-empty spec read;
