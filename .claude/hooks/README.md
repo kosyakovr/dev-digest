@@ -189,6 +189,22 @@ passes. An unquoted `>` inside an argument (`git log --format=%h>%s`) is
 denied by the read-only profile — rephrase the command. It stops honest
 mistakes; it does not stop an agent that is trying to get around it.
 
+**Quoted `db:*` / `drizzle-kit` runs** (both guards, `quoted_db_run`). Quote and
+backslash characters are dropped, the command is split on `; & | ( \`` and
+newlines, and any segment naming a package manager + `db:*` or a
+`drizzle-kit` run subcommand is denied — so `pnpm 'db:generate'`,
+`env pnpm "db:push"`, `{ pnpm db\:migrate; }` and `find -exec pnpm 'db:seed'`
+are caught. `grep`/`rg`/`git grep|log|show` segments are data, and so are
+`echo`/`printf` until the command has a pipe. Known gaps, accepted after seven
+self-review rounds (2026-10-02) because each regex patch opened the next edge:
+output piped into a shell the regex does not recognise as one (`| 'sh'`,
+`| (sh)`, `| time sh`, a pipe and `sh` on separate lines), a here-string into a
+shell (`bash <<< "$(…)"`), and command words built by expansion
+(`$(echo pnpm) …`, `P=pnpm; $P …`). Known fail-closed denials: `ugrep`, and
+`grep -l 'db:…' | xargs pnpm <anything>`. If a stronger guarantee is ever
+needed, invert it — check piped `grep`/`git` output unless every later stage is
+an allow-listed data consumer — rather than adding more executor patterns.
+
 **Trusted workspaces only**, as for the implementer guard.
 
 ```bash
