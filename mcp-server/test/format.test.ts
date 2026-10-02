@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DevDigestError } from '../src/core/errors.ts';
-import { renderAgents, renderError, renderFindings } from '../src/format/text.ts';
+import type { Agent } from '../src/core/schemas.ts';
+import { renderAgents, renderConventions, renderError, renderFindings } from '../src/format/text.ts';
 import { getFindings } from '../src/usecases/findings.ts';
-import { renderConventions } from '../src/format/text.ts';
 import { getConventions } from '../src/usecases/conventions.ts';
 import { agent, convention, FakeClock, finding, review, run, seededApi } from './fakes.ts';
 
@@ -146,7 +146,9 @@ describe('response_format', () => {
 });
 
 describe('renderAgents', () => {
-  const withPrompt = agent({ name: 'Sec', system_prompt: 'TOP-SECRET-PROMPT-TEXT' });
+  // The exact `Agent` type no longer has the field; a cast simulates a value that carries one
+  // anyway (e.g. a fake port), so the renderer is shown not to print it either way.
+  const withPrompt = { ...agent({ name: 'Sec' }), system_prompt: 'TOP-SECRET-PROMPT-TEXT' } as Agent;
 
   it('never prints the system_prompt, in either format', () => {
     expect(renderAgents([withPrompt], 'concise')).not.toContain('TOP-SECRET-PROMPT-TEXT');
@@ -205,6 +207,35 @@ describe('renderError', () => {
     expect(renderError(new DevDigestError('server', { detail: '503', serverMessage: 'down' }), ctx)).toBe(
       'DevDigest API error 503: down.',
     );
+  });
+
+  it('no_review says there is no finished review on the PR and points at run_agent_on_pr', () => {
+    const t = renderError(new DevDigestError('no_review', { candidates: ['acme/payments-api#482'] }), ctx);
+    expect(t).toBe('No finished review on acme/payments-api#482 yet. Run run_agent_on_pr first.');
+    expect(t).not.toContain('Check the repo');
+  });
+
+  it('no_review with an agent filter names the agent', () => {
+    const t = renderError(
+      new DevDigestError('no_review', { subject: 'Security Reviewer', candidates: ['acme/payments-api#482'] }),
+      ctx,
+    );
+    expect(t).toBe('No finished review by Security Reviewer on acme/payments-api#482 yet. Run run_agent_on_pr first.');
+    expect(t).not.toContain('Check the repo');
+  });
+
+  it('run_not_found names the run and the PR and points at get_findings without run_id', () => {
+    const t = renderError(
+      new DevDigestError('run_not_found', {
+        subject: '55555555-5555-4555-8555-555555555555',
+        candidates: ['acme/payments-api#482'],
+      }),
+      ctx,
+    );
+    expect(t).toBe(
+      'No run 55555555-5555-4555-8555-555555555555 on acme/payments-api#482. Call get_findings without run_id for the latest review.',
+    );
+    expect(t).not.toContain('Check the repo');
   });
 
   it('bad_response names the route and the env variable', () => {

@@ -95,10 +95,27 @@ describe('HttpDevDigestApi', () => {
     expect(seen[0]).toMatchObject({ method: 'GET', url: '/agents', accept: 'application/json' });
   });
 
-  it('keeps unknown fields (tolerant reader)', async () => {
+  it('tolerates unknown fields: the parse succeeds, known fields stay, unknown ones are stripped', async () => {
     const { baseUrl } = await serve((_q, res) => json(res, 200, [{ ...agentRow('a1', 'X'), brand_new: 42 }]));
+    const agents = await api(baseUrl).listAgents(OPTS);
+    expect(agents).toHaveLength(1);
+    expect(agents[0]).toMatchObject({ id: 'a1', name: 'X', provider: 'anthropic', model: 'm', enabled: true });
+    expect(agents[0]).not.toHaveProperty('brand_new');
+  });
+
+  it('listAgents drops the system_prompt the API returns', async () => {
+    const { baseUrl } = await serve((_q, res) => json(res, 200, [{ ...agentRow('a1', 'X'), system_prompt: 'TOP-SECRET-PROMPT' }]));
     const [a] = await api(baseUrl).listAgents(OPTS);
-    expect((a as Record<string, unknown>).brand_new).toBe(42);
+    expect(a?.name).toBe('X');
+    expect(a).not.toHaveProperty('system_prompt');
+    expect(JSON.stringify(a)).not.toContain('TOP-SECRET-PROMPT');
+  });
+
+  it('startReview answering an empty runs array is a bad_response for POST /pulls/:id/review', async () => {
+    const { baseUrl } = await serve((_q, res) => json(res, 200, { pr_id: PR_ID, runs: [], reviews: [] }));
+    const err = await failure(api(baseUrl).startReview(PR_ID, AGENT_SECURITY_ID, OPTS));
+    expect(err.kind).toBe('bad_response');
+    expect(err.route).toBe('POST /pulls/:id/review');
   });
 
   it('startReview POSTs {agentId} to /pulls/:id/review and returns the run target', async () => {

@@ -24,6 +24,15 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## Tool & Library Notes
 
+- 2026-10-02 — SDK 1.31.0 answers a tool call whose arguments fail the zod
+  `inputSchema` with an `isError` RESULT (`MCP error -32602: Input validation
+  error: … at <field>`), not a rejected request; and bad input that slips past
+  the schema also ends `isError` (our own `bad_ref`), so "it errored and made 0
+  port calls" cannot tell the two apart — the first test version passed with
+  zod removed → assert the `Input validation error` text and `at <field>`
+  (`expectSchemaRefusal` in test/mcp-server.test.ts), and never put an `expect`
+  inside the `try` that is meant to catch the transport rejection.
+
 - 2026-10-02 — `@modelcontextprotocol/sdk` 1.31.0 `McpServer.registerTool`
   itself advertises `capabilities.tools.listChanged: true` on `initialize` and
   adds `execution: {taskSupport: 'forbidden'}` to every tool in `tools/list`,

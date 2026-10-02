@@ -16,7 +16,9 @@ export type DevDigestErrorKind =
   | 'pr_not_found'
   | 'agent_unknown'
   | 'agent_ambiguous'
-  | 'bad_ref';
+  | 'bad_ref'
+  | 'no_review'
+  | 'run_not_found';
 
 /** What a 404/timeout was about; picks the hint text. */
 export type ErrorResource = 'agent' | 'pr' | 'repo' | 'pr_lookup' | 'other';
@@ -34,7 +36,7 @@ export interface DevDigestErrorInit {
   detail?: string;
   /** The user's input that could not be resolved (repo, agent name, PR number). */
   subject?: string;
-  /** Known repo names, or ambiguous agent ids. */
+  /** Known repo names, ambiguous agent ids, or the PR label (candidates[0]) for no_review / run_not_found. */
   candidates?: string[];
 }
 

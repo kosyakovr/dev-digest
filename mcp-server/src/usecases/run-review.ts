@@ -84,10 +84,8 @@ export async function runAgentOnPr(
     const started = await api.startReview(pr.prId, agent.id, calls(TIMEOUT_START_MS));
     const target = started.runs[0];
     if (!target) {
-      throw new DevDigestError('bad_response', {
-        operation: 'start the review',
-        route: 'POST /pulls/:id/review',
-      });
+      // Unreachable in practice: the port schema requires at least one run.
+      throw new DevDigestError('bad_response', { operation: 'start the review' });
     }
     runId = target.run_id;
   }

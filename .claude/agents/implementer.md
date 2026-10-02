@@ -135,7 +135,7 @@ a ledger keyed per package by the sources its checks read (`.git/devdigest/check
 | server | `pnpm typecheck` · `pnpm exec vitest run --exclude '**/*.it.test.ts'` · the `.it.test` suite, isolated from real keys (rule 7; SKIPPED without Docker) |
 | client | `pnpm typecheck` · `pnpm test` |
 
-It covers all three packages — server compiles against reviewer-core source, so
+It covers all four packages — server compiles against reviewer-core source, so
 a reviewer-core change needs the server checks anyway. While iterating on one
 package, `scripts/checks.sh --force --pkg <pkg> --no-it` is fine; the final run
 before your report is the full `scripts/checks.sh --force`. Paste its summary

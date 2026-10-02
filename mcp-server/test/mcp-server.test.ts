@@ -93,15 +93,35 @@ async function call(client: Client, name: string, args: Record<string, unknown>)
   return (await client.callTool({ name, arguments: args })) as ToolResult;
 }
 
-/** The SDK reports bad arguments either as a rejected request or as an `isError` result. */
-async function callExpectingError(client: Client, name: string, args: Record<string, unknown>): Promise<string> {
+type Outcome = { rejected: true; text: string } | { rejected: false; isError: boolean | undefined; text: string };
+
+/** Only the transport rejection is caught here; a successful call is reported as such, never as an "error". */
+async function callOutcome(client: Client, name: string, args: Record<string, unknown>): Promise<Outcome> {
+  let r: ToolResult;
   try {
-    const r = await call(client, name, args);
-    expect(r.isError).toBe(true);
-    return r.content.map((c) => c.text).join('\n');
+    r = await call(client, name, args);
   } catch (e) {
-    return (e as Error).message;
+    return { rejected: true, text: (e as Error).message };
   }
+  return { rejected: false, isError: r.isError, text: r.content.map((c) => c.text).join('\n') };
+}
+
+/**
+ * Bad arguments must be refused by the tool's input schema: the SDK answers either with a
+ * rejected request or with an `isError` result. The text must NOT be the use case's own
+ * `bad_ref` hint, which would mean the schema let the value through.
+ */
+async function expectSchemaRefusal(
+  client: Client,
+  name: string,
+  args: Record<string, unknown>,
+  field: string,
+): Promise<void> {
+  const o = await callOutcome(client, name, args);
+  expect(o.rejected || o.isError === true, `${name} ${JSON.stringify(args).slice(0, 60)} was accepted: ${o.text}`).toBe(true);
+  expect(o.text).not.toContain('owner/repo#123');
+  expect(o.text).toMatch(/input validation error/i);
+  expect(o.text).toContain(`at ${field}`);
 }
 
 const textOf = (r: ToolResult): string => {
@@ -214,21 +234,21 @@ describe('get_blast_radius', () => {
 describe('input validation', () => {
   it('run_agent_on_pr with pr: 123 is an error and makes no port call', async () => {
     const { client, api } = await connect(seededApi());
-    await callExpectingError(client, 'run_agent_on_pr', { pr: 123, agent: 'Security Reviewer' });
+    await expectSchemaRefusal(client, 'run_agent_on_pr', { pr: 123, agent: 'Security Reviewer' }, 'pr');
     expect(api.calls).toHaveLength(0);
   });
 
   it('rejects a pr longer than 300 chars and a missing agent before any port call', async () => {
     const { client, api } = await connect(seededApi());
-    await callExpectingError(client, 'get_findings', { pr: 'a'.repeat(301) });
-    await callExpectingError(client, 'run_agent_on_pr', { pr: 'acme/payments-api#482' });
+    await expectSchemaRefusal(client, 'get_findings', { pr: 'a'.repeat(301) }, 'pr');
+    await expectSchemaRefusal(client, 'run_agent_on_pr', { pr: 'acme/payments-api#482' }, 'agent');
     expect(api.calls).toHaveLength(0);
   });
 
   it('rejects a run_id that is not a uuid and a limit above 100', async () => {
     const { client, api } = await connect(seededApi());
-    await callExpectingError(client, 'get_findings', { pr: 'acme/payments-api#482', run_id: 'nope' });
-    await callExpectingError(client, 'get_findings', { pr: 'acme/payments-api#482', limit: 101 });
+    await expectSchemaRefusal(client, 'get_findings', { pr: 'acme/payments-api#482', run_id: 'nope' }, 'run_id');
+    await expectSchemaRefusal(client, 'get_findings', { pr: 'acme/payments-api#482', limit: 101 }, 'limit');
     expect(api.calls).toHaveLength(0);
   });
 });

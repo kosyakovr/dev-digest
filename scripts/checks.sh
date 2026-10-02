@@ -32,12 +32,13 @@
 #
 # Bash 3.2 compatible. Never installs anything: missing node_modules is a FAIL with a hint.
 #
-# Expected on this repo (2026-10-01): first `checks.sh --no-it` runs 6 checks and prints
-# "ran" for each; the same command again prints "cached" for all 6 (the ledger keys each package's sources,
+# Expected on this repo (2026-10-01): first `checks.sh --no-it` runs 8 checks (4 packages) and prints
+# "ran" for each; the same command again prints "cached" for all 8 (the ledger keys each package's sources,
 # so the checks must not leave untracked, non-ignored files behind). Measured results:
 #   reviewer-core  typecheck PASS, unit "Tests 23 passed (23)"
 #   server         typecheck PASS, unit "Tests 147 passed (147)", it "Tests 64 passed (64)" (Docker up)
 #   client         typecheck PASS, unit "Tests 165 passed (165)"
+#   mcp-server     typecheck PASS, unit "Tests 153 passed (153)"
 #   --no-it prints `server/it  SKIPPED  ran  --no-it`; Docker down prints SKIPPED with a reason.
 
 set -u

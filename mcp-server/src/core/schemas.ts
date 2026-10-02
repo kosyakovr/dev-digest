@@ -1,7 +1,7 @@
 /**
  * Ring ①: tolerant response schemas for the DevDigest HTTP API.
- * Only the fields this package reads are declared, and every object is
- * `.passthrough()` so additive API changes do not break us. Types are `z.infer`
+ * Only the fields this package reads are declared; unknown fields are
+ * stripped (tolerant reader), so additive API changes do not break us. Types are `z.infer`
  * of these schemas. Imports `zod` only: no HTTP, no MCP SDK, no env here.
  * `severity`/`category` are plain strings because the DB columns are free text.
  */
@@ -11,8 +11,7 @@ export const Repo = z
   .object({
     id: z.string(),
     full_name: z.string(),
-  })
-  .passthrough();
+  });
 export type Repo = z.infer<typeof Repo>;
 
 export const Pull = z
@@ -20,8 +19,7 @@ export const Pull = z
     id: z.string(),
     number: z.number().int(),
     title: z.string().nullish(),
-  })
-  .passthrough();
+  });
 export type Pull = z.infer<typeof Pull>;
 
 export const Agent = z
@@ -36,8 +34,7 @@ export const Agent = z
     strategy: z.string().nullish(),
     ci_fail_on: z.string().nullish(),
     repo_intel: z.boolean().nullish(),
-  })
-  .passthrough();
+  });
 export type Agent = z.infer<typeof Agent>;
 
 export const RunTarget = z
@@ -45,17 +42,15 @@ export const RunTarget = z
     run_id: z.string(),
     agent_id: z.string().nullish(),
     agent_name: z.string().nullish(),
-  })
-  .passthrough();
+  });
 export type RunTarget = z.infer<typeof RunTarget>;
 
 /** Response of `POST /pulls/:id/review` (the run continues in the background). */
 export const StartReviewResult = z
   .object({
     pr_id: z.string(),
-    runs: z.array(RunTarget),
-  })
-  .passthrough();
+    runs: z.array(RunTarget).min(1),
+  });
 export type StartReviewResult = z.infer<typeof StartReviewResult>;
 
 /** A run that is `running` right now (`GET /pulls/:id/runs/active`). */
@@ -65,8 +60,7 @@ export const ActiveRun = z
     agent_id: z.string().nullish(),
     agent_name: z.string().nullish(),
     ran_at: z.string().nullish(),
-  })
-  .passthrough();
+  });
 export type ActiveRun = z.infer<typeof ActiveRun>;
 
 export const RunEvent = z
@@ -75,8 +69,7 @@ export const RunEvent = z
     seq: z.number().int(),
     kind: z.string(),
     msg: z.string(),
-  })
-  .passthrough();
+  });
 export type RunEvent = z.infer<typeof RunEvent>;
 
 export const RunSummary = z
@@ -90,8 +83,7 @@ export const RunSummary = z
     cost_usd: z.number().nullish(),
     findings_count: z.number().nullish(),
     score: z.number().nullish(),
-  })
-  .passthrough();
+  });
 export type RunSummary = z.infer<typeof RunSummary>;
 
 export const Finding = z
@@ -107,8 +99,7 @@ export const Finding = z
     suggestion: z.string().nullish(),
     confidence: z.number().nullish(),
     dismissed_at: z.string().nullish(),
-  })
-  .passthrough();
+  });
 export type Finding = z.infer<typeof Finding>;
 
 export const Review = z
@@ -123,8 +114,7 @@ export const Review = z
     score: z.number().nullish(),
     created_at: z.string().nullish(),
     findings: z.array(Finding),
-  })
-  .passthrough();
+  });
 export type Review = z.infer<typeof Review>;
 
 export const Convention = z
@@ -138,8 +128,7 @@ export const Convention = z
     evidence_snippet: z.string().nullish(),
     confidence: z.number().nullish(),
     status: z.string(),
-  })
-  .passthrough();
+  });
 export type Convention = z.infer<typeof Convention>;
 
 export const ApiErrorBody = z
@@ -148,10 +137,8 @@ export const ApiErrorBody = z
       .object({
         code: z.string().nullish(),
         message: z.string(),
-      })
-      .passthrough(),
-  })
-  .passthrough();
+      }),
+  });
 export type ApiErrorBody = z.infer<typeof ApiErrorBody>;
 
 export const Repos = z.array(Repo);

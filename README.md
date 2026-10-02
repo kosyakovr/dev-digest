@@ -142,7 +142,7 @@ cd ../client && pnpm install && pnpm dev               # web on :3000
 `run_agent_on_pr`, `get_findings`, `get_conventions`, `get_blast_radius` (not
 implemented yet)). To use it: start the API (`./scripts/dev.sh`), run
 `cd mcp-server && pnpm install --frozen-lockfile`, then approve `devdigest` in
-`/mcp` (the root `.mcp.json` registers it). Details: [`mcp-server/README.md`](mcp-server/README.md).
+`/mcp` (the root `.mcp.json` registers it). Needs Node >= 22.18 for the MCP server. Details: [`mcp-server/README.md`](mcp-server/README.md).
 
 ## Testing & CI
 

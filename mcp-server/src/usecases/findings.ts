@@ -43,9 +43,9 @@ export async function getFindings(
     const run = runs.find((r) => r.run_id === input.run_id);
     const review = reviews.find((r) => r.run_id === input.run_id);
     if (!run && !review) {
-      throw new DevDigestError('not_found', {
-        resource: 'pr',
-        serverMessage: 'No such run on this pull request.',
+      throw new DevDigestError('run_not_found', {
+        subject: input.run_id,
+        candidates: [pr.label],
       });
     }
     const status = review ? 'done' : normalizeStatus(run?.status);
@@ -70,11 +70,9 @@ export async function getFindings(
       (!wanted || r.agent_name?.toLowerCase() === wanted || r.agent_id?.toLowerCase() === wanted),
   );
   if (!review) {
-    throw new DevDigestError('not_found', {
-      resource: 'pr',
-      serverMessage: wanted
-        ? 'No finished review by that agent on this pull request yet. Run run_agent_on_pr first.'
-        : 'No finished review on this pull request yet. Run run_agent_on_pr first.',
+    throw new DevDigestError('no_review', {
+      ...(wanted ? { subject: input.agent?.trim() } : {}),
+      candidates: [pr.label],
     });
   }
   const run = review.run_id ? runs.find((r) => r.run_id === review.run_id) : undefined;

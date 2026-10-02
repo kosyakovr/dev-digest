@@ -103,7 +103,9 @@ Per tool:
 - **`get_blast_radius`** returns `isError: true` with `get_blast_radius is not implemented yet (planned with L04 Blast Radius). Use get_findings for review results.`
 
 ### Errors
-Every error is `isError: true` with one or two actionable sentences; no stack trace, no raw body. The HTTP adapter maps transport to `DevDigestError` kinds (`unreachable`, `timeout`, `not_found`, `rejected`, `rate_limited`, `server`, `bad_response`) by HTTP **status** (a 429 arrives as `code:'internal_error'`); resolution errors are `repo_not_found`, `pr_not_found`, `agent_unknown`, `agent_ambiguous`, `bad_ref`. `renderError` turns a kind into text:
+Response schemas (`core/schemas.ts`) declare only the fields read; unknown fields are stripped (tolerant reader). `StartReviewResult.runs` requires at least one entry, so an empty list is a `bad_response` raised by the HTTP adapter with its own route.
+
+Every error is `isError: true` with one or two actionable sentences; no stack trace, no raw body. The HTTP adapter maps transport to `DevDigestError` kinds (`unreachable`, `timeout`, `not_found`, `rejected`, `rate_limited`, `server`, `bad_response`) by HTTP **status** (a 429 arrives as `code:'internal_error'`); resolution errors are `repo_not_found`, `pr_not_found`, `agent_unknown`, `agent_ambiguous`, `bad_ref`; `get_findings` adds `no_review` and `run_not_found`. `renderError` turns a kind into text:
 
 | Cause | Text |
 |---|---|
@@ -118,6 +120,8 @@ Every error is `isError: true` with one or two actionable sentences; no stack tr
 | PR not found | `No PR #<N> in <owner/repo> (after GitHub sync). Check the number.` |
 | agent unknown | `Unknown agent "<x>". Call list_agents.` |
 | agent ambiguous | `<k> agents are named "<x>"; pass one id: <ids>.` |
+| no review yet | `No finished review<, by <agent>,> on <pr> yet. Run run_agent_on_pr first.` |
+| unknown `run_id` | `No run <run_id> on <pr>. Call get_findings without run_id for the latest review.` |
 | bad `pr` | `Use owner/repo#123, https://github.com/owner/repo/pull/123, or a DevDigest PR id.` |
 
 ### Environment

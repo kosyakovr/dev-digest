@@ -6,6 +6,7 @@ conventions. It only talks to the running DevDigest API over HTTP: no database, 
 `server/` or `reviewer-core/`.
 
 ## Setup
+0. Node >= 22.18 (it runs TypeScript natively via type stripping; older 22.x fails with an unknown-extension error).
 1. Start the API: `./scripts/dev.sh` (or `cd server && pnpm dev`).
 2. `cd mcp-server && pnpm install --frozen-lockfile`
 3. Claude Code reads the root `.mcp.json`; approve `devdigest` in `/mcp`.

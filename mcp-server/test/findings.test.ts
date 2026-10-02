@@ -28,10 +28,35 @@ function setup() {
 const finds = (text: string) => text.split('\n').filter((l) => /^\[(CRITICAL|WARNING|SUGGESTION)\] /.test(l));
 
 describe('getFindings', () => {
-  it('without any review points at run_agent_on_pr', async () => {
+  it('without any review fails with no_review and points at run_agent_on_pr', async () => {
     const { clock, api } = setup();
     const err = await getFindings({ api, clock }, BASE).catch((e: unknown) => e);
-    expect(renderError(err, { baseUrl: 'http://x' })).toContain('run_agent_on_pr');
+    expect(err).toMatchObject({ kind: 'no_review' });
+    const text = renderError(err, { baseUrl: 'http://x' });
+    expect(text).toBe('No finished review on acme/payments-api#482 yet. Run run_agent_on_pr first.');
+  });
+
+  it('an agent filter that matches no review fails with no_review naming the agent', async () => {
+    const { clock, api } = setup();
+    api.reviews = [review({ findings: [finding()] })];
+    const err = await getFindings({ api, clock }, { ...BASE, agent: 'General Reviewer' }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ kind: 'no_review' });
+    expect(renderError(err, { baseUrl: 'http://x' })).toBe(
+      'No finished review by General Reviewer on acme/payments-api#482 yet. Run run_agent_on_pr first.',
+    );
+  });
+
+  it('a run_id that is neither a run nor a review of the PR fails with run_not_found', async () => {
+    const { clock, api } = setup();
+    api.runsSequence = [[run({ run_id: RUN_ID })]];
+    api.reviews = [review({ run_id: RUN_ID })];
+    const err = await getFindings({ api, clock }, { ...BASE, run_id: OTHER_RUN_ID }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ kind: 'run_not_found' });
+    const text = renderError(err, { baseUrl: 'http://x' });
+    expect(text).toBe(
+      `No run ${OTHER_RUN_ID} on acme/payments-api#482. Call get_findings without run_id for the latest review.`,
+    );
+    expect(text).not.toContain('Check the repo');
   });
 
   it('with a run_id whose run is still running reports status running and a get_findings hint', async () => {
@@ -168,6 +193,7 @@ describe('getFindings', () => {
     const { clock, api } = setup();
     api.reviews = [review({ kind: 'comment', findings: [finding({ title: 'not a review' })] })];
     const err = await getFindings({ api, clock }, BASE).catch((e: unknown) => e);
+    expect(err).toMatchObject({ kind: 'no_review' });
     expect(renderError(err, { baseUrl: 'http://x' })).toContain('run_agent_on_pr');
   });
 
