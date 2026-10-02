@@ -119,6 +119,22 @@ export interface OpenPrPayload {
   body: string;
 }
 
+/** Light PR summary (pulls.get) used by the blast module's prior-PR history. */
+export interface PullSummary {
+  number: number;
+  title: string;
+  author: string;
+  body: string | null;
+  merged_at: string | null;
+}
+
+/** One commit from `commits?path=` (first message line carries the PR number). */
+export interface PathCommit {
+  sha: string;
+  message: string;
+  date: string | null;
+}
+
 export interface GitHubClient {
   listPullRequests(repo: RepoRef): Promise<PrMeta[]>;
   getPullRequest(repo: RepoRef, n: number): Promise<PrDetail>;
@@ -133,6 +149,14 @@ export interface GitHubClient {
   ): Promise<PrReviewComment>;
   openPullRequest(repo: RepoRef, payload: OpenPrPayload): Promise<{ url: string }>;
   getIssue(repo: RepoRef, n: number): Promise<IssueMeta>;
+  /** One `pulls.get` call: title, author, body and merge time of PR `n`. */
+  getPullSummary(repo: RepoRef, n: number): Promise<PullSummary>;
+  /** One page of `repos.listCommits` for `path` on `opts.ref` (newest first). */
+  listCommitsForPath(
+    repo: RepoRef,
+    path: string,
+    opts: { ref: string; perPage: number },
+  ): Promise<PathCommit[]>;
   /** GET /user — for "posting as @user". */
   currentLogin(): Promise<string>;
 }

@@ -149,6 +149,63 @@ describe('HttpDevDigestApi', () => {
     ]);
   });
 
+  it('syncPull GETs /pulls/:id (the PR detail) and resolves without a value', async () => {
+    const { baseUrl, seen } = await serve((_q, res) => json(res, 200, { id: PR_ID, number: 482, title: 't', files: [] }));
+    await expect(api(baseUrl).syncPull(PR_ID, OPTS)).resolves.toBeUndefined();
+    expect(`${seen[0]?.method} ${seen[0]?.url}`).toBe(`GET /pulls/${PR_ID}`);
+  });
+
+  it('getBlast GETs /pulls/:id/blast and parses the radius, keeping depth/through and degraded fields', async () => {
+    const body = {
+      changed_symbols: [{ name: 'A', file: 'src/a.ts', kind: 'function' }],
+      downstream: [
+        {
+          symbol: 'A',
+          callers: [
+            { name: 'h', file: 'src/h.ts', line: 5, depth: 1 },
+            { name: 'route', file: 'src/r.ts', line: 4, depth: 2, through: 'h' },
+          ],
+          endpoints_affected: ['GET /x'],
+          crons_affected: [],
+        },
+      ],
+      summary: 's',
+      degraded: true,
+      reason: 'index_partial',
+      indexed_sha: 'abc',
+    };
+    const { baseUrl, seen } = await serve((_q, res) => json(res, 200, body));
+    const r = await api(baseUrl).getBlast(PR_ID, OPTS);
+    expect(`${seen[0]?.method} ${seen[0]?.url}`).toBe(`GET /pulls/${PR_ID}/blast`);
+    expect(r).toEqual(body);
+  });
+
+  it('getBlast tolerates a payload without the optional fields (older server)', async () => {
+    const { baseUrl } = await serve((_q, res) =>
+      json(res, 200, { changed_symbols: [], downstream: [], summary: 's' }),
+    );
+    const r = await api(baseUrl).getBlast(PR_ID, OPTS);
+    expect(r.downstream).toEqual([]);
+    expect(r.degraded).toBeUndefined();
+  });
+
+  it('getBlast maps a body without `downstream` to bad_response naming the route', async () => {
+    const { baseUrl } = await serve((_q, res) => json(res, 200, { changed_symbols: [], summary: 's' }));
+    const err = await failure(api(baseUrl).getBlast(PR_ID, OPTS));
+    expect(err.kind).toBe('bad_response');
+    expect(err.route).toBe('GET /pulls/:id/blast');
+  });
+
+  it('getBlast maps a 404 to not_found about a PR', async () => {
+    const { baseUrl } = await serve((_q, res) =>
+      json(res, 404, { error: { code: 'not_found', message: 'Pull request not found' } }),
+    );
+    const err = await failure(api(baseUrl).getBlast(PR_ID, OPTS));
+    expect(err.kind).toBe('not_found');
+    expect(err.resource).toBe('pr');
+    expect(err.serverMessage).toBe('Pull request not found');
+  });
+
   it('has no method that could cancel or delete a run', () => {
     const names = Object.getOwnPropertyNames(HttpDevDigestApi.prototype);
     expect(names.filter((n) => /cancel|delete|remove|dismiss|extract/i.test(n))).toEqual([]);

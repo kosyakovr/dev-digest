@@ -131,6 +131,35 @@ export const Convention = z
   });
 export type Convention = z.infer<typeof Convention>;
 
+/** `GET /pulls/:id/blast` — tolerant: the optional fields may be absent or null. */
+export const BlastCaller = z.object({
+  name: z.string(),
+  file: z.string(),
+  line: z.number().int(),
+  depth: z.number().int().nullish(),
+  through: z.string().nullish(),
+});
+export type BlastCaller = z.infer<typeof BlastCaller>;
+
+export const BlastRadius = z.object({
+  changed_symbols: z.array(
+    z.object({ name: z.string(), file: z.string(), kind: z.string() }),
+  ),
+  downstream: z.array(
+    z.object({
+      symbol: z.string(),
+      callers: z.array(BlastCaller),
+      endpoints_affected: z.array(z.string()),
+      crons_affected: z.array(z.string()),
+    }),
+  ),
+  summary: z.string(),
+  degraded: z.boolean().nullish(),
+  reason: z.string().nullish(),
+  indexed_sha: z.string().nullish(),
+});
+export type BlastRadius = z.infer<typeof BlastRadius>;
+
 export const ApiErrorBody = z
   .object({
     error: z

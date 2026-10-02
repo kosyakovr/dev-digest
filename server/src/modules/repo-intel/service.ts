@@ -3,9 +3,9 @@
  *
  * Every method returns a DEGRADED-but-valid result (see types.ts header). The
  * only methods that do real work in T1 are:
- *   - `getBlastRadius`: best-effort port of blast/service.ts logic, mapped
- *     into the `BlastResult` shape (and always tagged `degraded: true,
- *     reason: 'no_data'`, because T1 has no persistent index yet).
+ *   - `getBlastRadius`: reads ONLY the persistent index (symbols, resolved
+ *     references, file_rank, file_facts) and reports degraded/reason from the
+ *     index state — no codeIndex, no clone reads.
  *   - `getIndexState`: queries `repo_index_state` if the table exists (T2+),
  *     otherwise synthesises a degraded row so callers never throw.
  *
@@ -17,9 +17,8 @@
  * The constructor takes ONLY a Container. No astgrep / depgraph / tokenizer
  * deps are imported here — those land later and plug into this same shell.
  */
-import type { CodeSymbol, RepoRef } from '@devdigest/shared';
+import type { RepoRef } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
-import { extractEndpoints } from '../../adapters/codeindex/extract.js';
 import {
   parseImports,
   parseInvocationHeads,
@@ -28,11 +27,12 @@ import {
 } from '../../adapters/astgrep/index.js';
 import { readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
-import { RepoIntelRepository, type FullSymbolRow } from './repository.js';
+import { RepoIntelRepository, type FullSymbolRow, type ResolvedCallerRow } from './repository.js';
 import type {
   BlastCallerRow,
   BlastChangedSymbol,
   BlastResult,
+  DegradedReason,
   FileRankRow,
   IndexResult,
   IndexState,
@@ -209,115 +209,61 @@ export class RepoIntelService implements RepoIntel {
   // -------------------------------------------------------------------------
 
   /**
-   * Best-effort blast over `container.codeIndex` — a faithful port of
-   * blast/service.ts mapped into the facade's `BlastResult` shape, then
-   * tagged `degraded: true` so consumers can branch.
+   * Blast radius from the PERSISTENT index only (symbols / resolved references /
+   * file_rank / file_facts) — never `container.codeIndex`, never the clone.
    *
-   * Why "always degraded" in T1: there's no persistent rank/decl_file yet, so
-   * every caller gets `rank: 0` and HTTP impact is detected by re-reading the
-   * clone (not the index). T2 promotes this path to the persistent layer.
+   * `degraded`/`reason` follow the index state: flag off → `flag_off`; no
+   * `repo_index_state` row → `no_data`; failed/degraded index → its reason with
+   * empty arrays; `partial` → data + `index_partial`; `full` → not degraded.
+   * Callers are PRECISE (references whose `decl_file` resolved), capped at
+   * `MAX_CALLERS_PER_SYMBOL` per changed symbol; hops 2..BFS_DEPTH add callers of
+   * callers, tagged `depth` + `through`. Never throws.
    */
   async getBlastRadius(repoId: string, changedFiles: string[]): Promise<BlastResult> {
-    // T3: serve from the persistent index when it's built. Falls through to the
-    // ripgrep best-effort below when the flag is off / index is absent.
-    if (this.container.config.repoIntelEnabled && changedFiles.length > 0) {
-      const persistent = await this.tryPersistentBlast(repoId, changedFiles);
-      if (persistent) return persistent;
-    }
-
-    const empty: BlastResult = {
+    const emptyResult = (
+      reason: DegradedReason,
+      indexedSha?: string,
+    ): BlastResult => ({
       changedSymbols: [],
       callers: [],
       impactedEndpoints: [],
       degraded: true,
-      reason: 'no_data',
-    };
+      reason,
+      source: 'none',
+      ...(indexedSha ? { indexedSha } : {}),
+    });
 
-    const repo = await this.repo.getRepoBasics(repoId);
-    if (!repo || !repo.clonePath || changedFiles.length === 0) return empty;
-
-    const ref: RepoRef = { owner: repo.owner, name: repo.name };
-    const changedSet = new Set(changedFiles);
-
-    let allSymbols: CodeSymbol[];
+    if (!this.container.config.repoIntelEnabled) return emptyResult('flag_off');
     try {
-      allSymbols = await this.container.codeIndex.symbols(ref);
+      const state = await this.repo.tryGetIndexState(repoId);
+      if (!state) return emptyResult('no_data');
+      const indexedSha = state.lastIndexedSha || undefined;
+      if (state.status !== 'full' && state.status !== 'partial') {
+        return emptyResult(state.degradedReason ?? 'index_failed', indexedSha);
+      }
+      const partial = state.status === 'partial';
+      const result = await this.persistentBlast(repoId, changedFiles);
+      return {
+        ...result,
+        degraded: partial,
+        ...(partial ? { reason: 'index_partial' as const } : {}),
+        source: 'index',
+        ...(indexedSha ? { indexedSha } : {}),
+      };
     } catch {
-      return empty;
+      return emptyResult('no_data');
     }
-
-    // changed symbols = declared in any changed file (dedup by name+file).
-    const changedSymbols: BlastChangedSymbol[] = [];
-    const seen = new Set<string>();
-    for (const s of allSymbols) {
-      if (!changedSet.has(s.path)) continue;
-      const key = `${s.name}:${s.path}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      changedSymbols.push({ file: s.path, name: s.name, kind: s.kind });
-    }
-
-    const callerRows: BlastCallerRow[] = [];
-    const endpoints = new Set<string>();
-    const callerSeen = new Set<string>();
-
-    for (const sym of changedSymbols) {
-      let refs;
-      try {
-        refs = await this.container.codeIndex.references(ref, sym.name);
-      } catch {
-        continue;
-      }
-      const callerFiles = new Set<string>();
-      for (const r of refs) {
-        if (r.fromPath === sym.file) continue; // skip the decl's own file
-        const callerName = enclosingSymbolName(allSymbols, r.fromPath, r.line);
-        const key = `${r.fromPath}|${callerName}|${sym.name}`;
-        if (callerSeen.has(key)) continue;
-        callerSeen.add(key);
-        callerRows.push({
-          file: r.fromPath,
-          symbol: callerName,
-          viaSymbol: sym.name,
-          line: r.line,
-          rank: 0, // ripgrep/degraded path has no persistent rank
-        });
-        callerFiles.add(r.fromPath);
-      }
-
-      // Detect HTTP routes reachable from any caller file (best-effort, just
-      // like the legacy blast service).
-      for (const file of callerFiles) {
-        const content = await readClone(repo.clonePath, file);
-        if (!content) continue;
-        for (const e of extractEndpoints(content)) endpoints.add(e);
-      }
-    }
-
-    return {
-      changedSymbols,
-      callers: callerRows,
-      impactedEndpoints: [...endpoints],
-      degraded: true,
-      reason: 'no_data',
-    };
   }
 
-  /**
-   * Persistent-index blast (T3): reads symbols / resolved references / file_rank
-   * / file_facts straight from Postgres — NO clone parsing on the hot path.
-   * Returns `null` when the index isn't usable (caller falls back to ripgrep).
-   *
-   * Callers are PRECISE: only references whose `decl_file` resolved to a changed
-   * file count. That favours precision over recall — an ambiguous
-   * (NULL decl_file) reference is not asserted as a caller.
-   */
-  private async tryPersistentBlast(
-    repoId: string,
-    changedFiles: string[],
-  ): Promise<BlastResult | null> {
-    const state = await this.repo.tryGetIndexState(repoId);
-    if (!state || (state.status !== 'full' && state.status !== 'partial')) return null;
+  /** Reads symbols / callers (hops 1..BFS_DEPTH) / facts for a usable index. */
+  private async persistentBlast(repoId: string, changedFiles: string[]): Promise<BlastResult> {
+    const empty: BlastResult = {
+      changedSymbols: [],
+      callers: [],
+      impactedEndpoints: [],
+      source: 'index',
+    };
+    if (changedFiles.length === 0) return empty;
 
     // Changed symbols = declared in a changed file. Skip the qualified
     // `Class.method` dual-emit (the bare form already covers the name).
@@ -334,45 +280,103 @@ export class RepoIntelService implements RepoIntel {
       }
       nameSet.add(s.name);
     }
-    if (nameSet.size === 0) {
-      return { changedSymbols, callers: [], impactedEndpoints: [], degraded: false };
-    }
+    if (nameSet.size === 0) return { ...empty, changedSymbols };
 
-    // Resolved cross-file callers.
-    const callerRows = await this.repo.getResolvedCallers(repoId, changedFiles, [...nameSet]);
-    const callerFiles = [...new Set(callerRows.map((c) => c.fromPath))];
-
-    // Enclosing caller symbol from the callers' persistent symbol rows.
-    const callerSymRows = await this.repo.getSymbolRows(repoId, callerFiles);
+    // Symbol rows of every caller file seen so far (enclosing-symbol lookup).
     const symsByFile = new Map<string, FullSymbolRow[]>();
-    for (const s of callerSymRows) {
-      const arr = symsByFile.get(s.path);
-      if (arr) arr.push(s);
-      else symsByFile.set(s.path, [s]);
-    }
+    const loadSymbols = async (files: string[]): Promise<void> => {
+      const missing = [...new Set(files)].filter((f) => !symsByFile.has(f));
+      if (missing.length === 0) return;
+      for (const f of missing) symsByFile.set(f, []);
+      for (const s of await this.repo.getSymbolRows(repoId, missing)) symsByFile.get(s.path)?.push(s);
+    };
+    const enclosing = (file: string, line: number): { name: string; found: boolean } => {
+      const hit = enclosingFromRows(symsByFile.get(file) ?? [], line);
+      return hit
+        ? { name: hit, found: true }
+        : { name: file.split('/').pop() ?? file, found: false };
+    };
+    const byRank = (a: ResolvedCallerRow, b: ResolvedCallerRow): number =>
+      b.rank - a.rank || a.fromPath.localeCompare(b.fromPath) || a.line - b.line;
 
-    const callers: BlastCallerRow[] = [];
-    const seenCaller = new Set<string>();
-    for (const c of callerRows) {
-      const enclosing =
-        enclosingFromRows(symsByFile.get(c.fromPath) ?? [], c.line) ??
-        c.fromPath.split('/').pop() ??
-        c.fromPath;
-      const key = `${c.fromPath}|${enclosing}|${c.toSymbol}`;
-      if (seenCaller.has(key)) continue;
-      seenCaller.add(key);
-      callers.push({
+    // Hop 1 — resolved cross-file callers of the changed symbols.
+    const hop1Rows = (
+      await this.repo.getResolvedCallers(repoId, changedFiles, [...nameSet])
+    ).sort(byRank);
+    await loadSymbols(hop1Rows.map((c) => c.fromPath));
+
+    interface Found extends BlastCallerRow {
+      located: boolean;
+    }
+    const all: Found[] = [];
+    const seen = new Set<string>(); // viaSymbol|file|symbol across all depths
+    const perVia = new Map<string, number>();
+    for (const c of hop1Rows) {
+      const enc = enclosing(c.fromPath, c.line);
+      const key = `${c.toSymbol}|${c.fromPath}|${enc.name}`;
+      if (seen.has(key)) continue;
+      if ((perVia.get(c.toSymbol) ?? 0) >= MAX_CALLERS_PER_SYMBOL) continue;
+      seen.add(key);
+      perVia.set(c.toSymbol, (perVia.get(c.toSymbol) ?? 0) + 1);
+      all.push({
         file: c.fromPath,
-        symbol: enclosing,
+        symbol: enc.name,
         viaSymbol: c.toSymbol,
         line: c.line,
         rank: c.rank,
+        depth: 1,
+        through: null,
+        located: enc.found,
       });
     }
-    callers.sort((a, b) => b.rank - a.rank);
 
-    // Precomputed facts per caller file (endpoints + crons), so consumers can
-    // attribute them to the changed symbol whose callers live in that file.
+    // Hops 2..BFS_DEPTH — callers of the previous hop's callers.
+    for (let d = 2; d <= BFS_DEPTH; d++) {
+      const frontier = all.filter((c) => c.depth === d - 1 && c.located && !c.symbol.includes('.'));
+      if (frontier.length === 0) break;
+      const rows = await this.repo.getResolvedCallers(
+        repoId,
+        [...new Set(frontier.map((f) => f.file))],
+        [...new Set(frontier.map((f) => f.symbol))],
+      );
+      rows.sort(byRank);
+      await loadSymbols(rows.map((r) => r.fromPath));
+      const perPair = new Map<string, number>();
+      for (const row of rows) {
+        const enc = enclosing(row.fromPath, row.line);
+        for (const entry of frontier) {
+          if (row.declFile !== entry.file || row.toSymbol !== entry.symbol) continue;
+          if (row.fromPath === entry.file && enc.name === entry.symbol) continue;
+          const key = `${entry.viaSymbol}|${row.fromPath}|${enc.name}`;
+          if (seen.has(key)) continue;
+          if ((perPair.get(entry.viaSymbol) ?? 0) >= MAX_CALLERS_PER_SYMBOL) continue;
+          seen.add(key);
+          perPair.set(entry.viaSymbol, (perPair.get(entry.viaSymbol) ?? 0) + 1);
+          all.push({
+            file: row.fromPath,
+            symbol: enc.name,
+            viaSymbol: entry.viaSymbol,
+            line: row.line,
+            rank: row.rank,
+            depth: d,
+            through: entry.symbol,
+            located: enc.found,
+          });
+        }
+      }
+    }
+
+    all.sort(
+      (a, b) =>
+        a.depth - b.depth ||
+        b.rank - a.rank ||
+        a.file.localeCompare(b.file) ||
+        a.line - b.line,
+    );
+    const callers: BlastCallerRow[] = all.map(({ located: _located, ...row }) => row);
+
+    // Precomputed facts per caller file (endpoints + crons), all hops.
+    const callerFiles = [...new Set(callers.map((c) => c.file))];
     const facts = await this.repo.getFileFacts(repoId, callerFiles);
     const endpoints = new Set<string>();
     const factsByFile: Record<string, { endpoints: string[]; crons: string[] }> = {};
@@ -383,10 +387,10 @@ export class RepoIntelService implements RepoIntel {
 
     return {
       changedSymbols,
-      callers: callers.slice(0, MAX_CALLERS_PER_SYMBOL),
+      callers,
       impactedEndpoints: [...endpoints],
       factsByFile,
-      degraded: false,
+      source: 'index',
     };
   }
 
@@ -738,25 +742,6 @@ function enclosingFromRows(rows: FullSymbolRow[], line: number): string | null {
     .filter((s) => !s.name.includes('.') && (s.line ?? 0) <= line)
     .sort((a, b) => (b.line ?? 0) - (a.line ?? 0))[0];
   return hit?.name ?? null;
-}
-
-// ---------------------------------------------------------------------------
-// helpers — local to T1, replaced when blast/onboarding migrate to the facade.
-// ---------------------------------------------------------------------------
-
-/**
- * Best-effort: name the enclosing top-level symbol of a reference line. Mirrors
- * blast/helpers.ts callerName so we get the same caller labels.
- */
-function enclosingSymbolName(
-  allSymbols: CodeSymbol[],
-  fromPath: string,
-  line: number,
-): string {
-  const inFile = allSymbols
-    .filter((s) => s.path === fromPath && s.line <= line && !s.name.includes('.'))
-    .sort((a, b) => b.line - a.line);
-  return inFile[0]?.name ?? fromPath.split('/').pop() ?? fromPath;
 }
 
 async function readClone(clonePath: string, file: string): Promise<string | null> {

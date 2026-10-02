@@ -35,6 +35,23 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## What Doesn't Work
 
+- 2026-10-02 — Blast radius is honestly EMPTY on an Angular/DI frontend, and it
+  looks like a bug: on `kosyakovr/ai-agentic-sandbox-1` the repo-intel index
+  holds no symbol for `export class IssuesService extends BaseApiService`
+  (`@Injectable`), records no reference for TYPE usages (only invocations), and
+  resolves `references.decl_file` for 118 of 4656 refs (direct named function
+  imports only); `file_facts` is empty because endpoints are server routes → to
+  demo or accept-test blast, use a backend PR that changes an EXISTING exported
+  function/class (dev-digest PR #1: 53 callers, 10 endpoints), not a types or
+  new-package PR (new files are not in the default-branch index at all).
+  (ref: server/src/modules/repo-intel/service.ts getBlastRadius)
+
+- 2026-10-02 — The clone moves past the index: `kosyakovr/dev-digest`'s clone was
+  at `c6af1e4` while `repo_index_state.last_indexed_sha` was `8c283a0`, so reading
+  a caller's `file:line` from the clone showed the wrong lines (and the shallow
+  clone lacks `8c283a0`) → check index rows with `git show <last_indexed_sha>:<file>`
+  in a full checkout; this is also why blast links use `indexed_sha`, not head_sha.
+
 - 2026-09-22 — A foreign key proves EXISTENCE, not tenancy: `agent_skills.
   skill_id` references `skills.id` with no workspace predicate, so
   `AgentsRepository.setSkills` happily linked another workspace's skill and its
@@ -61,6 +78,12 @@ Non-obvious findings a future session needs. **Read this before working here.**
 ## Codebase Patterns
 
 ## Tool & Library Notes
+
+- 2026-10-02 — A route-level `config.rateLimit` cannot be asserted under the
+  default test config: `@fastify/rate-limit` is registered only when
+  `NODE_ENV !== 'test'` (`src/app.ts:129`), so the 21st call still gets 200 →
+  build that one app with `NODE_ENV: 'development'`, `LOG_LEVEL: 'silent'`.
+  (ref: server/test/pr-history.it.test.ts, rate-limit case)
 
 - 2026-10-01 — Spying `process.stdout.write` captures NOTHING from the app's
   real pino logger: pino's stdout destination (sonic-boom) writes via
@@ -134,6 +157,9 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## Session Notes
 
+- 2026-10-02 — L04 Blast radius: `modules/blast/` (`/pulls/:id/blast` mapper +
+  `/history` via GitHub `commits?path=`), repo-intel `getBlastRadius` rewritten
+  to index-only with hop 2 (spec: server/specs/L04-blast-radius.md).
 - 2026-09-23 — L02 conventions: added `modules/conventions/` (code sampling →
   one structured call → a code-only evidence gate), migration 0012 and the
   three-state triage (spec: server/specs/L02-conventions.md).
@@ -146,3 +172,8 @@ Non-obvious findings a future session needs. **Read this before working here.**
   (spec: server/specs/L01-findings-visibility.md).
 
 ## Open Questions
+
+- 2026-10-02 — Why does `test/reviews.it.test.ts` › "a review batch resolves the
+  intent ONCE and every agent prompt carries the same ## Stated intent" fail on a
+  clean `cab50e6` (2/2 runs, 10 s timeout, `expected 0 to be >= 2` at :757)? It
+  predates L04 Blast radius — do not chase it from an unrelated change.

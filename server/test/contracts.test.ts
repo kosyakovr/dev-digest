@@ -108,6 +108,65 @@ describe('AI contracts parse fixtures', () => {
     ).not.toThrow();
   });
 
+  it('BlastRadius accepts the optional degraded / reason / indexed_sha / depth / through fields', () => {
+    const base = {
+      changed_symbols: [{ name: 'A', file: 'a.ts', kind: 'function' }],
+      summary: 's',
+    };
+    const parsed = BlastRadius.parse({
+      ...base,
+      degraded: true,
+      reason: 'index_partial',
+      indexed_sha: 'abc',
+      downstream: [
+        {
+          symbol: 'A',
+          callers: [{ name: 'h', file: 'h.ts', line: 3, depth: 2, through: 'x' }],
+          endpoints_affected: [],
+          crons_affected: [],
+        },
+      ],
+    });
+    expect(parsed.reason).toBe('index_partial');
+    expect(parsed.indexed_sha).toBe('abc');
+    expect(parsed.downstream[0]!.callers[0]).toMatchObject({ depth: 2, through: 'x' });
+  });
+
+  it('BlastRadius rejects an unknown reason and a depth below 1', () => {
+    const base = { changed_symbols: [], downstream: [], summary: 's' };
+    expect(() => BlastRadius.parse({ ...base, reason: 'bogus' })).toThrow();
+    expect(() =>
+      BlastRadius.parse({
+        ...base,
+        downstream: [
+          {
+            symbol: 'A',
+            callers: [{ name: 'h', file: 'h.ts', line: 3, depth: 0 }],
+            endpoints_affected: [],
+            crons_affected: [],
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+
+  it('BlastRadius without the new fields still parses (backward compatible)', () => {
+    const parsed = BlastRadius.parse({ changed_symbols: [], downstream: [], summary: 's' });
+    expect(parsed.degraded).toBeUndefined();
+    expect(parsed.reason).toBeUndefined();
+    expect(parsed.indexed_sha).toBeUndefined();
+  });
+
+  it('PrHistory accepts github_partial / github_unavailable and rejects other reasons', () => {
+    expect(PrHistory.parse({ history: [], degraded: true, reason: 'github_partial' }).reason).toBe(
+      'github_partial',
+    );
+    expect(
+      PrHistory.parse({ history: [], degraded: true, reason: 'github_unavailable' }).reason,
+    ).toBe('github_unavailable');
+    expect(() => PrHistory.parse({ history: [], degraded: true, reason: 'no_clone' })).toThrow();
+  });
+
   it('SmartDiff (data.jsx DIFF)', () => {
     const d = SmartDiff.parse({
       groups: [

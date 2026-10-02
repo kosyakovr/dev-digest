@@ -11,6 +11,8 @@ import type {
   OpenPrPayload,
   CommitFilesPayload,
   IssueMeta,
+  PullSummary,
+  PathCommit,
 } from '@devdigest/shared';
 import { withRetry, withTimeout } from '../../platform/resilience.js';
 
@@ -364,6 +366,46 @@ export class OctokitGitHubClient implements GitHubClient {
       state_reason: res.data.state_reason ?? null,
       is_pull_request: res.data.pull_request != null,
     };
+  }
+
+  async getPullSummary(repo: RepoRef, n: number): Promise<PullSummary> {
+    const res = await withRetry(() =>
+      withTimeout(
+        this.octokit.rest.pulls.get({ owner: repo.owner, repo: repo.name, pull_number: n }),
+        TIMEOUT,
+      ),
+    );
+    return {
+      number: res.data.number,
+      title: res.data.title,
+      author: res.data.user?.login ?? '',
+      body: res.data.body ?? null,
+      merged_at: res.data.merged_at ?? null,
+    };
+  }
+
+  async listCommitsForPath(
+    repo: RepoRef,
+    path: string,
+    opts: { ref: string; perPage: number },
+  ): Promise<PathCommit[]> {
+    const res = await withRetry(() =>
+      withTimeout(
+        this.octokit.rest.repos.listCommits({
+          owner: repo.owner,
+          repo: repo.name,
+          path,
+          sha: opts.ref,
+          per_page: opts.perPage,
+        }),
+        TIMEOUT,
+      ),
+    );
+    return res.data.map((c) => ({
+      sha: c.sha,
+      message: c.commit.message,
+      date: c.commit.committer?.date ?? c.commit.author?.date ?? null,
+    }));
   }
 
   async currentLogin(): Promise<string> {

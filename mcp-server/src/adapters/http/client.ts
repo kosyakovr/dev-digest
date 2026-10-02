@@ -101,6 +101,22 @@ export class HttpDevDigestApi implements DevDigestApi {
     );
   }
 
+  async syncPull(prId: string, o: CallOpts): Promise<void> {
+    await this.get(
+      S.Pull,
+      `/pulls/${encodeURIComponent(prId)}`,
+      this.opts(o, 'open the PR', 'GET /pulls/:id', 'pr'),
+    );
+  }
+
+  getBlast(prId: string, o: CallOpts) {
+    return this.get(
+      S.BlastRadius,
+      `/pulls/${encodeURIComponent(prId)}/blast`,
+      this.opts(o, 'read the blast radius', 'GET /pulls/:id/blast', 'pr'),
+    );
+  }
+
   listConventions(repoId: string, o: CallOpts) {
     return this.get(
       S.Conventions,

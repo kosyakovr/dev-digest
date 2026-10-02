@@ -86,7 +86,7 @@ These are intentionally **not** in the starter — each lesson adds one back:
 | L01 | Run cost badge · severity filter on findings |
 | L02 | Skills in the product · Conventions extractor |
 | L03 | Intent layer · Smart Diff |
-| L04 | `devdigest-mcp` server (built: `mcp-server/`) · Blast Radius (reads `repo-intel`) |
+| L04 | `devdigest-mcp` server (built: `mcp-server/`) · Blast Radius built (reads `repo-intel`) |
 | L05 | Project Context Folder · Onboarding generator · PR Brief card |
 | L06 | Eval pipeline · Secret/Phantom gates · Plan Verifier · Export to CI |
 | L07 | Multi-agent review · Run Trace / Live Log · Persistent memory · per-agent stats |
@@ -139,8 +139,7 @@ cd ../client && pnpm install && pnpm dev               # web on :3000
 ## Use from Claude Code (MCP)
 
 `mcp-server/` is a local stdio MCP server named `devdigest` (tools: `list_agents`,
-`run_agent_on_pr`, `get_findings`, `get_conventions`, `get_blast_radius` (not
-implemented yet)). To use it: start the API (`./scripts/dev.sh`), run
+`run_agent_on_pr`, `get_findings`, `get_conventions`, `get_blast_radius`). To use it: start the API (`./scripts/dev.sh`), run
 `cd mcp-server && pnpm install --frozen-lockfile`, then approve `devdigest` in
 `/mcp` (the root `.mcp.json` registers it). Needs Node >= 22.18 for the MCP server. Details: [`mcp-server/README.md`](mcp-server/README.md).
 
