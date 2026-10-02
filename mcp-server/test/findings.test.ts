@@ -42,7 +42,7 @@ describe('getFindings', () => {
     const err = await getFindings({ api, clock }, { ...BASE, agent: 'General Reviewer' }).catch((e: unknown) => e);
     expect(err).toMatchObject({ kind: 'no_review' });
     expect(renderError(err, { baseUrl: 'http://x' })).toBe(
-      'No finished review by General Reviewer on acme/payments-api#482 yet. Run run_agent_on_pr first.',
+      'No finished review by "General Reviewer" on acme/payments-api#482 yet. Run run_agent_on_pr first.',
     );
   });
 

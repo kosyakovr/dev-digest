@@ -233,7 +233,7 @@ export function renderError(err: unknown, ctx: ErrorContext): string {
     case 'bad_ref':
       return BAD_REF;
     case 'no_review': {
-      const by = err.subject ? ` by ${oneLine(err.subject, 100)}` : '';
+      const by = err.subject ? ` by "${oneLine(err.subject, 100)}"` : '';
       return `No finished review${by} on ${oneLine(err.candidates[0] ?? 'that PR', 100)} yet. Run run_agent_on_pr first.`;
     }
     case 'run_not_found':

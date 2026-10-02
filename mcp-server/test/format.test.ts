@@ -220,7 +220,7 @@ describe('renderError', () => {
       new DevDigestError('no_review', { subject: 'Security Reviewer', candidates: ['acme/payments-api#482'] }),
       ctx,
     );
-    expect(t).toBe('No finished review by Security Reviewer on acme/payments-api#482 yet. Run run_agent_on_pr first.');
+    expect(t).toBe('No finished review by "Security Reviewer" on acme/payments-api#482 yet. Run run_agent_on_pr first.');
     expect(t).not.toContain('Check the repo');
   });
 

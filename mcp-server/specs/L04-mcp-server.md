@@ -120,7 +120,7 @@ Every error is `isError: true` with one or two actionable sentences; no stack tr
 | PR not found | `No PR #<N> in <owner/repo> (after GitHub sync). Check the number.` |
 | agent unknown | `Unknown agent "<x>". Call list_agents.` |
 | agent ambiguous | `<k> agents are named "<x>"; pass one id: <ids>.` |
-| no review yet | `No finished review<, by <agent>,> on <pr> yet. Run run_agent_on_pr first.` |
+| no review yet | `No finished review< by "<agent>"> on <pr> yet. Run run_agent_on_pr first.` |
 | unknown `run_id` | `No run <run_id> on <pr>. Call get_findings without run_id for the latest review.` |
 | bad `pr` | `Use owner/repo#123, https://github.com/owner/repo/pull/123, or a DevDigest PR id.` |
 
