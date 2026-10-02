@@ -121,6 +121,8 @@ run_case deny  "ugrep --filter runs cmds"  "$(bash_ "ugrep --filter='md:env pnpm
 run_case deny  "printf db:gen | /bin/sh"   "$(bash_ "printf 'pnpm db:generate' | /bin/sh")"
 run_case allow "rg -l | xargs wc"          "$(bash_ "rg -l 'db:generate' docs | xargs wc -l")"
 run_case allow "grep || bash"              "$(bash_ "grep -c 'db:generate' docs/x.md || bash scripts/x.sh")"
+run_case deny  "git log --format | sh"     "$(bash_ "git log -1 --format='pnpm db:generate' | sh")"
+run_case deny  "echo > >(sh)"              "$(bash_ "echo 'pnpm db:generate' > >(sh)")"
 run_case deny  "printf db:generate | sh"   "$(bash_ "printf 'pnpm db:generate' | sh")"
 run_case deny  "echo db:generate | xargs"  "$(bash_ "echo 'db:generate' | xargs pnpm")"
 run_case deny  "versioned drizzle-kit"     "$(bash_ 'npx drizzle-kit@0.31.4 generate')"
