@@ -208,10 +208,12 @@ describe("DiffTab", () => {
     {
       name: "smart-diff failed",
       state: () => setSmart({ data: undefined, isError: true }),
+      findingsNote: true,
     },
     {
       name: "a failed refresh with stale data",
       state: () => setSmart({ data: smartResponse(), isError: true }),
+      findingsNote: false,
     },
     {
       name: "smart-diff path set differs from the PR's files",
@@ -221,13 +223,16 @@ describe("DiffTab", () => {
             groups: [{ role: "core", files: [{ path: "a.ts", additions: 3, deletions: 0, finding_lines: [] }] }],
           }),
         }),
+      findingsNote: false,
     },
-  ])("$name: flat list in original order with the notice, no group headers", ({ state }) => {
+  ])("$name: flat list in original order with the notice, no group headers", ({ state, findingsNote }) => {
     state();
     renderTab();
     expect(screen.queryByRole("button", { name: ROLE_RE })).toBeNull();
     for (const p of PATHS) expect(screen.getByText(p)).toBeInTheDocument();
     expect(screen.getByText(UNAVAILABLE)).toBeInTheDocument();
+    // findings come from the smart diff's review_ids: say so only when there is no data at all
+    expect(!!screen.queryByText(FINDINGS_UNAVAILABLE)).toBe(findingsNote);
   });
 
   it("while smart-diff loads: a loading status, no files, no headers, no notice", () => {

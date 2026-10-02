@@ -70,6 +70,11 @@ export function DiffTab({ prId, filesCount, additions, deletions, files, canComm
     !!smart.data && !smart.isError && smart.data.review_ids.length === 0 ? (
       <p style={note}>{t("smartDiff.noReview")}</p>
     ) : null;
+  // Findings are the reviews the smart diff names (review_ids), so without its
+  // data there are none to show in either order — say so rather than render a
+  // silently bare diff.
+  const findingsUnavailable =
+    smart.isError && !smart.data ? <p style={note}>{t("smartDiff.findingsUnavailable")}</p> : null;
   // The flat list in the PR's own order — Original order, and Smart order's fallback.
   const flat = <DiffViewer files={files} commenting={commenting} findings={findingApi} />;
 
@@ -77,11 +82,8 @@ export function DiffTab({ prId, filesCount, additions, deletions, files, canComm
   if (files.length === 0) {
     body = <DiffViewer files={files} commenting={commenting} />;
   } else if (order === "original") {
-    // Findings are the reviews the smart diff names (review_ids), so without its
-    // data there are none to show — say so rather than render a silently bare diff.
     body = (
       <>
-        {smart.isError && !smart.data && <p style={note}>{t("smartDiff.findingsUnavailable")}</p>}
         {noReview}
         {flat}
       </>
@@ -145,6 +147,7 @@ export function DiffTab({ prId, filesCount, additions, deletions, files, canComm
           onOrderChange={setOrder}
         />
       )}
+      {files.length > 0 && findingsUnavailable}
       {body}
     </section>
   );

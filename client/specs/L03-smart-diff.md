@@ -19,8 +19,8 @@ client-specific.
 - **Findings come from the smart diff in both orders:** the cards are the
   findings of the reviews in `review_ids`, so none render until the smart diff
   has loaded. Once it has, they render under their line in either order. When
-  it failed with no data, Original order says findings are unavailable
-  (`smartDiff.findingsUnavailable`); a failed refresh that kept stale data keeps
+  it failed with no data, a muted note under the toolbar says findings are
+  unavailable, in both orders (`smartDiff.findingsUnavailable`); a failed refresh that kept stale data keeps
   showing the findings of those stale `review_ids`.
 - **Smart order (`DiffTab`)** groups files by server-provided role in the
   order core, tests, wiring, docs, boilerplate. `RoleGroup` header is a button
