@@ -23,6 +23,8 @@ import { toJsonSchema, parseWithRepair } from './structured.js';
  */
 
 const NOT_SUPPORTED = 'OpenRouterProvider only implements completeStructured';
+/** Validation issues quoted in the final error — enough to tell which field failed. */
+const MAX_ERROR_DETAIL_CHARS = 500;
 
 export interface OpenRouterProviderOptions {
   /** OpenAI-compatible base URL (default: OpenRouter). */
@@ -64,6 +66,7 @@ export class OpenRouterProvider implements LLMProvider {
     let tokensOut = 0;
     let costFromApi: number | null = null;
     let lastRaw = '';
+    let lastError = '';
 
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
       const res = await this.client.chat.completions.create({
@@ -109,10 +112,23 @@ export class OpenRouterProvider implements LLMProvider {
           attempts: attempt,
         };
       }
+      lastError = parsed.error;
+      // Cut off at max_tokens: a reprompt gets the same budget and is cut off
+      // again. Reasoning models spend that budget on hidden reasoning first.
+      if (choice.finish_reason === 'length') {
+        const reasoning = res.usage?.completion_tokens_details?.reasoning_tokens;
+        throw new Error(
+          `OpenRouter output for ${req.schemaName} was cut off at max_tokens` +
+            `${req.maxTokens ? ` (${req.maxTokens})` : ''}: ${res.usage?.completion_tokens ?? '?'} completion tokens` +
+            `${reasoning ? `, ${reasoning} of them reasoning` : ''} — raise maxTokens`,
+        );
+      }
       messages.push({ role: 'assistant', content: lastRaw });
       messages.push({ role: 'user', content: parsed.repromptMessage });
     }
-    throw new Error(`OpenRouter structured output failed schema validation for ${req.schemaName}`);
+    throw new Error(
+      `OpenRouter structured output failed schema validation for ${req.schemaName} after ${maxRetries + 1} attempts: ${lastError.slice(0, MAX_ERROR_DETAIL_CHARS)}`,
+    );
   }
 
   /**

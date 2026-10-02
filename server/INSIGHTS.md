@@ -110,6 +110,13 @@ Non-obvious findings a future session needs. **Read this before working here.**
   caller reads it) → for a long single-shot call set `timeoutMs` to what the
   call actually needs and pass an explicit `maxRetries`; worst case is
   `timeoutMs × (maxRetries + 1)`. (ref: server/src/modules/conventions/constants.ts:48)
+- 2026-10-02 (correction) — On the `openrouter` provider `req.timeoutMs` is
+  IGNORED: `OpenRouterProvider` sets the OpenAI SDK's timeout once in its
+  constructor (90 s, SDK `maxRetries` 2) and the container passes none, so
+  intent's "20 s per attempt" is really 90 s → do not rely on `timeoutMs` for
+  OpenRouter calls until the provider forwards it per request.
+  (ref: reviewer-core/src/llm/openrouter.ts:54, server/src/platform/container.ts:216)
+- 2026-10-02 (ref for the entry above) — (ref: reviewer-core/src/llm/openrouter.ts:56)
 
 - 2026-09-23 — A second API server on `:3001` exits with `EADDRINUSE` while your
   `curl localhost:3001` keeps returning 200, served by the developer's already

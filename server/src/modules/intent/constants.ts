@@ -44,7 +44,13 @@ export const MAX_SCOPE_ITEM_CHARS = 160;
 // `timeoutMs` is PER ATTEMPT (server/INSIGHTS.md 2026-09-23): worst case is
 // timeoutMs × (maxRetries + 1) = 40 s.
 export const INTENT_TEMPERATURE = 0;
-export const INTENT_MAX_TOKENS = 800;
+/**
+ * Output cap. The default model reasons before answering and its hidden
+ * reasoning counts against this cap: a live probe saw 0–800+ reasoning tokens
+ * per call beside a ~300–400-token answer, so 800 cut half the calls off mid-JSON.
+ * Only generated tokens are billed, so the headroom costs nothing on success.
+ */
+export const INTENT_MAX_TOKENS = 3_000;
 export const INTENT_TIMEOUT_MS = 20_000;
 export const INTENT_MAX_RETRIES = 1;
 

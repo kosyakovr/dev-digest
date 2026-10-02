@@ -46,6 +46,16 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 
 ## What Doesn't Work
 
+- 2026-10-02 — The default model `deepseek/deepseek-v4-flash` REASONS before it
+  answers, and its hidden reasoning (0–900 tokens per call, varying by upstream)
+  counts against `maxTokens`, so a cap sized for the JSON alone (intent had 800)
+  cut half the calls off mid-JSON — reported as "structured output failed schema
+  validation", never as truncation (live probe: 7 of 10 attempts
+  `finish_reason: length`, 3 with ZERO content) → size `maxTokens` for reasoning
+  plus answer (intent now 3_000; only generated tokens are billed); to diagnose,
+  log `finish_reason` and `usage.completion_tokens_details.reasoning_tokens`.
+  (ref: server/src/modules/intent/constants.ts, reviewer-core/src/llm/openrouter.ts)
+
 - 2026-10-02 — `pr_files` is written ONLY by `GET /pulls/:id` (it re-fetches the
   PR from GitHub, `server/src/modules/pulls/routes.ts:314`); PR import/list never
   writes it, so any non-browser reader keyed on it (MCP tool, script, curl)
