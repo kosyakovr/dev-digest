@@ -46,10 +46,18 @@ reviewers take it from there.
    are production code and stay yours: a new adapter gets its mock there.
 6. **Report what happened, not what should have happened.** A failing or
    skipped check is reported as failing or skipped, with the output.
-7. **Never run the server `.it.test` suite outside `scripts/hermetic.sh`.**
-   A developer machine may store real provider keys (`~/.devdigest/secrets.json`);
-   a bare run then makes billed LLM calls and times out
-   (`server/INSIGHTS.md`, 2026-09-24). `scripts/check-all.sh` already does this.
+7. **The server `.it.test` suite runs only through `scripts/checks.sh`** — it
+   isolates the run (fake HOME, key env vars unset). Never a bare
+   `vitest run .it.test` or `pnpm test`-style run of it: a developer machine may
+   store real provider keys (`~/.devdigest/secrets.json`), and a bare run then
+   makes billed LLM calls and times out (`server/INSIGHTS.md`, 2026-09-24).
+   Recipe and reasons: [README.md](README.md) § Running the integration suite
+   without real keys. Without Docker `checks.sh` reports it SKIPPED, which you
+   report as skipped, never as passed.
+8. Batch independent reads, greps and commands into ONE turn as parallel tool calls.
+   Every turn re-reads the whole context from cache, so the number of turns, not
+   file size, drives cost (measured 2026-10-01: 64.9M cache-read tokens vs 1.6M
+   written across the session).
 
 ## Step 0 — Preconditions
 
@@ -116,23 +124,21 @@ file still applies.
 
 ## Step 3 — Verify your own change
 
-Run `scripts/check-all.sh --force` from the repo root. It runs, per package,
-exactly the commands CI runs, and records them in a ledger keyed by the state
-of the working tree so the stages after you do not re-run them on an unchanged
-tree:
+Run **`scripts/checks.sh --force`** from the repo root. It runs, from inside
+each package, exactly the commands CI runs (`.github/workflows/*.yml`) and writes
+a ledger keyed per package by the sources its checks read (`.git/devdigest/checks/<pkg>/<key>/`):
 
-| Package | Commands it runs |
+| Package | Commands |
 |---|---|
 | reviewer-core | `npm run typecheck` · `npm test` |
-| server | `pnpm typecheck` · `pnpm exec vitest run --exclude '**/*.it.test.ts'` · `docker info`, then `scripts/hermetic.sh pnpm exec vitest run .it.test` — without Docker it prints **SKIPPED**, never PASS |
+| server | `pnpm typecheck` · `pnpm exec vitest run --exclude '**/*.it.test.ts'` · the `.it.test` suite, isolated from real keys (rule 7; SKIPPED without Docker) |
 | client | `pnpm typecheck` · `pnpm test` |
 
-It runs all three packages by default — server compiles against
-reviewer-core source, so a reviewer-core change needs the server checks
-anyway. While iterating on one package, `--pkg server --no-it` is fine; the
-final run before your report is the full `--force` one. A failing check prints
-the last 30 lines of its log; the whole log is under
-`.git/devdigest/checks/<tree>/<pkg>-<check>.log`.
+It covers all three packages — server compiles against reviewer-core source, so
+a reviewer-core change needs the server checks anyway. While iterating on one
+package, `scripts/checks.sh --force --pkg <pkg> --no-it` is fine; the final run
+before your report is the full `scripts/checks.sh --force`. Paste its summary
+table into the Verification section; the per-check logs stay in the ledger.
 
 e2e only if the plan asks: `./scripts/e2e.sh` from the repo root; check
 `command -v agent-browser` first — without it the script "passes" 0 flows.
@@ -149,9 +155,11 @@ wrong — fix the code.
 
 Then check the diff against the plan:
 
-- `scripts/change-manifest.sh` — every changed file belongs to a work
-  package (or is listed as a deviation); none is a file that was already
-  modified before you started. Its line ranges go into your report.
+- `scripts/change-set.sh` (one line per file: `STATUS<TAB>path<TAB>ranges`,
+  untracked included) — every changed file belongs to a work package (or is
+  listed as a deviation); none is a file that was already modified before you
+  started. Its line ranges go into your report; do not rebuild them from
+  `git diff`.
 - Every acceptance criterion in the plan: met, not met, or not verifiable
   locally. Report the met ones by ID only; explain the others.
 
@@ -173,7 +181,7 @@ Status: done | partial | blocked
 
 ## Changes by work package
 ### WP1 — <title> — done | partial | skipped | blocked
-- Files: `path` (A | M, lines 12-40, 88), … — ranges from `scripts/change-manifest.sh`
+- Files: `path` (A | M, lines 12-40, 88), … — ranges from `scripts/change-set.sh`
 - Skills applied: <skill> (§… where the plan cited one)
 - Notes: <only what a reviewer cannot see in the code>
 
@@ -181,8 +189,8 @@ Status: done | partial | blocked
 - <what> — <why> (or "none")
 
 ## Verification
-`scripts/check-all.sh --force` · tree `<key from its first line>` · exit <n>
-<its PASS/FAIL/SKIPPED lines, verbatim; failing output trimmed below>
+The `scripts/checks.sh --force` summary table, verbatim (package key included;
+`.it.test` PASS / FAIL / SKIPPED as it printed); failing output trimmed below.
 
 ## Acceptance criteria
 Met: AC-1, AC-2, … · Not met / not verifiable locally:

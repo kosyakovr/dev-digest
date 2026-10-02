@@ -40,26 +40,6 @@ export const s = {
   } satisfies CSSProperties,
   sizeBadgeBorder: (color: string): CSSProperties => ({ border: `1px solid ${color}` }),
   scoreCell: { display: "flex", alignItems: "center" } satisfies CSSProperties,
-  /** Ring + the "partial" marker under it; the score column is only 60px wide. */
-  scoreStack: { display: "flex", flexDirection: "column", alignItems: "center", gap: 2 } satisfies CSSProperties,
-  scorePartial: {
-    fontSize: 10,
-    lineHeight: 1,
-    color: "var(--warn)",
-    cursor: "help",
-  } satisfies CSSProperties,
-  /** Read by assistive tech, never painted (same recipe as ConventionCard's). */
-  srOnly: {
-    position: "absolute",
-    width: 1,
-    height: 1,
-    padding: 0,
-    margin: -1,
-    overflow: "hidden",
-    clip: "rect(0 0 0 0)",
-    whiteSpace: "nowrap",
-    border: 0,
-  } satisfies CSSProperties,
   findingsCell: { display: "flex", alignItems: "center", minWidth: 0 } satisfies CSSProperties,
   costCell: { fontSize: 12, color: "var(--text-secondary)" } satisfies CSSProperties,
   updatedCell: {

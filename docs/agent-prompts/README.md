@@ -27,80 +27,64 @@ receives exactly two messages:
 <INJECTION_GUARD>   // appended verbatim to EVERY agent, every run
 ```
 
-`INJECTION_GUARD` (`prompt.ts:16`) tells the model that everything inside
+`INJECTION_GUARD` (in `reviewer-core/src/prompt.ts`) tells the model that everything inside
 `<untrusted>…</untrusted>` is data, never instructions, and that claims like "test
 fixture / not for production / ignore this" never descope the review. You do not
 need to repeat any of this in your prompt — it is always there.
 
 **User message** = the task and all context, in this order, each untrusted block
-delimiter-wrapped (`prompt.ts:104-122`):
+delimiter-wrapped (`assemblePrompt` in `reviewer-core/src/prompt.ts`):
 
 ```
 <task line, e.g. "Review PR #7 '…'">
 ## PR description        (untrusted, author-controlled, truncated to 4000 chars)
-## PR intent (derived …) (untrusted, derived from PR body/linked issue/spec)
+## Stated intent         (untrusted, derived from author text; omitted when absent)
 ## Skills / rules        (linked skill bodies)
 ## Relevant memory       (curated memory items)
 ## Repo skeleton         (untrusted, repo-derived)
 ## Project context       (untrusted spec chunks)
 ## Callers of changed symbols  (untrusted, repo-derived)
-## Diff to review        (trusted line-number rule + untrusted numbered diff)
+## Diff to review        (untrusted)
 ```
 
 Sections with no content are omitted. Everything repo- or author-derived is wrapped
 in `<untrusted source="…">…</untrusted>` so the model can tell instructions
 (system) from data (user).
 
-Each of these sections (`system_prompt`, `injection_guard`, `task`,
-`pr_description`, `intent`, `skills`, `memory`, `repo_map`, `specs`,
-`callers`, `diff`) is also what `PROMPT_LOG` records: set `PROMPT_LOG=verbose`
-locally (`server/README.md` § Prompt logging) to log a `'prompt: assembled'`
-line per prompt with each section's name, source, role, untrusted flag, char
-count and a 12-hex fingerprint — never the section text itself. Comparing
-fingerprints across runs is the fastest way to spot prompt drift (a section
-that changed shape without a code change).
+### Prompt logging
 
-## Numbered diff (line-number gutter)
+Each agent run and each intent derivation writes one `prompt: assembled` line:
+section names, sources, trust, chars and estimated tokens, provider/model and a
+`correlationId` (spec: `server/specs/L03-prompt-logging.md`). Logs carry lengths and hashes, never section content.
 
-The model never has to count down from a `@@ -a,b +c,d @@` hunk header — it
-miscounts, and grounding then keeps the model's wrong line (context lines are
-part of the hunk too). Before the diff reaches `assemblePrompt`, `run.ts` runs
-it through `numberDiff` (`reviewer-core/src/review/numbered-diff.ts`), which
-prints every line's own new-file line number in a 6-column, right-aligned
-gutter plus one space (`"   446 "`); a line with no new-file number — a
-`diff --git`/`---`/`+++` header, a `@@` header itself, a deleted `-` line, or a
-`\ No newline at end of file` marker — gets a blank gutter (7 spaces) instead.
-The counter restarts at each `@@` header, from that hunk's new-file start. One
-exception: a hunk that only deletes lines has nothing numbered in its body, so
-its `@@` line prints the hunk's new-file start (`     9 @@ -10,2 +9,0 @@`, `0`
-for a deleted file) — the number to cite for that removed code, and the one
-line grounding accepts for such a hunk.
-Example (PR #5, `events-map.component.ts`):
+| Section | Source | Trust |
+|---|---|---|
+| `system` | `agent.system_prompt` | trusted |
+| `injection_guard` | `reviewer-core.guard` | trusted |
+| `task` | `server.task_line` | untrusted |
+| `pr_description` | `pr.body` | untrusted |
+| `intent` | `intent.derived` | untrusted |
+| `skills` / `memory` | `agent.skills` / `memory` | trusted |
+| `repo_map` / `specs` / `callers` | `repo-intel.map` / `specs` / `repo-intel.callers` | untrusted |
+| `diff` | `pr.diff` | untrusted |
 
-```
-@@ -443,6 +443,8 @@ export class EventsMapComponent
-   443      */
-   444      private eventNamesMapping: EventNamesMap | null = null;
-   445 
-   446 +    private gmapApiKey = '…'; // test issue 1
-   447 +
-   448      get eventsSearchControl() {
-```
+`DEVDIGEST_PROMPT_LOG=verbose` (explicit development/test `NODE_ENV` only) adds a per-chunk `prompt: detail` debug line with hashes and a masked system-prompt preview.
 
-`## Diff to review` therefore carries two things: a **trusted** instruction
-(`DIFF_LINE_NUMBER_RULE`, pushed by `assemblePrompt` itself, outside the
-`<untrusted>` wrapper — the model can never be told by diff content to ignore
-it) telling the model to read `start_line`/`end_line` off the printed gutter,
-never the hunk header, and to cite deleted code by the nearest printed number
-in its hunk (the `@@` anchor when the hunk only deletes); followed by the
-**untrusted**, numbered diff. `numberDiff` and `parseUnifiedDiff`'s
-`newLineNumbers` — the exact set citation grounding checks — are both derived
-from one parse (`reviewer-core/src/diff/parse.ts`'s `parseDiff`), so they
-cannot disagree with each other by construction, and a number the model copies
-verbatim always survives grounding. A `+++`/`--- ` line inside a hunk is
-content, not a file header — it is classified as a plain addition/deletion
-like any other `+`/`-` line, only real `--- `/`+++ ` headers (outside a hunk)
-are exempt.
+## Stated intent — context, never a filter
+
+The `## Stated intent` section is the server's derived paraphrase of the PR's
+title, description, ticket and spec (spec: `server/specs/L03-intent-layer.md`).
+It carries a confidence (`high`/`medium`/`low`, computed in code) and a trusted
+caution line after it. Invariants, enforced by the prompt and by the absence of
+any code path that reads the intent after the model call:
+
+1. Scope never filters or lowers findings. `groundFindings` and
+   `countBlockers(findings, agent.ciFailOn)` do not receive the intent.
+2. A CRITICAL outside the stated scope is still CRITICAL and still a blocker.
+3. An author's "out of scope" never excuses reviewing that code.
+4. A scope mismatch on its own is at most a WARNING finding.
+5. "Does not do what it promised" findings only at medium/high confidence; at
+   low confidence the intent is a weak hint and must not be the sole reason for a finding.
 
 ## Skill ordering
 
@@ -180,8 +164,7 @@ numbers and gates from what the model returns:
   findings list. The model's self-reported score is ignored.
 - **Findings are citation-grounded**: a finding whose line range doesn't intersect a
   real diff hunk is dropped (`grounding.ts`). Cite real `file:line` from the diff or
-  the finding disappears — the cited line must be the number printed in the
-  diff's gutter (see § Numbered diff), never a line counted from the `@@` header.
+  the finding disappears.
 - **`verdict` is currently passed through from the model** (`run.ts:208`). That is
   why a wrong verdict reaches the UI unchanged — and why the verdict convention
   above is load-bearing until/unless the verdict is also derived deterministically.

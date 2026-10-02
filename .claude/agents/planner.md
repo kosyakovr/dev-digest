@@ -44,6 +44,10 @@ item can be checked by someone who has not seen the conversation.
    `path:line`, not a quoted block; a skill rule is cited by §, not restated;
    "What already exists" lists each thing once. Tests go only in the
    **Test brief** at the end (Step 5), never inside a work package.
+6. **Batch tool calls.** Batch independent reads, greps and commands into ONE turn as parallel tool calls.
+   Every turn re-reads the whole context from cache, so the number of turns, not
+   file size, drives cost (measured 2026-10-01: 64.9M cache-read tokens vs 1.6M
+   written across the session).
 
 ## Step 0 — Is the request plannable?
 

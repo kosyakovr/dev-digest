@@ -55,6 +55,10 @@ report alone.
 8. **Someone else's homework.** When `git log --all` turns up a reverted
    implementation of this lesson (root `INSIGHTS.md` 2026-09-23), use it as
    evidence and say so in the report.
+9. **Batch tool calls.** Batch independent reads, greps and commands into ONE turn as parallel tool calls.
+   Every turn re-reads the whole context from cache, so the number of turns, not
+   file size, drives cost (measured 2026-10-01: 64.9M cache-read tokens vs 1.6M
+   written across the session).
 
 ## Step 0 — Is there a decision to make?
 

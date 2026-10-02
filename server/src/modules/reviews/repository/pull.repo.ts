@@ -1,7 +1,7 @@
 import { and, asc, eq } from 'drizzle-orm';
 import type { Db } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
-import type { PrCommitRow, PrFileRow, PullRow, RepoRow } from '../../../db/rows.js';
+import type { NewPrIntentRow, PrCommitRow, PrIntentRow, PullRow } from '../../../db/rows.js';
 
 // ---- PR lookup (workspace-scoped) -----------------------------------------
 
@@ -17,19 +17,19 @@ export async function getPull(
   return row;
 }
 
-export async function getRepo(db: Db, repoId: string): Promise<RepoRow | undefined> {
+export async function getRepo(
+  db: Db,
+  repoId: string,
+): Promise<typeof t.repos.$inferSelect | undefined> {
   const [row] = await db.select().from(t.repos).where(eq(t.repos.id, repoId));
   return row;
 }
 
-export async function getPrFiles(db: Db, prId: string): Promise<PrFileRow[]> {
+export async function getPrFiles(
+  db: Db,
+  prId: string,
+): Promise<(typeof t.prFiles.$inferSelect)[]> {
   return db.select().from(t.prFiles).where(eq(t.prFiles.prId, prId));
-}
-
-/** A PR's commits, oldest first — the intent layer (L03) reads commit
- *  subjects as a low-priority signal. */
-export async function getPrCommits(db: Db, prId: string): Promise<PrCommitRow[]> {
-  return db.select().from(t.prCommits).where(eq(t.prCommits.prId, prId)).orderBy(asc(t.prCommits.committedAt));
 }
 
 /**
@@ -41,4 +41,43 @@ export async function markReviewed(db: Db, prId: string, sha: string): Promise<v
     .update(t.pullRequests)
     .set({ lastReviewedSha: sha })
     .where(eq(t.pullRequests.id, prId));
+}
+
+// ---- intent ---------------------------------------------------------------
+
+export async function upsertIntent(db: Db, row: Required<NewPrIntentRow>): Promise<void> {
+  const { prId: _prId, ...set } = row;
+  await db
+    .insert(t.prIntent)
+    .values(row)
+    .onConflictDoUpdate({ target: t.prIntent.prId, set });
+}
+
+/** Workspace-scoped: joins the PR so another workspace's id yields `undefined`. */
+export async function getIntent(
+  db: Db,
+  workspaceId: string,
+  prId: string,
+): Promise<PrIntentRow | undefined> {
+  const [res] = await db
+    .select({ intent: t.prIntent })
+    .from(t.prIntent)
+    .innerJoin(t.pullRequests, eq(t.pullRequests.id, t.prIntent.prId))
+    .where(and(eq(t.prIntent.prId, prId), eq(t.pullRequests.workspaceId, workspaceId)));
+  return res?.intent;
+}
+
+/** Workspace-scoped: joins the PR so another workspace's id yields `[]`. Oldest first. */
+export async function getPrCommits(
+  db: Db,
+  workspaceId: string,
+  prId: string,
+): Promise<PrCommitRow[]> {
+  const rows = await db
+    .select({ commit: t.prCommits })
+    .from(t.prCommits)
+    .innerJoin(t.pullRequests, eq(t.pullRequests.id, t.prCommits.prId))
+    .where(and(eq(t.prCommits.prId, prId), eq(t.pullRequests.workspaceId, workspaceId)))
+    .orderBy(asc(t.prCommits.committedAt), asc(t.prCommits.sha));
+  return rows.map((r) => r.commit);
 }

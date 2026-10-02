@@ -7,15 +7,9 @@ import type {
   UnifiedDiff,
 } from '@devdigest/shared';
 import { Review as ReviewSchema } from '@devdigest/shared';
-import {
-  assemblePrompt,
-  type AssembledPrompt,
-  type PromptIntent,
-  type PromptSection,
-} from '../prompt.js';
-import { groundFindings, groundingSummary } from '../grounding.js';
-import { parseDiff } from '../diff/parse.js';
-import { numberDiff, renderNumberedLines } from './numbered-diff.js';
+import { assemblePrompt, type ReviewIntent } from '../prompt.js';
+import type { PromptSectionMeta } from '../prompt-meta.js';
+import { groundFindings, groundingSummary, type DroppedFinding } from '../grounding.js';
 import { reduceReviews, scoreFromFindings, sliceDiff } from './reduce.js';
 
 /**
@@ -41,48 +35,27 @@ export const DEFAULT_REVIEW_MAX_RETRIES = 2;
 export type ReviewStrategy = 'auto' | 'single-pass' | 'map-reduce';
 export type ReviewMode = 'single-pass' | 'map-reduce';
 
-/**
- * Prompt-assembly metadata for one call (L03 — prompt logging). Text-free by
- * construction: it carries `sections` (from `assemblePrompt`), sizes and
- * scope, never the prompt itself.
- */
-export interface PromptAssembledInfo {
-  scope: 'run' | 'chunk';
-  mode: ReviewMode;
-  model: string;
-  chunk_count: number;
-  /** chunk scope only. */
-  chunk_index?: number;
-  /** chunk scope only. */
-  chunk_label?: string;
-  system_chars: number;
-  user_chars: number;
-  total_chars: number;
-  tokens_est: number;
-  sections: PromptSection[];
-  /** verbose, run scope only. */
-  diff_files?: { path: string; chars: number }[];
-}
-
-/**
- * Opt-in telemetry sink for `reviewPullRequest`. `onPrompt` receives
- * metadata ONLY (never section text) and is invoked once per assembled
- * prompt: once per review (`scope:'run'`), plus once per map-reduce chunk
- * when `detail === 'verbose'`. Every invocation is wrapped in try/catch
- * inside the engine — telemetry must never fail a review.
- */
-export interface PromptTelemetryOptions {
-  detail: 'summary' | 'verbose';
-  onPrompt: (info: PromptAssembledInfo) => void;
-  /** Only used when `detail === 'verbose'` — reviewer-core never hashes on its own. */
-  fingerprint?: (text: string) => string;
-}
-
 /** Progress event emitted during a review (server → SSE bus, runner → log). */
 export interface ReviewEvent {
   kind: RunEventKind;
   msg: string;
   data?: unknown;
+  /**
+   * Text safe for a stdout/pino mirror, when `msg` carries model-generated text
+   * (e.g. a finding title). The live log keeps `msg`; the mirror uses this.
+   */
+  mirrorMsg?: string;
+}
+
+/** Emitted before each LLM call: what the prompt is made of, never its content. */
+export interface PromptEvent {
+  mode: ReviewMode;
+  chunkCount: number;
+  /** Sections of the whole-diff assembly (shared by every chunk). */
+  overall: PromptSectionMeta[];
+  /** Exact length of the whole-diff messages (separators included). */
+  overallChars: number;
+  chunk: { index: number; label: string; sections: PromptSectionMeta[] };
 }
 
 export interface ReviewInput {
@@ -115,11 +88,8 @@ export interface ReviewInput {
   /** PR author's description/body (untrusted; truncated + delimiter-wrapped in
       the prompt). Empty/undefined → section omitted. */
   prDescription?: string;
-  /**
-   * Derived PR intent (L03) — attacker-influenced like `prDescription`, so
-   * it is rendered as an untrusted block too. Undefined → section omitted.
-   */
-  intent?: PromptIntent;
+  /** Derived PR intent (L03, untrusted). Omitted → the prompt is unchanged. */
+  intent?: ReviewIntent;
   /** Task framing line, e.g. "Review PR #482 …". */
   task?: string;
   /** Override the structured-output retry budget. */
@@ -134,18 +104,16 @@ export interface ReviewInput {
   /** Progress sink. */
   onEvent?: (e: ReviewEvent) => void;
   /**
+   * Called before each LLM call with content-free section metadata. A throwing
+   * callback is ignored — logging must never fail a review.
+   */
+  onPrompt?: (e: PromptEvent) => void;
+  /**
    * Cancellation checkpoint, called before each (expensive) chunk LLM call.
    * Supply a function that THROWS to abort mid-run (the caller owns the error
    * type, e.g. the server's RunCancelledError); the engine stays agnostic.
    */
   checkCancelled?: () => void;
-  /**
-   * Optional prompt-assembly telemetry (L03). METADATA ONLY, NEVER TEXT: the
-   * engine reports section names/sizes/provenance through `onPrompt`, never
-   * the assembled prompt itself. The caller (server) builds and logs a
-   * record from it; reviewer-core stays free of I/O and a logger.
-   */
-  promptTelemetry?: PromptTelemetryOptions;
 }
 
 export interface ReviewOutcome {
@@ -154,7 +122,7 @@ export interface ReviewOutcome {
   /** Human-readable grounding summary, e.g. "3/4 passed". */
   grounding: string;
   /** Findings dropped by grounding, with reasons (for logs / "never go silent"). */
-  dropped: { finding: Finding; reason: string }[];
+  dropped: DroppedFinding[];
   /** Which path ran. */
   mode: ReviewMode;
   /** Prompt assembly (for the run trace). Single-pass: the one call; map-reduce: the whole-diff assembly. */
@@ -176,46 +144,12 @@ function selectMode(strategy: ReviewStrategy, diff: UnifiedDiff, threshold: numb
   return totalLines > threshold && diff.files.length > 1 ? 'map-reduce' : 'single-pass';
 }
 
-/** Build one PromptAssembledInfo from an AssembledPrompt (never touches text
- *  beyond measuring its length) — shared by the run-scope and chunk-scope emits. */
-function buildPromptInfo(
-  scope: 'run' | 'chunk',
-  assembled: AssembledPrompt,
-  ctx: {
-    mode: ReviewMode;
-    model: string;
-    chunkCount: number;
-    chunkIndex?: number;
-    chunkLabel?: string;
-    diffFiles?: { path: string; chars: number }[];
-  },
-): PromptAssembledInfo {
-  const systemChars = assembled.messages[0]!.content.length;
-  const userChars = assembled.messages[1]!.content.length;
-  return {
-    scope,
-    mode: ctx.mode,
-    model: ctx.model,
-    chunk_count: ctx.chunkCount,
-    ...(ctx.chunkIndex !== undefined ? { chunk_index: ctx.chunkIndex } : {}),
-    ...(ctx.chunkLabel !== undefined ? { chunk_label: ctx.chunkLabel } : {}),
-    system_chars: systemChars,
-    user_chars: userChars,
-    total_chars: systemChars + userChars,
-    // Same heuristic as estimateTokens (ceil(chars/4)), applied to the
-    // already-computed char totals — no need to re-measure the text.
-    tokens_est: Math.ceil((systemChars + userChars) / 4),
-    sections: assembled.sections,
-    ...(ctx.diffFiles ? { diff_files: ctx.diffFiles } : {}),
-  };
-}
-
 export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutcome> {
   const threshold = input.mapThresholdLines ?? DEFAULT_MAP_THRESHOLD_LINES;
   const maxRetries = input.maxRetries ?? DEFAULT_REVIEW_MAX_RETRIES;
   const mode = selectMode(input.strategy ?? 'auto', input.diff, threshold);
-  const emit = (kind: RunEventKind, msg: string, data?: unknown) =>
-    input.onEvent?.({ kind, msg, data });
+  const emit = (kind: RunEventKind, msg: string, data?: unknown, mirrorMsg?: string) =>
+    input.onEvent?.({ kind, msg, data, ...(mirrorMsg !== undefined ? { mirrorMsg } : {}) });
 
   const promptParts = {
     system: input.systemPrompt,
@@ -229,42 +163,15 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
     task: input.task,
   };
 
-  // Fingerprints are computed only in verbose mode — reviewer-core never
-  // hashes on its own, and summary mode never touches this.
-  const fingerprintOpts =
-    input.promptTelemetry?.detail === 'verbose' && input.promptTelemetry.fingerprint
-      ? { fingerprint: input.promptTelemetry.fingerprint }
-      : undefined;
-
-  // Every diff that reaches the LLM is numbered (L03 — grounding citations
-  // must match a real line, never a hunk-header-counted guess). Parsed ONCE;
-  // the whole-diff text and every map-reduce chunk's text are rendered from
-  // this one parse rather than re-parsed per chunk. For any path this is
-  // byte-identical to `numberDiff(sliceDiff(input.diff, path))` (see
-  // numbered-diff.ts's `renderNumberedLines`) — `numberDiffForPath` below
-  // falls back to that slower, always-correct form if a path from
-  // `input.diff.files` somehow isn't one of THIS parse's files (e.g. a diff
-  // hand-built for a test rather than produced from `raw`).
-  const parsedDiff = parseDiff(input.diff.raw);
-  const numberedWhole = renderNumberedLines(parsedDiff.lines);
-  const numberDiffForPath = (path: string): string => {
-    const pf = parsedDiff.files.find((f) => f.path === path);
-    return pf
-      ? renderNumberedLines(parsedDiff.lines.slice(pf.start, pf.end))
-      : numberDiff(sliceDiff(input.diff, path));
-  };
-
   // Whole-diff assembly is the trace default; overwritten below for single-pass.
-  const wholeDiffAssembled = assemblePrompt({ ...promptParts, diff: numberedWhole }, fingerprintOpts);
-  let assembly: PromptAssembly = wholeDiffAssembled.assembly;
+  const whole = assemblePrompt({ ...promptParts, diff: input.diff.raw });
+  let assembly: PromptAssembly = whole.assembly;
+  const overall = whole.sections;
 
-  // Every file gets a chunk, deleted and deletions-only ones included: removed
-  // code can be the defect, and a hunk with no new-side lines still grounds
-  // against its declared range (grounding.ts buildLineIndex).
   const chunks =
     mode === 'map-reduce'
-      ? input.diff.files.map((f) => ({ label: f.path, diffText: numberDiffForPath(f.path) }))
-      : [{ label: 'all files', diffText: numberedWhole }];
+      ? input.diff.files.map((f) => ({ label: f.path, diffText: sliceDiff(input.diff, f.path) }))
+      : [{ label: 'all files', diffText: input.diff.raw }];
 
   emit(
     'info',
@@ -273,38 +180,13 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
       : `Reviewing ${input.diff.files.length} changed file(s) in one pass`,
   );
 
-  // One scope:'run' telemetry record per review, describing the whole-diff
-  // assembly — emitted BEFORE any LLM call so it's there even if every call
-  // fails. Never let a telemetry error break the review (try/catch, swallowed).
-  if (input.promptTelemetry) {
-    try {
-      input.promptTelemetry.onPrompt(
-        buildPromptInfo('run', wholeDiffAssembled, {
-          mode,
-          model: input.model,
-          chunkCount: chunks.length,
-          ...(input.promptTelemetry.detail === 'verbose'
-            ? {
-                diffFiles: input.diff.files.map((f) => ({
-                  path: f.path,
-                  chars: numberDiffForPath(f.path).length,
-                })),
-              }
-            : {}),
-        }),
-      );
-    } catch {
-      // Telemetry must never fail a review.
-    }
-  }
-
   const partials: Review[] = [];
   let tokensIn = 0;
   let tokensOut = 0;
   let costUsd: number | null = 0;
   const raws: string[] = [];
 
-  for (const [chunkIndex, chunk] of chunks.entries()) {
+  for (const [index, chunk] of chunks.entries()) {
     // Cancellation checkpoint — stop before the next (expensive) LLM call.
     input.checkCancelled?.();
     // 'map:' prefix only for the map-reduce path (one call per file). In
@@ -314,24 +196,18 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
       mode === 'map-reduce' ? `map: reviewing ${chunk.label}` : `Reviewing ${chunk.label} in one pass`,
       { file: chunk.label },
     );
-    const a = assemblePrompt({ ...promptParts, diff: chunk.diffText }, fingerprintOpts);
+    const a = assemblePrompt({ ...promptParts, diff: chunk.diffText });
     if (mode === 'single-pass') assembly = a.assembly;
-    // One scope:'chunk' telemetry record per LLM call, verbose + map-reduce
-    // only (single-pass's one chunk duplicates the run record above).
-    if (input.promptTelemetry?.detail === 'verbose' && mode === 'map-reduce') {
-      try {
-        input.promptTelemetry.onPrompt(
-          buildPromptInfo('chunk', a, {
-            mode,
-            model: input.model,
-            chunkCount: chunks.length,
-            chunkIndex,
-            chunkLabel: chunk.label,
-          }),
-        );
-      } catch {
-        // Telemetry must never fail a review.
-      }
+    try {
+      input.onPrompt?.({
+        mode,
+        chunkCount: chunks.length,
+        overall,
+        overallChars: whole.messages.reduce((n, m) => n + m.content.length, 0),
+        chunk: { index, label: chunk.label, sections: a.sections },
+      });
+    } catch {
+      // Observability must never fail a review.
     }
     const res = await input.llm.completeStructured<Review>({
       model: input.model,
@@ -359,7 +235,15 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
   const ground = groundFindings(merged.findings, input.diff);
   const grounding = groundingSummary(ground);
   for (const d of ground.dropped) {
-    emit('info', `grounding dropped "${d.finding.title}": ${d.reason}`);
+    // The title is model-generated: the live log keeps it, the pino mirror gets
+    // only a count and a generic reason (the raw reason embeds a model-chosen path).
+    const why = d.code === 'file_not_in_diff' ? 'file not in diff' : 'line not in diff';
+    emit(
+      'info',
+      `grounding dropped "${d.finding.title}": ${d.reason}`,
+      undefined,
+      `grounding dropped 1 finding(s) (reason: ${why})`,
+    );
   }
   emit('result', `Citation grounding: ${grounding}`);
 

@@ -1,5 +1,5 @@
 {
-  "id": "27cf8687-d9f9-42c9-874d-8fcc1f49a072",
+  "id": "b9be69e1-7634-4588-88a1-1302fbb23f88",
   "prevId": "86dd3410-faf2-4779-88e9-1b6c9dd21cd0",
   "version": "7",
   "dialect": "postgresql",
@@ -891,20 +891,6 @@
           "notNull": true,
           "default": "'low'"
         },
-        "confidence_basis": {
-          "name": "confidence_basis",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'indirect_only'"
-        },
-        "downgraded": {
-          "name": "downgraded",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
         "sources": {
           "name": "sources",
           "type": "jsonb",
@@ -912,15 +898,15 @@
           "notNull": true,
           "default": "'[]'::jsonb"
         },
-        "input_hash": {
-          "name": "input_hash",
+        "head_sha": {
+          "name": "head_sha",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "''"
         },
-        "head_sha": {
-          "name": "head_sha",
+        "input_hash": {
+          "name": "input_hash",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -956,8 +942,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "generated_at": {
-          "name": "generated_at",
+        "derived_at": {
+          "name": "derived_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,

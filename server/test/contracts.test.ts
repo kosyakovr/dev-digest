@@ -8,6 +8,7 @@ import {
   PrHistory,
   SmartDiff,
   SmartDiffRole,
+  SmartDiffResponse,
   Conformance,
   Onboarding,
   EvalRun,
@@ -120,23 +121,24 @@ describe('AI contracts parse fixtures', () => {
     expect(d.groups[0]!.role).toBe('core');
   });
 
-  // WP2 (L03 Smart Order): SmartDiffRole gained 'tests' and 'docs'.
-  it('SmartDiffRole accepts the new "tests" and "docs" values', () => {
-    expect(SmartDiffRole.parse('tests')).toBe('tests');
-    expect(SmartDiffRole.parse('docs')).toBe('docs');
+  it('SmartDiffRole lists the five roles in display order (core → tests → wiring → docs → boilerplate)', () => {
+    expect(SmartDiffRole.options).toEqual(['core', 'tests', 'wiring', 'docs', 'boilerplate']);
   });
 
-  it('SmartDiffRole rejects a value outside the 5-role enum', () => {
-    expect(() => SmartDiffRole.parse('other')).toThrow();
-  });
-
-  it('SmartDiff parses a group with role "docs" without throwing', () => {
-    expect(() =>
-      SmartDiff.parse({
-        groups: [{ role: 'docs', files: [{ path: 'README.md', additions: 1, deletions: 0, finding_lines: [] }] }],
-        split_suggestion: { too_big: false, total_lines: 1, proposed_splits: [] },
-      }),
-    ).not.toThrow();
+  it('SmartDiffResponse requires review_ids and accepts the docs role', () => {
+    const payload = {
+      groups: [
+        {
+          role: 'docs',
+          files: [{ path: 'README.md', additions: 1, deletions: 1, finding_lines: [1] }],
+        },
+      ],
+      split_suggestion: { too_big: false, total_lines: 2, proposed_splits: [] },
+    };
+    const parsed = SmartDiffResponse.parse({ ...payload, review_ids: ['r1'] });
+    expect(parsed.review_ids).toEqual(['r1']);
+    expect(parsed.groups[0]!.role).toBe('docs');
+    expect(() => SmartDiffResponse.parse(payload)).toThrow();
   });
 
   it('Conformance / Onboarding / EvalRun / MemoryItem', () => {

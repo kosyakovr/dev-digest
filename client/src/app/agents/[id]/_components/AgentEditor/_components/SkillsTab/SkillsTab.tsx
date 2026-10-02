@@ -33,16 +33,14 @@ export function SkillsTab({ agent }: { agent: Agent }) {
   const { data: links, isLoading: loadingLinks } = useAgentSkills(agent.id);
   const save = useSetAgentSkills();
 
-  // `draft` holds the user's in-progress edits. It starts null (no edits yet)
-  // and stays null until the first edit, so a background refetch of `skills`
-  // / `links` (e.g. another tab saving, a window refocus) recomputes `rows`
-  // from the fresh server data without discarding an unsaved draft — the
-  // draft is only ever replaced by a save, never by a refetch.
-  const [draft, setDraft] = React.useState<SkillRow[] | null>(null);
+  const [rows, setRows] = React.useState<SkillRow[] | null>(null);
   const [filter, setFilter] = React.useState("");
   const [dragId, setDragId] = React.useState<string | null>(null);
 
-  const rows = draft ?? (skills && links ? buildRows(skills, links) : null);
+  // Rebuild the local draft whenever the server data or the agent changes.
+  React.useEffect(() => {
+    if (skills && links) setRows(buildRows(skills, links));
+  }, [skills, links, agent.id]);
 
   if (isError) return <ErrorState body={t("skills.loadError")} onRetry={() => refetch()} />;
   if (loadingSkills || loadingLinks || !rows) return <Skeleton height={180} />;
@@ -60,14 +58,7 @@ export function SkillsTab({ agent }: { agent: Agent }) {
   const commit = () => {
     save.mutate(
       { agentId: agent.id, skills: toPayload(rows) },
-      {
-        onSuccess: () => {
-          // The saved draft is now what `links` will refetch to — drop it so
-          // `rows` goes back to being derived from server data.
-          setDraft(null);
-          toast.success(t("skills.savedToast", { name: agent.name }));
-        },
-      },
+      { onSuccess: () => toast.success(t("skills.savedToast", { name: agent.name })) },
     );
   };
 
@@ -75,7 +66,7 @@ export function SkillsTab({ agent }: { agent: Agent }) {
     if (!dragId || dragId === targetId) return;
     const attached = rows.filter((r) => r.attached);
     const toIndex = attached.findIndex((r) => r.skill.id === targetId);
-    if (toIndex !== -1) setDraft(reorderTo(rows, dragId, toIndex));
+    if (toIndex !== -1) setRows(reorderTo(rows, dragId, toIndex));
     setDragId(null);
   };
 
@@ -127,7 +118,7 @@ export function SkillsTab({ agent }: { agent: Agent }) {
               {/* Attach / detach. */}
               <Toggle
                 on={r.attached}
-                onChange={() => setDraft(toggleAttached(rows, r.skill.id))}
+                onChange={() => setRows(toggleAttached(rows, r.skill.id))}
                 size={14}
               />
 
@@ -141,7 +132,7 @@ export function SkillsTab({ agent }: { agent: Agent }) {
                   kind="ghost"
                   size="sm"
                   icon={r.enabled ? "Eye" : "EyeOff"}
-                  onClick={() => setDraft(toggleEnabled(rows, r.skill.id))}
+                  onClick={() => setRows(toggleEnabled(rows, r.skill.id))}
                   title={r.enabled ? undefined : t("skills.mutedTitle")}
                 >
                   {r.enabled ? t("skills.mute") : t("skills.unmute")}
@@ -156,7 +147,7 @@ export function SkillsTab({ agent }: { agent: Agent }) {
                 <span style={s.moveGroup}>
                   <button
                     type="button"
-                    onClick={() => setDraft(moveRow(rows, r.skill.id, -1))}
+                    onClick={() => setRows(moveRow(rows, r.skill.id, -1))}
                     disabled={index === 0}
                     aria-label={t("skills.moveUp", { name: r.skill.name })}
                     style={s.moveBtn(index === 0)}
@@ -165,7 +156,7 @@ export function SkillsTab({ agent }: { agent: Agent }) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setDraft(moveRow(rows, r.skill.id, 1))}
+                    onClick={() => setRows(moveRow(rows, r.skill.id, 1))}
                     disabled={index === attachedCount - 1}
                     aria-label={t("skills.moveDown", { name: r.skill.name })}
                     style={s.moveBtn(index === attachedCount - 1)}

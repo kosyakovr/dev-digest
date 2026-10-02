@@ -1,42 +1,38 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { DeriveIntentRequest } from '@devdigest/shared';
+import { PrIntentResponse } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
+import { IntentService } from './service.js';
 
 /**
  * L03 — intent module (ring ④). The only file here that imports fastify.
  *
- *   GET  /pulls/:id/intent  → the persisted intent for a PR (or null), with `stale`.
- *   POST /pulls/:id/intent  {force}  → derive (or return cached) intent; one model call.
+ *   GET  /pulls/:id/intent  → the stored intent or `{intent:null}` (never calls the model)
+ *   POST /pulls/:id/intent  → derive now (one paid model call), rate-limited
  */
 export default async function intentRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
-  const { container } = app;
+  const service = new IntentService(app.container);
 
-  app.get('/pulls/:id/intent', { schema: { params: IdParams } }, async (req) => {
-    const { workspaceId } = await getContext(container, req);
-    const intent = await container.intent.get(workspaceId, req.params.id);
-    return { intent };
-  });
+  app.get(
+    '/pulls/:id/intent',
+    { schema: { params: IdParams, response: { 200: PrIntentResponse } } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      return service.get(workspaceId, req.params.id);
+    },
+  );
 
-  // Synchronous on purpose (one model call, the client shows a pending
-  // button) — same shape as conventions/extract. Tight per-route limit:
-  // each call can trigger an expensive LLM classification.
   app.post(
     '/pulls/:id/intent',
     {
-      schema: { params: IdParams, body: DeriveIntentRequest },
+      schema: { params: IdParams, response: { 200: PrIntentResponse } },
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     },
     async (req) => {
-      const { workspaceId } = await getContext(container, req);
-      const { record, cached } = await container.intent.derive(workspaceId, req.params.id, {
-        force: req.body.force,
-        budget: 'on-demand',
-        logger: req.log,
-      });
-      return { intent: record, cached };
+      const { workspaceId } = await getContext(app.container, req);
+      return service.derive(workspaceId, req.params.id, req.log.child({ correlationId: req.id }));
     },
   );
 }

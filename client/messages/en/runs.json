@@ -44,12 +44,12 @@
     },
     "prompt": {
       "system": "System",
+      "intent": "Stated intent — derived, untrusted (dynamic)",
       "skills": "Skills (dynamic)",
       "memory": "Memory (dynamic)",
       "repoMap": "Repo skeleton — repo-intel (dynamic)",
       "specs": "Project context (dynamic)",
       "callers": "Callers of changed symbols — repo-intel (dynamic)",
-      "intent": "Intent (dynamic)",
       "user": "User / diff (dynamic)",
       "copy": "Copy",
       "fullscreen": "Open fullscreen",

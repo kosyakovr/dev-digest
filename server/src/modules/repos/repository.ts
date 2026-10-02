@@ -1,14 +1,13 @@
 import { and, eq } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
-import type { RepoRow } from '../../db/rows.js';
 
 /**
  * F1 — repos data-access layer. The ONLY place that touches the `repos`
  * table. Every query is scoped by `workspaceId` (tenancy guard).
  */
 
-export type { RepoRow };
+export type RepoRow = typeof t.repos.$inferSelect;
 
 export interface InsertRepo {
   workspaceId: string;

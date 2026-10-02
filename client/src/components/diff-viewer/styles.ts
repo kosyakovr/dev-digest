@@ -64,36 +64,6 @@ export const s = {
     color: "var(--text-primary)",
     paddingRight: 12,
   } satisfies CSSProperties,
-  findingDot: (color: string): CSSProperties => ({
-    display: "inline-block",
-    width: 7,
-    height: 7,
-    borderRadius: 99,
-    background: color,
-    marginLeft: 6,
-    flexShrink: 0,
-  }),
-  findingCardsWrap: {
-    margin: "6px 14px 8px 58px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-  } satisfies CSSProperties,
-  unanchoredWrap: {
-    borderTop: "1px solid var(--border)",
-    margin: "4px 14px 4px 14px",
-    paddingTop: 10,
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-  } satisfies CSSProperties,
-  unanchoredTitle: {
-    fontSize: 11,
-    fontWeight: 700,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    color: "var(--text-muted)",
-  } satisfies CSSProperties,
 } as const;
 
 /** Chevron rotates 90deg when the file card is open. */
@@ -105,47 +75,10 @@ export function chevronFor(open: boolean): CSSProperties {
   };
 }
 
-/** Row background per line kind (add/del tinted, others transparent), plus an
-    optional 3px left stripe (highest-severity finding color) on this line.
-    `muted` (all findings dismissed) fades the stripe's color, not the row —
-    the code text must stay fully readable. */
-export function lineRowFor(kind: Line["kind"], stripeColor?: string, muted = false): CSSProperties {
+/** Row background per line kind (add/del tinted, others transparent). */
+export function lineRowFor(kind: Line["kind"]): CSSProperties {
   const background = kind === "add" ? "var(--code-add)" : kind === "del" ? "var(--code-del)" : "transparent";
-  const stripe = stripeColor && muted ? `color-mix(in srgb, ${stripeColor} 40%, transparent)` : stripeColor;
-  return {
-    display: "flex",
-    alignItems: "stretch",
-    fontSize: 13,
-    lineHeight: "20px",
-    background,
-    borderLeftWidth: 3,
-    borderLeftStyle: "solid",
-    borderLeftColor: stripe ?? "transparent",
-  };
-}
-
-/** The clickable severity badge on a code line (`FindingMarker`): icon + word
-    in a pill with the severity's border and tinted background (`SEV` tokens). */
-export function findingMarkerStyle(color: string, muted: boolean, bg = "transparent"): CSSProperties {
-  return {
-    marginLeft: "auto",
-    marginRight: 10,
-    alignSelf: "center",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 5,
-    padding: "0 8px",
-    lineHeight: "18px",
-    borderRadius: 6,
-    border: `1px solid ${color}`,
-    background: bg,
-    cursor: "pointer",
-    fontSize: 12,
-    fontWeight: 600,
-    color,
-    flexShrink: 0,
-    opacity: muted ? 0.5 : 1,
-  };
+  return { display: "flex", alignItems: "stretch", fontSize: 13, lineHeight: "20px", background };
 }
 
 /** Gutter sign colour per line kind. */
@@ -157,3 +90,43 @@ export function lineSignFor(kind: Line["kind"]): CSSProperties {
     flexShrink: 0,
   };
 }
+
+/** Left stripe on a diff row that carries findings (colour = worst severity, from SEV). */
+export function findingStripeFor(color: string): CSSProperties {
+  return { boxShadow: `inset 3px 0 0 ${color}` };
+}
+
+/** The per-line badge button that toggles the stacked finding cards: outlined
+    and tinted while the cards are open, text-only while they are hidden. */
+export function findingLabelFor(color: string, bg: string, open: boolean): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "center",
+    flexShrink: 0,
+    margin: "1px 8px 1px 0",
+    padding: "0 7px",
+    fontSize: 11,
+    fontWeight: 600,
+    lineHeight: "18px",
+    color,
+    background: open ? bg : "transparent",
+    border: `1px solid ${open ? color : "transparent"}`,
+    borderRadius: 5,
+    cursor: "pointer",
+  };
+}
+
+/** Heading + list wrapper for findings that have no rendered line. */
+export const outsideStyles = {
+  wrap: { padding: "8px 0", borderBottom: "1px solid var(--border)" } satisfies CSSProperties,
+  heading: {
+    padding: "0 12px",
+    fontSize: 12,
+    fontWeight: 700,
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
+  /** The inline card's left margin is sized for diff rows; reset it here. */
+  item: { marginLeft: -44 } satisfies CSSProperties,
+} as const;

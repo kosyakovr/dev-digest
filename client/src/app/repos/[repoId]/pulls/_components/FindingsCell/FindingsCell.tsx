@@ -32,7 +32,6 @@ export function FindingsCell({ rollup }: { rollup: PrFindingsRollup | null | und
   const t = useTranslations("prReview");
   const panelId = React.useId();
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
-  const panelRef = React.useRef<HTMLDivElement | null>(null);
   const closeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const [open, setOpen] = React.useState(false);
   const [pos, setPos] = React.useState<{ top: number; left: number } | null>(null);
@@ -66,21 +65,14 @@ export function FindingsCell({ rollup }: { rollup: PrFindingsRollup | null | und
 
   React.useEffect(() => {
     if (!open) return;
+    const close = () => setOpen(false);
     // A fixed panel does not follow the scroll container, so closing is the
-    // honest behaviour rather than letting it drift away from its row — but
-    // scrolling the panel's OWN content (the findings list) must not count:
-    // that scroll event bubbles up to window too, and would otherwise close
-    // the popover the instant the user tries to read past the fold.
-    const closeOnScroll = (e: Event) => {
-      if (panelRef.current?.contains(e.target as Node)) return;
-      setOpen(false);
-    };
-    const closeOnResize = () => setOpen(false);
-    window.addEventListener("scroll", closeOnScroll, true);
-    window.addEventListener("resize", closeOnResize);
+    // honest behaviour rather than letting it drift away from its row.
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
     return () => {
-      window.removeEventListener("scroll", closeOnScroll, true);
-      window.removeEventListener("resize", closeOnResize);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
     };
   }, [open]);
 
@@ -123,7 +115,6 @@ export function FindingsCell({ rollup }: { rollup: PrFindingsRollup | null | und
 
       {open && (
         <div
-          ref={panelRef}
           id={panelId}
           role="tooltip"
           onMouseEnter={openNow}

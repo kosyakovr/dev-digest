@@ -1,228 +1,103 @@
-/**
- * Pure helpers for DiffTab (Smart Order, L03): the URL <-> DiffOrder mapping,
- * the "latest review per agent" rule (TP-1, shared with the server's
- * `smart-diff-helpers.test.ts`), the smart-diff role layout, and the
- * per-severity file counts.
- */
 import { describe, it, expect } from "vitest";
-import type { FindingRecord, ReviewRecord, PrFile, SmartDiff } from "@devdigest/shared";
-import {
-  orderFromParam,
-  orderToParam,
-  findingsByFile,
-  layoutSmartGroups,
-  filesPerSeverity,
-  lineRange,
-} from "./helpers";
-import { highestSeverity } from "@/lib/severity";
+import type { FindingRecord, PrFile, ReviewRecord, SmartDiffResponse } from "@devdigest/shared";
+import { planGroups, visibleFindings } from "./helpers";
 
-describe("orderFromParam / orderToParam", () => {
-  it.each([
-    [null, "smart"],
-    ["original", "original"],
-    ["x", "smart"],
-  ] as const)("orderFromParam(%s) -> %s", (param, expected) => {
-    expect(orderFromParam(param)).toBe(expected);
-  });
+const file = (path: string): PrFile => ({ path, additions: 1, deletions: 0, patch: null });
 
-  it.each([
-    ["smart", null],
-    ["original", "original"],
-  ] as const)("orderToParam(%s) -> %s", (order, expected) => {
-    expect(orderToParam(order)).toBe(expected);
-  });
-});
-
-/** TP-1 — mirrors `server/test/smart-diff-helpers.test.ts`'s fixture exactly
-    (same reviews, same agents, same timestamps). */
-function tp1Reviews(): ReviewRecord[] {
-  function finding(o: Partial<FindingRecord> & { id: string; file: string; start_line: number }): FindingRecord {
-    return {
-      severity: "WARNING",
-      category: "bug",
-      title: `Finding ${o.id}`,
-      end_line: o.start_line,
-      rationale: "r",
-      suggestion: null,
-      confidence: 0.8,
-      kind: "finding",
-      trifecta_components: null,
-      evidence: null,
-      review_id: "unused",
-      accepted_at: null,
-      dismissed_at: null,
-      ...o,
-    };
-  }
-  function review(o: Partial<ReviewRecord> & { id: string; agent_id: string | null; created_at: string }): ReviewRecord {
-    return {
-      pr_id: "pr1",
-      run_id: null,
-      agent_name: null,
-      kind: "review",
-      verdict: null,
-      summary: null,
-      score: null,
-      model: null,
-      grounding: null,
-      findings: [],
-      ...o,
-    };
-  }
-  return [
-    review({
-      id: "r1",
-      agent_id: "agent-a",
-      created_at: "2026-09-01T10:00:00Z",
-      findings: [finding({ id: "f1", file: "a.ts", start_line: 10, severity: "CRITICAL", review_id: "r1" })],
-    }),
-    review({
-      id: "r2",
-      agent_id: "agent-a",
-      created_at: "2026-09-02T10:00:00Z",
-      findings: [finding({ id: "f2", file: "a.ts", start_line: 20, severity: "WARNING", review_id: "r2" })],
-    }),
-    review({
-      id: "r3",
-      agent_id: "agent-b",
-      created_at: "2026-09-01T12:00:00Z",
-      findings: [
-        finding({
-          id: "f3",
-          file: "a.ts",
-          start_line: 30,
-          severity: "SUGGESTION",
-          review_id: "r3",
-          dismissed_at: "2026-09-03T00:00:00Z",
-        }),
-        finding({
-          id: "f4",
-          file: "b.md",
-          start_line: 5,
-          severity: "WARNING",
-          review_id: "r3",
-          accepted_at: "2026-09-03T00:00:00Z",
-        }),
-      ],
-    }),
-    review({
-      id: "r4",
-      agent_id: null,
-      created_at: "2026-08-30T00:00:00Z",
-      findings: [finding({ id: "f5", file: "a.ts", start_line: 40, severity: "CRITICAL", review_id: "r4" })],
-    }),
-    review({
-      id: "r5",
-      agent_id: null,
-      created_at: "2026-08-31T00:00:00Z",
-      findings: [finding({ id: "f6", file: "a.ts", start_line: 50, severity: "SUGGESTION", review_id: "r5" })],
-    }),
-  ];
-}
-
-describe("TP-1 — findingsByFile / highestSeverity (shared fixture)", () => {
-  it("a.ts keeps {f2, f3, f6}, b.md keeps {f4} (only the latest review per agent)", () => {
-    const byFile = findingsByFile(tp1Reviews());
-    expect(new Set(byFile.get("a.ts")!.map((f) => f.id))).toEqual(new Set(["f2", "f3", "f6"]));
-    expect(byFile.get("b.md")!.map((f) => f.id)).toEqual(["f4"]);
-  });
-
-  it("highestSeverity(a.ts) is WARNING (dismissed f3 excluded, active f2/f6 remain)", () => {
-    const byFile = findingsByFile(tp1Reviews());
-    expect(highestSeverity(byFile.get("a.ts")!)).toBe("WARNING");
-  });
-});
-
-function file(path: string): PrFile {
-  return { path, additions: 1, deletions: 0, patch: null };
-}
-
-describe("layoutSmartGroups", () => {
-  it("keeps files within a group in the PR's original order", () => {
-    const smart: SmartDiff = {
-      groups: [
-        {
-          role: "core",
-          files: [
-            { path: "src/b.ts", pseudocode_summary: null, additions: 1, deletions: 0, finding_lines: [] },
-            { path: "src/a.ts", pseudocode_summary: null, additions: 1, deletions: 0, finding_lines: [] },
-          ],
-        },
-      ],
-      split_suggestion: { too_big: false, total_lines: 2, proposed_splits: [] },
-    };
-    const groups = layoutSmartGroups([file("src/b.ts"), file("src/a.ts")], smart);
-    expect(groups).toHaveLength(1);
-    expect(groups[0]!.files.map((f) => f.path)).toEqual(["src/b.ts", "src/a.ts"]);
-  });
-
-  it("a path missing from the smart-diff response falls into core; empty groups are dropped", () => {
-    const smart: SmartDiff = {
-      groups: [{ role: "docs", files: [{ path: "README.md", pseudocode_summary: null, additions: 1, deletions: 0, finding_lines: [] }] }],
-      split_suggestion: { too_big: false, total_lines: 1, proposed_splits: [] },
-    };
-    const groups = layoutSmartGroups([file("README.md"), file("src/unknown.ts")], smart);
-    expect(groups.map((g) => g.role)).toEqual(["core", "docs"]);
-    expect(groups.find((g) => g.role === "core")!.files.map((f) => f.path)).toEqual(["src/unknown.ts"]);
-  });
-});
-
-describe("filesPerSeverity", () => {
-  it("counts a file with {CRITICAL, WARNING, WARNING} once per severity present, and a dismissed severity is excluded", () => {
-    const findings: FindingRecord[] = [
-      makeFinding({ id: "1", severity: "CRITICAL" }),
-      makeFinding({ id: "2", severity: "WARNING" }),
-      makeFinding({ id: "3", severity: "WARNING" }),
-    ];
-    const byFile = new Map<string, FindingRecord[]>([
-      ["x.ts", findings],
-      ["y.ts", [makeFinding({ id: "4", severity: "WARNING" })]],
-    ]);
-    const counts = filesPerSeverity([file("x.ts"), file("y.ts")], byFile);
-    expect(counts).toEqual({ CRITICAL: 1, WARNING: 2, SUGGESTION: 0 });
-  });
-
-  it("accepted findings count, dismissed findings do not", () => {
-    const byFile = new Map<string, FindingRecord[]>([
-      [
-        "x.ts",
-        [
-          makeFinding({ id: "1", severity: "CRITICAL", accepted_at: "2026-09-01T00:00:00Z" }),
-          makeFinding({ id: "2", severity: "WARNING", dismissed_at: "2026-09-01T00:00:00Z" }),
-        ],
-      ],
-    ]);
-    const counts = filesPerSeverity([file("x.ts")], byFile);
-    expect(counts).toEqual({ CRITICAL: 1, WARNING: 0, SUGGESTION: 0 });
-  });
-});
-
-describe("lineRange", () => {
-  it("returns just the number when start and end are the same line", () => {
-    expect(lineRange({ start_line: 5, end_line: 5 })).toBe("5");
-  });
-
-  it("returns start-end when the finding spans multiple lines", () => {
-    expect(lineRange({ start_line: 61, end_line: 74 })).toBe("61-74");
-  });
-});
-
-function makeFinding(o: Partial<FindingRecord> & { id: string; severity: FindingRecord["severity"] }): FindingRecord {
+function smart(groups: Array<[SmartDiffResponse["groups"][number]["role"], Array<[string, number[]]>]>): SmartDiffResponse {
   return {
+    groups: groups.map(([role, files]) => ({
+      role,
+      files: files.map(([path, finding_lines]) => ({ path, additions: 1, deletions: 0, finding_lines })),
+    })),
+    split_suggestion: { too_big: false, total_lines: 0, proposed_splits: [] },
+    review_ids: [],
+  };
+}
+
+describe("planGroups", () => {
+  it("joins the server grouping with the PR's files, in the smart-diff order", () => {
+    const a = file("a");
+    const b = file("b");
+    // PR files arrive in a different order than the smart-diff lists them.
+    const plan = planGroups(smart([["core", [["a", []]]], ["tests", [["b", []]]]]), [b, a]);
+    expect(plan).not.toBeNull();
+    expect(plan!.map((g) => g.role)).toEqual(["core", "tests"]);
+    expect(plan![0]!.files).toEqual([a]);
+    expect(plan![1]!.files).toEqual([b]);
+  });
+
+  it("counts FILES with findings per group, not finding lines", () => {
+    const plan = planGroups(
+      smart([["core", [["a.ts", [3, 7, 9]], ["b.ts", [1, 2]], ["c.ts", []]]]]),
+      [file("a.ts"), file("b.ts"), file("c.ts")],
+    );
+    expect(plan![0]!.filesWithFindings).toBe(2);
+  });
+
+  it("returns null when the PR has a file the smart-diff does not know", () => {
+    expect(planGroups(smart([["core", [["a", []], ["b", []]]]]), [file("a"), file("b"), file("c")])).toBeNull();
+  });
+
+  it("returns null when the smart-diff lists a file the PR no longer has", () => {
+    expect(planGroups(smart([["core", [["a", []], ["b", []]]]]), [file("a"), file("c")])).toBeNull();
+  });
+
+  it("returns null when a path is listed twice, even if the counts add up", () => {
+    expect(planGroups(smart([["core", [["a", []]]], ["docs", [["a", []]]]]), [file("a"), file("b")])).toBeNull();
+  });
+});
+
+function finding(id: string, dismissed_at: string | null = null): FindingRecord {
+  return {
+    id,
+    severity: "WARNING",
     category: "bug",
-    title: `Finding ${o.id}`,
-    file: "x.ts",
+    title: id,
+    file: "a.ts",
     start_line: 1,
     end_line: 1,
     rationale: "r",
     suggestion: null,
-    confidence: 0.8,
+    confidence: 0.9,
     kind: "finding",
     trifecta_components: null,
     evidence: null,
-    review_id: "r1",
+    review_id: "x",
     accepted_at: null,
-    dismissed_at: null,
-    ...o,
+    dismissed_at,
   };
 }
+
+function review(id: string, findings: FindingRecord[]): ReviewRecord {
+  return {
+    id,
+    pr_id: "p",
+    agent_id: null,
+    run_id: null,
+    kind: "review",
+    verdict: null,
+    summary: null,
+    score: null,
+    model: null,
+    created_at: "2026-10-01T00:00:00Z",
+    findings,
+  };
+}
+
+describe("visibleFindings", () => {
+  const reviews = [review("R1", [finding("f1")]), review("R2", [finding("f2", "2026-10-02T00:00:00Z"), finding("f3")])];
+
+  it("keeps only reviews of the smart-diff's set and drops dismissed findings", () => {
+    expect(visibleFindings(reviews, ["R2"]).map((f) => f.id)).toEqual(["f3"]);
+  });
+
+  it("takes every review of a multi-agent set", () => {
+    expect(visibleFindings(reviews, ["R1", "R2"]).map((f) => f.id)).toEqual(["f1", "f3"]);
+  });
+
+  it("is empty when there are no review ids or the reviews have not loaded", () => {
+    expect(visibleFindings(reviews, [])).toEqual([]);
+    expect(visibleFindings(undefined, ["R1"])).toEqual([]);
+  });
+});

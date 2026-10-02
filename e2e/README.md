@@ -44,7 +44,7 @@ Flows target **read-only seeded data** (the demo repo `acme/payments-api`, PR
 > stack and leaves your dev DB untouched.
 >
 > ⚠️ **Never `docker compose down -v` to "reset" your dev DB** — `-v` deletes the
-> `devdigest_pgdata` volume along with every real repo and review you've imported.
+> `devdigest_pgdata2` volume along with every real repo and review you've imported.
 
 ## Run locally
 
@@ -59,7 +59,7 @@ npm i -g agent-browser && agent-browser install
 # Boots an isolated, freshly-seeded stack on alternate ports
 # (Postgres :5433, API :3101, web :3100), runs the flows, then tears it all
 # down. Safe to run while your normal dev stack is up — it never touches your
-# dev DB or the devdigest_pgdata volume.
+# dev DB or the devdigest_pgdata2 volume.
 ./scripts/e2e.sh
 # or: cd e2e && npm install && npm run e2e:hermetic
 ```

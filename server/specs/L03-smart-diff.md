@@ -1,187 +1,146 @@
-# Smart Order / Smart Diff (server)
+# Smart Diff
 
 **Status:** in-progress
 **Lesson / ticket:** L03
 
-## Goal
+Client side: [../../client/specs/L03-smart-diff.md](../../client/specs/L03-smart-diff.md).
 
-On the PR "Files changed" tab the user sees the PR's files grouped by role
-(core → tests → wiring → docs → boilerplate) instead of GitHub's raw file
-order, so the reviewer's attention goes to the files that matter first. The
-server exposes a deterministic classification of each file plus a
-"is this PR too big to review at once" signal; no LLM call is involved and
-the feature has zero marginal cost.
+## Goal
+On the "Files changed" tab the PR's files are grouped by role in a fixed order
+`core → tests → wiring → docs → boilerplate` (docs and boilerplate collapsed by
+default), and the findings of the latest review are shown inside the diff.
 
 ## Non-goals
-
-- LLM summaries, `pseudocode_summary` and `proposed_splits` content, or any
-  change to the prompt builder / `reviewer-core`. `pseudocode_summary` is
-  always `null` and `proposed_splits` is always `[]` in this iteration.
-- DB schema and migrations — no new table or column. `pr_files`, `reviews`
-  and `findings` already carry everything the classifier needs.
-- Sorting files *within* a role group by `repo-intel`'s `file_rank` — rejected
-  because `getFileRank` returns `[]` whenever repo-intel is disabled or the
-  repo isn't indexed, which would make in-group order machine-dependent.
-  Within a group, files keep GitHub's original order (client) / are sorted by
-  path (server's own listing, for a deterministic response).
-- Changes to the Findings tab (still shows every run).
-- Findings whose `file` is not among the PR's files — not shown on this tab.
+- No split-PR banner: `split_suggestion.too_big` is always `false`,
+  `proposed_splits` always `[]`. (The Smart order / Original order toggle was
+  added later, client-only — see
+  [../../client/specs/L03-smart-diff.md](../../client/specs/L03-smart-diff.md).)
+- `pseudocode_summary` is never populated (key absent).
+- No LLM call; `assemblePrompt` and `run-executor.ts` are unchanged. The L08
+  filter is not implemented — only its seam (`classifyFile`) exists.
+- No DB schema change, no migration, no new dependency.
 
 ## Contract
+`GET /pulls/:id/smart-diff` (reviews module). Params `IdParams`; 200
+`SmartDiffResponse`; 404 `Pull request not found` for an unknown or
+other-workspace PR; 422 for a non-uuid.
 
-**Shared contract** (`server/src/vendor/shared/contracts/brief.ts`, mirrored
-byte-for-byte in `client/src/vendor/shared/contracts/brief.ts`):
+```ts
+export const SmartDiffRole = z.enum(['core', 'tests', 'wiring', 'docs', 'boilerplate']); // order = display order
+export const SmartDiffResponse = SmartDiff.extend({ review_ids: z.array(z.string()) });
+```
 
-- `SmartDiffRole = z.enum(['core', 'tests', 'wiring', 'docs', 'boilerplate'])`
-  — was `['core', 'wiring', 'boilerplate']`; `tests` and `docs` are new
-  values, order matches on-screen display order. Purely additive (no
-  breaking change to existing consumers).
-- `SmartDiff`, `SmartDiffGroup`, `SmartDiffFile`, `ProposedSplit` — unchanged
-  (`contracts/brief.ts:135-164`).
-- `SmartDiffResponse = SmartDiff` (`contracts/review-api.ts:95-97`) —
-  unchanged.
+Example:
+```json
+{ "groups": [
+    { "role": "core",  "files": [{ "path": "src/a.ts", "additions": 10, "deletions": 2, "finding_lines": [12, 30] }] },
+    { "role": "boilerplate", "files": [{ "path": "pnpm-lock.yaml", "additions": 100, "deletions": 50, "finding_lines": [] }] } ],
+  "split_suggestion": { "too_big": false, "total_lines": 162, "proposed_splits": [] },
+  "review_ids": ["8f0c…"] }
+```
 
-**Route** (new module `server/src/modules/smart-diff/`, registered in
-`server/src/modules/index.ts` under the key `smartDiff`):
+### Data sources
+`pr_files` (path, additions, deletions), the latest review set (`reviews`,
+`findings`, `agent_runs`).
 
-- `GET /pulls/:id/smart-diff` → 200 `SmartDiffResponse`.
-  - 404 `NotFoundError('Pull request not found')` if the PR doesn't exist or
-    belongs to another workspace.
-  - 422 for a non-uuid `:id` (`IdParams`).
-  - A PR with no `pr_files` rows → 200 `{ groups: [], split_suggestion: {
-    total_lines: 0, too_big: false, proposed_splits: [] } }`.
-  - Global rate limit only (120/min) — this is a read with no LLM cost.
-
-Ring layout (`onion-architecture`): `routes.ts` (④, delegates only),
-`service.ts` (②, `SmartDiffService.get(workspaceId, prId, logger?)`, reads
-via `container.reviewRepo` — `getPull`, `getPrFiles`, `reviewsForPull`; no
-own `repository.ts`, per the "do not create empty files" rule), `helpers.ts`
-(②, pure), `constants.ts` (literals). No new port: nothing outside the
-process is called.
+### Call sequence
+`routes.ts` → `ReviewService.smartDiff(workspaceId, prId, logger)` → `getPull`
+(404) → `getPrFiles` → `latestReviewSet` → drop dismissed → `buildSmartDiff`
+(pure) → one `info` log line.
 
 ### Classifier
+`classifyFile(path)` in `modules/reviews/smart-diff/helpers.ts`; rules in
+`constants.ts`; checked in the order boilerplate → tests → wiring → docs, first
+match wins, else `core`. `dist/`, `build/`, `e2e/`, `docs/`, `.github/`,
+`.claude/` are anchored to the FIRST path segment. The table below is the
+specification; `server/test/smart-diff-classify.test.ts` asserts it row for row.
 
-`classifyPath(path)`: `segments = path.split('/')`, `base` = last segment,
-`dirs` = the rest. Comparison is case-sensitive. "Segment" means an exact
-match against one of `dirs` — never a substring, never the basename. Rules
-are checked in this order (first match wins); anything unmatched is `core`:
+| path | role | why (rule that wins) |
+|---|---|---|
+| `pnpm-lock.yaml` | boilerplate | lock basename |
+| `server/pnpm-lock.yaml` | boilerplate | lock basename at any depth |
+| `e2e/package-lock.json` | boilerplate | boilerplate checked before `e2e/` (tests) |
+| `Cargo.lock` | boilerplate | `*.lock` |
+| `dist/index.js` | boilerplate | root `dist/` |
+| `build/out.js` | boilerplate | root `build/` |
+| `src/build/plan.ts` | core | `build/` is root-anchored only |
+| `src/__snapshots__/a.test.ts.snap` | boilerplate | `__snapshots__` beats `.test.` |
+| `test/fixtures/x.snap` | boilerplate | `*.snap` beats `test/` |
+| `src/api.generated.ts` | boilerplate | `*.generated.*` |
+| `public/vendor.min.js` | boilerplate | `*.min.js` |
+| `src/a.test.ts` | tests | `*.test.ts` |
+| `src/A.test.tsx` | tests | `*.test.tsx` |
+| `server/test/smart-diff.it.test.ts` | tests | `*.test.ts` covers `*.it.test.ts` |
+| `src/a.spec.ts` | tests | `*.spec.ts` |
+| `server/test/helpers/index.ts` | tests | `test/` dir beats the `index.ts` barrel (wiring) |
+| `src/__tests__/util.ts` | tests | `__tests__/` dir |
+| `e2e/specs/05-pr-diff.flow.json` | tests | root `e2e/` |
+| `src/contest/foo.ts` | core | whole segment only, `contest` ≠ `test` |
+| `src/tests.ts` | core | `tests` as a basename is not a dir |
+| `client/src/vendor/shared/index.ts` | wiring | barrel |
+| `lib/index.js` | wiring | barrel |
+| `vitest.config.ts` | wiring | `*.config.*` |
+| `client/next.config.mjs` | wiring | `*.config.*` |
+| `tsconfig.json` | wiring | `tsconfig*.json` |
+| `server/tsconfig.build.json` | wiring | `tsconfig*.json` |
+| `.eslintrc.cjs` | wiring | `.eslintrc*` |
+| `.env.example` | wiring | `.env*` |
+| `docker-compose.dev.yml` | wiring | `docker-compose*.yml` |
+| `.github/workflows/client.yml` | wiring | root `.github/` |
+| `.claude/agents/planner.md` | wiring | root `.claude/` beats `*.md` (docs) |
+| `src/app.environment.ts` | wiring | `*.environment.*` |
+| `docs/index.ts` | wiring | barrel beats `docs/` |
+| `README.md` | docs | `*.md` |
+| `server/specs/L03-smart-diff.md` | docs | `*.md` |
+| `docs/hand-written-migrations.md` | docs | `*.md` |
+| `docs/diagram.png` | docs | root `docs/` |
+| `CHANGELOG` | docs | `CHANGELOG*` |
+| `LICENSE` | docs | `LICENSE*` |
+| `readme.txt` | docs | `README*`, case-insensitive |
+| `./src/x.ts` | core | leading `./` stripped |
+| `server\src\a.ts` | core | `\` normalised to `/` |
+| `server/src/modules/reviews/service.ts` | core | fallback |
+| `client/src/app/layout.tsx` | core | fallback |
 
-| Role | Pattern | Rule | Anchoring |
-|---|---|---|---|
-| boilerplate | `*.lock` | base ends with `.lock` | basename, any depth |
-| | `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock` | base equals | basename |
-| | `dist/**`, `build/**` | segment `dist` or `build` | any depth |
-| | `**/__snapshots__/**` | segment `__snapshots__` | any depth |
-| | `*.snap`, `*.min.js` | base ends with `.snap` / `.min.js` | basename |
-| | `*.generated.*` | base matches `/^.+\.generated\..+$/` | basename |
-| tests | `*.test.ts(x)`, `*.it.test.ts`, `*.spec.ts` | base ends with `.test.ts` / `.test.tsx` / `.spec.ts` | basename |
-| | `**/test/**`, `**/tests/**`, `**/__tests__/**` | segment | any depth |
-| | `e2e/**` | segment `e2e` | any depth |
-| wiring | `index.ts`, `index.js` | base equals | basename |
-| | `*.config.*` | base matches `/^.+\.config\..+$/` (`config.ts` itself does NOT match — no dot before `config`) | basename |
-| | `tsconfig*.json` | base starts with `tsconfig`, ends with `.json` | basename |
-| | `.eslintrc*`, `.env*` | base starts with `.eslintrc` / `.env` | basename |
-| | `docker-compose*.yml` | base starts with `docker-compose`, ends with `.yml` | basename |
-| | `.github/**`, `.claude/**` | segment | any depth |
-| docs | `**/*.md` | base ends with `.md` | basename |
-| | `docs/**` | segment `docs` | any depth |
-| | `README*`, `CHANGELOG*` | base starts with | basename |
-| | `LICENSE` | base equals | basename |
-| core | everything else | — | — |
+### Decisions (approved 2026-10-02)
+- **G1** latest review set: the newest `agent_runs` batch for the PR (all runs
+  with exactly the newest `ran_at`) → their `reviews` with `kind='review'`; if
+  none, the single newest `kind='review'` review; if none, `review_ids = []`.
+  Same semantics as the FINDINGS column of the PR list.
+- **G2** findings with `dismissed_at` set are excluded; accepted ones stay.
+- **G3** `review_ids` is an additive field.
+- **Q1** the client shows `● N` (files with findings) in a group header always.
+- `finding_lines` = unique `start_line` of findings whose `file` equals the
+  path, ascending. Findings that match no PR path are dropped (counted in the log).
 
-`Cargo.lock` / `poetry.lock` are already covered by the generic `*.lock`
-rule and are not listed separately. Any-depth segment matching is a
-deliberate monorepo choice: it also catches `build/` used as a source
-directory name and `server/docs/*.ts`. No additional boilerplate patterns
-(`go.sum`, `*.min.css`, `*.map`) are added in this iteration, and `**/vendor/**`
-is deliberately rejected — it would hide changes to
-`*/src/vendor/shared/contracts/*` inside the boilerplate group.
+## Prompt builder
+No LLM call; prompt assembly is unchanged. L08 seam:
+`import { classifyFile } from './smart-diff/helpers.js'` inside
+`server/src/modules/reviews/`; the folder is pure (no I/O).
 
-### "Latest review per agent"
+## Logging
+One `info` line `'smart-diff built'` with counts only (`prId`, `files`, `roles`,
+`reviews`, `findings`, `dismissedExcluded`, `unmatchedFindings`,
+`filesWithFindings`) — no paths, titles or finding text.
 
-Identical rule on server and client (client copy: `DiffTab/helpers.ts`,
-its own spec):
-
-1. Group reviews by `agent_id`; every review with `agent_id = null` is one
-   single group (not one group per row — the seed has exactly one
-   `agent_id = NULL` review).
-2. Within a group, keep the review with the greatest `created_at`; on a tie,
-   the greatest `id`.
-3. Only findings from the kept reviews count.
-
-A failed re-run of an agent creates no review row (`ReviewRecord` only ever
-represents a persisted, successful review), so the previous successful run's
-findings/markers remain visible until a new one supersedes them.
-
-### `finding_lines` / dismissed / accepted
-
-- `finding_lines` on a `SmartDiffFile` = sorted, de-duplicated `start_line`s
-  of **non-dismissed** findings from the kept reviews whose `file === path`.
-  Accepted findings still count (accept confirms a true positive, it doesn't
-  hide it); dismissed findings never contribute a line.
-- The server computes `finding_lines` so the contract's field is truthful,
-  but the client's finding markers (dots, chips, inline cards) are sourced
-  **only** from `usePrReviews` — never from this field — so there is exactly
-  one source of truth for what the user sees, and it updates immediately on
-  accept/dismiss. Both implementations follow the same rule above; parity is
-  pinned by a shared fixture used in both the server's and the client's unit
-  tests (Test brief TP-1).
-
-### `split_suggestion`
-
-- `total_lines = Σ(additions + deletions)` over all of the PR's files.
-- `too_big = total_lines >= 400` (matches the existing "L" size badge on the
-  PR list, `client/.../pulls/helpers.ts`, `SIZE_MEDIUM_MAX = 400`).
-- `proposed_splits` is always `[]` in this iteration (no LLM-derived split
-  suggestions yet).
-- Every file's `pseudocode_summary` is `null`.
-
-### Response shape
-
-`groups` contains only non-empty groups, in the fixed order core → tests →
-wiring → docs → boilerplate. Within a group the server sorts files by `path`
-(code-unit order) so its own response is deterministic; the client lays
-files out in the PR's original GitHub order instead (see the client spec).
-
-### Logging
-
-One `logger?.info({ prId, files, byRole: {core,tests,wiring,docs,boilerplate},
-findings, reviewsKept, totalLines, tooBig, durationMs }, 'smart-diff: built')`
-per call, using `req.log` (type `PinoLike`,
-`server/src/platform/run-logger.ts`). No file path, patch text or finding
-text is ever logged.
+## Risks
+- Rule order gives non-obvious roles (`docs/index.ts` → wiring, `.claude/**/*.md`
+  → wiring, `server/dist/x.js` → core, `e2e/playwright.config.ts` → tests).
+- Renamed files / findings on files not in the PR are not shown in the diff.
+- `pr_files` is replaced on `GET /pulls/:id`; the client falls back to the flat
+  list when the path sets differ.
 
 ## Acceptance criteria
-
-- [ ] `GET /pulls/:id/smart-diff` for a PR with files `src/a.ts`,
-      `src/a.test.ts`, `tsconfig.json`, `README.md`, `pnpm-lock.yaml` returns
-      200 and `groups[].role` in the order
-      `["core","tests","wiring","docs","boilerplate"]`.
-- [ ] A PR from another workspace, or a random (non-existent) uuid → 404;
-      `/pulls/not-a-uuid/smart-diff` → 422.
-- [ ] `split_suggestion`: 399 total lines → `too_big: false`; 400 →
-      `too_big: true`; `proposed_splits` is always `[]`; every
-      `pseudocode_summary` is `null`.
-- [ ] `finding_lines` only reflects the latest review per agent, and never
-      includes a dismissed finding's line.
-- [ ] `server/src/vendor/shared/contracts/brief.ts` and the client's copy are
-      byte-identical; `SmartDiffRole.options` is
-      `['core','tests','wiring','docs','boilerplate']`.
-- [ ] `git diff main --stat -- reviewer-core server/src/db client/src/vendor/ui
-      '**/package.json' '**/*lock*'` is empty.
-
-See the client spec ([../../client/specs/L03-smart-diff.md](../../client/specs/L03-smart-diff.md))
-for the UI-facing acceptance criteria (order toggle, group headers, finding
-markers, inline cards, unanchored block).
+- [ ] Groups come in order core, tests, wiring, docs, boilerplate; no empty groups.
+- [ ] `finding_lines` from the latest batch only, no dismissed findings.
+- [ ] A PR without `agent_runs` but with reviews → `review_ids = [newest review]`.
+- [ ] Unknown uuid → 404; non-uuid → 422; other workspace → 404.
+- [ ] `split_suggestion = {too_big:false, total_lines: Σ, proposed_splits:[]}`.
+- [ ] Both vendored `brief.ts` and `review-api.ts` are byte-identical.
+- [ ] `classifyFile` is unit-testable without `buildApp` and a DB.
 
 ## Test plan
-
-This iteration ships the implementation only; test files are written by
-test-writer from this spec and the plan's per-work-package "Tests" lines.
-
-| Package | Command | Needs Docker? | Covers |
-|---|---|---|---|
-| server | `pnpm typecheck` | no | contract, module |
-| server | `pnpm exec vitest run --exclude '**/*.it.test.ts'` | no | `classifyPath`, `latestReviewPerAgent`, `buildSmartDiff`, contract enum |
-| server | `../scripts/hermetic.sh pnpm exec vitest run .it.test` | yes | route, 404/422, logging (no secret leakage) |
-| client | `pnpm typecheck` · `pnpm test` | no | helpers, DiffTab, diff-viewer, hooks |
+Unit: `test/contracts.test.ts`, `test/smart-diff-classify.test.ts`,
+`test/smart-diff-helpers.test.ts`. Integration (Docker):
+`test/smart-diff.it.test.ts` — latest-batch selection, fallbacks, dismissed
+exclusion, 404/422/tenancy.

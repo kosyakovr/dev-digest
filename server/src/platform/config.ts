@@ -15,7 +15,7 @@ import { join, isAbsolute, resolve } from 'node:path';
 const EnvSchema = z.object({
   DATABASE_URL: z
     .string()
-    .default('postgres://devdigest:devdigest@localhost:5432/devdigest'),
+    .default('postgres://devdigest2:devdigest2@localhost:5432/devdigest2'),
   // Memory/RAG embeddings run on OpenAI (text-embedding-3-small, 1536-dim — the
   // pgvector columns are locked to that). Default OFF so the app makes ZERO
   // OpenAI requests; set EMBEDDINGS_ENABLED=true to turn memory retrieval on.
@@ -29,20 +29,23 @@ const EnvSchema = z.object({
   API_PORT: z.coerce.number().int().default(3001),
   WEB_PORT: z.coerce.number().int().default(3000),
   DEVDIGEST_CLONE_DIR: z.string().optional(),
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  // An empty (or blank) NODE_ENV counts as unset: it falls through to the default
+  // and, for prompt logging, is not "explicit" (see loadConfig).
+  NODE_ENV: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+    z.enum(['development', 'test', 'production']).default('development'),
+  ),
   // `.env` (and .env.example) ship `LOG_LEVEL=` empty; an empty string is not a
   // valid enum member, so coerce '' → undefined to fall through to the default.
   LOG_LEVEL: z.preprocess(
     (v) => (v === '' ? undefined : v),
     z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).optional(),
   ),
-  // L03 — prompt logging (see docs/agent-prompts/README.md § How a prompt is
-  // assembled). Same '' → undefined pattern as LOG_LEVEL. 'verbose' is gated
-  // to non-production in loadConfig, not here: the schema only validates the
-  // literal value, not the NODE_ENV interaction.
-  PROMPT_LOG: z.preprocess(
+  // Prompt-assembly logging. `verbose` adds per-chunk detail (hashes, a masked
+  // system-prompt preview) and is honoured only for an EXPLICIT local NODE_ENV.
+  DEVDIGEST_PROMPT_LOG: z.preprocess(
     (v) => (v === '' ? undefined : v),
-    z.enum(['summary', 'verbose']).optional(),
+    z.enum(['default', 'verbose']).optional(),
   ),
 });
 
@@ -56,6 +59,12 @@ export type AppConfig = {
   secretsPath: string;
   nodeEnv: 'development' | 'test' | 'production';
   logLevel: string;
+  /** Prompt-log mode actually in effect (verbose only for an explicit development/test NODE_ENV). */
+  promptLog: 'default' | 'verbose';
+  /** What DEVDIGEST_PROMPT_LOG asked for, before the environment check. */
+  promptLogRequested: 'default' | 'verbose';
+  /** Why a requested verbose mode was not honoured; undefined when it was (or not requested). */
+  promptLogIgnoredReason?: string;
   /** Allowed CORS origin for the Next.js dev server. */
   webOrigin: string;
   /** Whether memory/RAG embeddings (OpenAI) are enabled. Default false. */
@@ -67,15 +76,6 @@ export type AppConfig = {
    * EXACTLY like the ripgrep-only baseline.
    */
   repoIntelEnabled: boolean;
-  /**
-   * L03 — prompt-log detail level. 'summary' logs one text-free record per
-   * assembled prompt (section name/source/role/untrusted/chars/tokens_est).
-   * 'verbose' (local only — see promptLogVerboseIgnored) adds per-section
-   * fingerprints, diff file paths, skill names and intent source refs.
-   */
-  promptLog: 'summary' | 'verbose';
-  /** True when PROMPT_LOG=verbose was set but ignored because NODE_ENV=production. */
-  promptLogVerboseIgnored: boolean;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -83,10 +83,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const cloneDirRaw =
     parsed.DEVDIGEST_CLONE_DIR ?? join(homedir(), '.devdigest', 'workspace');
   const cloneDir = isAbsolute(cloneDirRaw) ? cloneDirRaw : resolve(process.cwd(), cloneDirRaw);
-  const promptLogVerboseIgnored =
-    parsed.PROMPT_LOG === 'verbose' && parsed.NODE_ENV === 'production';
-  const promptLog: 'summary' | 'verbose' =
-    parsed.PROMPT_LOG === 'verbose' && parsed.NODE_ENV !== 'production' ? 'verbose' : 'summary';
+  const promptLogRequested = parsed.DEVDIGEST_PROMPT_LOG ?? 'default';
+  // "Local only" needs an EXPLICIT NODE_ENV: the schema default ('development')
+  // must not count, or an unconfigured deployment would honour the flag.
+  const rawNodeEnv = env.NODE_ENV;
+  const nodeEnvExplicit = typeof rawNodeEnv === 'string' && rawNodeEnv.trim() !== '';
+  const local = nodeEnvExplicit && (parsed.NODE_ENV === 'development' || parsed.NODE_ENV === 'test');
+  const promptLog = promptLogRequested === 'verbose' && local ? 'verbose' : 'default';
+  const promptLogIgnoredReason =
+    promptLogRequested === 'verbose' && !local
+      ? nodeEnvExplicit
+        ? `NODE_ENV=${parsed.NODE_ENV}`
+        : 'NODE_ENV not set explicitly'
+      : undefined;
   return {
     databaseUrl: parsed.DATABASE_URL,
     apiPort: parsed.API_PORT,
@@ -94,27 +103,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     cloneDir,
     secretsPath: join(homedir(), '.devdigest', 'secrets.json'),
     nodeEnv: parsed.NODE_ENV,
-    logLevel: parsed.LOG_LEVEL ?? (parsed.NODE_ENV === 'test' ? 'silent' : 'info'),
+    logLevel:
+      parsed.LOG_LEVEL ??
+      (parsed.NODE_ENV === 'test' ? 'silent' : promptLog === 'verbose' ? 'debug' : 'info'),
+    promptLog,
+    promptLogRequested,
+    ...(promptLogIgnoredReason ? { promptLogIgnoredReason } : {}),
     webOrigin: `http://localhost:${parsed.WEB_PORT}`,
     embeddingsEnabled: parsed.EMBEDDINGS_ENABLED === 'true',
     repoIntelEnabled: parsed.REPO_INTEL_ENABLED !== 'false',
-    promptLog,
-    promptLogVerboseIgnored,
   };
-}
-
-/**
- * Pure post-load warnings to surface once at boot. `loadConfig` has no
- * logger (it may run in scripts/tests too) — `app.ts` calls this after
- * Fastify is constructed and logs each entry via `app.log.warn`.
- */
-export function startupWarnings(config: AppConfig): { obj: Record<string, unknown>; msg: string }[] {
-  const warnings: { obj: Record<string, unknown>; msg: string }[] = [];
-  if (config.promptLogVerboseIgnored) {
-    warnings.push({
-      obj: { promptLog: 'verbose', nodeEnv: 'production' },
-      msg: 'PROMPT_LOG=verbose ignored in production; using summary',
-    });
-  }
-  return warnings;
 }

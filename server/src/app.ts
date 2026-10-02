@@ -11,8 +11,7 @@ import {
 } from 'fastify-type-provider-zod';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { loadConfig, startupWarnings, type AppConfig } from './platform/config.js';
-import { loggerOptions } from './platform/logger-options.js';
+import { loadConfig, type AppConfig } from './platform/config.js';
 import { createDb, type Db } from './db/client.js';
 import { Container, type ContainerOverrides } from './platform/container.js';
 import { AppError } from './platform/errors.js';
@@ -48,13 +47,50 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     // Explicit 1MB cap on request bodies (PR comments, settings payloads are
     // small). Protects against oversized/abusive payloads.
     bodyLimit: 1_048_576,
-    logger: loggerOptions(config),
+    logger:
+      config.logLevel === 'silent'
+        ? false
+        : {
+            level: config.logLevel,
+            // Backup layer only: prompt content is never put into a log payload.
+            // pino's `*.x` matches ONE level down only, so each key is listed
+            // bare too, for the common top-level shape `log.info({ token })`.
+            redact: {
+              paths: [
+                'apiKey',
+                'token',
+                'authorization',
+                'diff',
+                'body',
+                'content',
+                'text',
+                'systemPrompt',
+                'prDescription',
+                '*.apiKey',
+                '*.token',
+                '*.authorization',
+                'req.headers.authorization',
+                'req.headers.cookie',
+                '*.diff',
+                '*.body',
+                '*.content',
+                '*.text',
+                '*.systemPrompt',
+                '*.prDescription',
+              ],
+              censor: '[redacted]',
+            },
+            transport:
+              config.nodeEnv === 'development'
+                ? { target: 'pino-pretty', options: { colorize: true } }
+                : undefined,
+          },
   });
 
-  // Surface any config-derived warning once at boot (currently: PROMPT_LOG=
-  // verbose ignored in production). Pure `startupWarnings` has no logger of
-  // its own — this is the one place that logs it.
-  for (const w of startupWarnings(config)) app.log.warn(w.obj, w.msg);
+  if (config.promptLogRequested === 'verbose') {
+    if (config.promptLog === 'verbose') app.log.info('prompt logging: verbose (local only)');
+    else app.log.warn(`prompt logging: verbose ignored (${config.promptLogIgnoredReason ?? 'not local'})`);
+  }
 
   // Use zod schemas directly for request validation + response serialization.
   // Routes opt in per-module via `app.withTypeProvider<ZodTypeProvider>()`.

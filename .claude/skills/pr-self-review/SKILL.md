@@ -48,16 +48,12 @@ your own edit loop, never for the gate.
 ## 1. Scope
 
 ```bash
-BASE=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##'); BASE=${BASE:-main}
+BASE=$(git rev-parse --abbrev-ref origin/HEAD 2>/dev/null | sed 's#^origin/##'); BASE=${BASE:-main}
 MB=$(git merge-base "$BASE" HEAD)
 git rev-parse HEAD                      # head_sha
 git diff --name-status -M "$MB" HEAD    # the change, with rename detection
 git status --porcelain                  # coverage warning only — never reviewed
 ```
-
-`symbolic-ref`, not `rev-parse --abbrev-ref`: without an `origin/HEAD` (a repo that
-was `git init`ed and pushed rather than cloned) the latter still prints
-`origin/HEAD`, `BASE` becomes `HEAD`, and every run finds nothing to review.
 
 If `HEAD` equals `$MB` there is nothing to review — say so and stop. If the
 worktree is dirty, print a prominent warning naming the uncommitted files and
@@ -81,11 +77,6 @@ Also specified in [routing.md](routing.md):
   requires them to change together. A one-sided edit is a synthetic **CRITICAL**
   (`source_skill: "AGENTS.md"`, `source_rule: "Cross-package invariants"`).
 - **The greps** — [greps.md](greps.md), run at two revisions and subtracted.
-- **Secret greps** — `scripts/secret-greps.sh "$MB" HEAD`: the secret-shaped
-  literals the branch adds, masked. Each file with a new hit joins group E
-  (the content trigger in routing.md), and the hits go to the E reviewer as
-  leads. Exit 1 (`INCOMPLETE`) means a pattern did not run — report it, do not
-  treat the run as clean.
 
 ## 4. Spawn reviewers
 

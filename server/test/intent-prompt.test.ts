@@ -1,94 +1,100 @@
-/**
- * L03 — `describeClassifierPrompt` / `buildUserPrompt` (modules/intent/prompt.ts).
- * Pure: text-free section metadata for the intent classifier's prompt, plus the
- * byte-identical guarantee on `buildUserPrompt`'s actual LLM-bound text.
- */
 import { describe, it, expect } from 'vitest';
-import {
-  describeClassifierPrompt,
-  buildUserPrompt,
-  SYSTEM_PROMPT,
-  type ClassifierSource,
-} from '../src/modules/intent/prompt.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { buildUserPrompt, intentPromptSections, SYSTEM_PROMPT } from '../src/modules/intent/prompt.js';
+import type { GatherPull, IntentBundle } from '../src/modules/intent/types.js';
 
-const PR = { number: 42, owner: 'acme', repo: 'widgets' };
+/**
+ * WP4.tests + AC-8 for the intent prompt. `intentPromptSections` describes the
+ * prompt without its content; `buildUserPrompt` / `SYSTEM_PROMPT` stay
+ * byte-identical to the pre-change snapshot d17edf2 (golden fixture, generated
+ * by running that snapshot's code on the stored inputs).
+ */
 
-const SOURCES: ClassifierSource[] = [
-  { kind: 'linked_spec', ref: 'docs/specs/rl.md', text: 'CANARY_SPEC_6', truncated: false },
-  { kind: 'linked_issue', ref: '#12', text: 'CANARY_ISSUE_7', truncated: false },
-  { kind: 'title', ref: 'CANARY_TITLE_8', text: 'CANARY_TITLE_8', truncated: false },
-  { kind: 'branch', ref: 'feat/CANARY_BRANCH_9', text: 'feat/CANARY_BRANCH_9', truncated: false },
-];
+interface GoldenCase {
+  name: string;
+  input: { bundle: IntentBundle; pull: GatherPull; repo: { owner: string; name: string } };
+  system: string;
+  user: string;
+}
+const golden = JSON.parse(
+  readFileSync(fileURLToPath(new URL('./fixtures/intent-prompt-golden.json', import.meta.url)), 'utf8'),
+) as GoldenCase[];
 
-describe('describeClassifierPrompt', () => {
-  it('describes one section per source, with sizes and allowlisted refs only', () => {
-    const result = describeClassifierPrompt(PR, SOURCES);
-
-    expect(result.sections.map((s) => s.name)).toEqual([
-      'system_prompt',
-      'header',
-      'S1',
-      'S2',
-      'S3',
-      'S4',
-    ]);
-    expect(result.system_chars).toBe(SYSTEM_PROMPT.length);
-
-    // header + S1..S4 are the "user" sections; the join separator is '\n\n'
-    // (2 chars) between each of them — same arithmetic as assemblePrompt's.
-    const userSections = result.sections.slice(1);
-    const userSum = userSections.reduce((n, s) => n + s.chars, 0) + 2 * (userSections.length - 1);
-    expect(userSum).toBe(buildUserPrompt(PR, SOURCES).length);
-
-    // linked_spec / linked_issue are in LOGGABLE_REF_KINDS → their ref is kept.
-    expect(result.sections[2]!.ref).toBe('docs/specs/rl.md');
-    expect(result.sections[3]!.ref).toBe('#12');
-    // title / branch refs ARE the author's own text → always null.
-    expect(result.sections[4]!.ref).toBeNull();
-    expect(result.sections[5]!.ref).toBeNull();
-
-    // Text-free: none of the sources' bodies (nor the title/branch text used
-    // as their `ref`) leaks into the returned metadata.
-    expect(JSON.stringify(result)).not.toMatch(
-      /CANARY_(SPEC_6|ISSUE_7|TITLE_8|BRANCH_9)/,
-    );
-  });
-
-  it('attaches a fingerprint per section only when a hasher is supplied', () => {
-    const withHash = describeClassifierPrompt(PR, SOURCES, { fingerprint: (t) => `h${t.length}` });
-    for (const s of withHash.sections) {
-      expect(s.fingerprint).toBe(`h${s.chars}`);
-    }
-
-    const withoutHash = describeClassifierPrompt(PR, SOURCES);
-    for (const s of withoutHash.sections) {
-      expect(s.fingerprint).toBeUndefined();
-    }
-  });
+describe('intent prompt is byte-identical to the pre-change snapshot (AC-8)', () => {
+  for (const c of golden) {
+    it(`${c.name}: system prompt and user prompt`, () => {
+      expect(SYSTEM_PROMPT).toBe(c.system);
+      expect(buildUserPrompt(c.input.bundle, c.input.pull, c.input.repo)).toBe(c.user);
+    });
+  }
 });
 
-describe('buildUserPrompt — byte-identical rendering', () => {
-  it('renders "PR #N in owner/repo" + one wrapped block per source, joined by blank lines', () => {
-    const pr = { number: 7, owner: 'acme', repo: 'widgets' };
-    const sources: ClassifierSource[] = [
-      { kind: 'description', ref: 'pr-body', text: 'Adds caching.', truncated: false },
-    ];
+describe('intentPromptSections', () => {
+  const full = golden.find((c) => c.name === 'full')!.input.bundle;
+  const sparse = golden.find((c) => c.name === 'sparse')!.input.bundle;
 
-    const expected =
-      'PR #7 in acme/widgets\n\n' +
-      '### S1 · description · pr-body\n' +
-      '<untrusted source="intent-S1">\n' +
-      'Adds caching.\n' +
-      '</untrusted>';
+  const withSentinel: IntentBundle = {
+    ...full,
+    specs: [{ path: 'docs/specs/x.md', text: 'SPEC-SENTINEL-42 plus the spec body' }],
+    tickets: [{ n: 471, title: 'Rate limit API', body: 'ISSUE-BODY-SENTINEL' }],
+    body: 'PR-BODY-SENTINEL',
+    diffExcerpt: '+const k = "AKIAIOSFODNN7EXAMPLE";',
+  };
 
-    expect(buildUserPrompt(pr, sources)).toBe(expected);
+  it('describes the ticket by ref and the spec as untrusted by path; system first, instruction last', () => {
+    const sections = intentPromptSections(withSentinel);
+    expect(sections[0]!.name).toBe('system');
+    expect(sections[sections.length - 1]!.name).toBe('instruction');
+    expect(sections.find((s) => s.name === 'ticket')).toMatchObject({ name: 'ticket', ref: '#471' });
+    expect(sections.find((s) => s.name === 'spec')).toMatchObject({
+      name: 'spec',
+      ref: 'docs/specs/x.md',
+      trust: 'untrusted',
+    });
   });
 
-  it('marks a truncated source in its block label', () => {
-    const pr = { number: 1, owner: 'a', repo: 'b' };
-    const sources: ClassifierSource[] = [
-      { kind: 'commits', ref: 'commits', text: 'c1\nc2', truncated: true },
-    ];
-    expect(buildUserPrompt(pr, sources)).toContain('### S1 · commits · commits (truncated)');
+  it('serialized output holds no spec text, issue body, PR body or secret', () => {
+    const json = JSON.stringify(intentPromptSections(withSentinel));
+    expect(json).not.toContain('SPEC-SENTINEL-42');
+    expect(json).not.toContain('ISSUE-BODY-SENTINEL');
+    expect(json).not.toContain('PR-BODY-SENTINEL');
+    expect(json).not.toContain('AKIAIOSFODNN7EXAMPLE');
+    expect(json).not.toContain('Rate limit API');
+  });
+
+  it('uses the Contract table names, sources and trust, in render order', () => {
+    expect(intentPromptSections(full).map((s) => [s.name, s.source, s.trust])).toEqual([
+      ['system', 'intent.system_prompt', 'trusted'],
+      ['title', 'pr.title', 'untrusted'],
+      ['description', 'pr.body', 'untrusted'],
+      ['ticket', 'tracker', 'untrusted'],
+      ['spec', 'repo.spec', 'untrusted'],
+      ['commits', 'git.commits', 'untrusted'],
+      ['branch', 'pr.branch', 'untrusted'],
+      ['files', 'pr.files', 'untrusted'],
+      ['diff', 'pr.diff_excerpt', 'untrusted'],
+      ['instruction', 'intent.instruction', 'trusted'],
+    ]);
+  });
+
+  it('counts items for commits (2) and files (2) only', () => {
+    const items = Object.fromEntries(intentPromptSections(full).map((s) => [s.name, s.items]));
+    expect(items.commits).toBe(2);
+    expect(items.files).toBe(2);
+    expect(items.title).toBeUndefined();
+    expect(items.spec).toBeUndefined();
+  });
+
+  it('a bundle with only a title lists system, title, instruction', () => {
+    expect(intentPromptSections(sparse).map((s) => s.name)).toEqual(['system', 'title', 'instruction']);
+  });
+
+  it('every tokensEst is ceil(chars/4)', () => {
+    for (const s of intentPromptSections(full)) expect(s.tokensEst).toBe(Math.ceil(s.chars / 4));
+  });
+
+  it('the system section is the real system prompt (its length)', () => {
+    expect(intentPromptSections(full)[0]!.chars).toBe(SYSTEM_PROMPT.length);
   });
 });

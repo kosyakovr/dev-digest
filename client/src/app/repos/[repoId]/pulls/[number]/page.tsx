@@ -53,14 +53,12 @@ export default function PRDetailPage() {
   };
   // When a run settles (done OR failed) refresh the full run history too, so a
   // just-failed run shows up in "Run history" immediately — no page reload.
-  // Runs also derive the PR's intent as pre-work, so the Intent card's cache
-  // is invalidated alongside — a fresh derive there means the card shows it.
   const invalidateRunHistory = () => {
-    if (prId) {
-      qc.invalidateQueries({ queryKey: ["pr-runs", prId] });
-      qc.invalidateQueries({ queryKey: ["pr-intent", prId] });
-      qc.invalidateQueries({ queryKey: ["smart-diff", prId] });
-    }
+    if (prId) qc.invalidateQueries({ queryKey: ["pr-runs", prId] });
+    // A settled run may have (re)derived the PR intent.
+    if (prId) qc.invalidateQueries({ queryKey: ["pr-intent", prId] });
+    // …and its findings change the Files-changed tab's grouping + inline cards.
+    if (prId) qc.invalidateQueries({ queryKey: ["smart-diff", prId] });
   };
 
   const tab = search.get("tab") ?? "overview";
@@ -171,10 +169,10 @@ export default function PRDetailPage() {
           <DiffTab
             prId={prId}
             filesCount={pr.files_count}
+            additions={pr.additions}
+            deletions={pr.deletions}
             files={pr.files}
             canComment={pr.status === "open"}
-            orderParam={search.get("order")}
-            onOrderParamChange={(v) => setParam("order", v)}
           />
         )}
       </div>

@@ -1,104 +1,148 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { startPg, dockerAvailable, type PgFixture } from './helpers/pg.js';
-import { waitForPrRuns } from './helpers/runs.js';
 import { buildApp } from '../src/app.js';
-import { loadConfig, type AppConfig } from '../src/platform/config.js';
+import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
-import { MockLLMProvider, MockEmbedder, MockGitClient } from '../src/adapters/mocks.js';
-import { ReviewService } from '../src/modules/reviews/service.js';
-import type { Logger } from '../src/modules/reviews/run-executor.js';
+import {
+  MockLLMProvider,
+  MockEmbedder,
+  MockGitClient,
+  MockGitHubClient,
+  MockSecretsProvider,
+} from '../src/adapters/mocks.js';
 import * as t from '../src/db/schema.js';
-import type { Review } from '@devdigest/shared';
+import { ReviewService } from '../src/modules/reviews/service.js';
+import { IntentService } from '../src/modules/intent/service.js';
+import type { Logger } from '../src/modules/reviews/run-executor.js';
+import type { AgentRow } from '../src/db/rows.js';
 
 /**
- * L03 — the payoff for WP5 (review run wiring) + WP6 (intent classifier
- * prompt logging): drives a real review (through `ReviewService.runReview`,
- * not the route — the test brief's seam) with a capturing logger, and asserts
- * on the `'prompt: assembled'` records it produces. The core guarantee,
- * proven once per mode here: no diff / PR title / PR body / skill text ever
- * reaches ANY captured log line.
+ * Safe prompt-assembly logging, end to end (server/specs/L03-prompt-logging.md
+ * AC-1..AC-4, AC-6, AC-10). A real Postgres, the real executor / intent service /
+ * RunLogger / prompt-log, a mock LLM and git, and a capturing logger that
+ * implements `child`. The sentinels below are the content that must never reach
+ * the captured pino output; the tests assert they are absent from every line.
  */
+
 const hasDocker = await dockerAvailable();
 const d = hasDocker ? describe : describe.skip;
 
-if (!hasDocker) {
-  // eslint-disable-next-line no-console
-  console.warn('[prompt-log] Docker not available — skipping integration tests.');
-}
+const AWS_KEY = 'AKIAIOSFODNN7EXAMPLE';
+const DIFF_SENTINEL = 'DIFF-BODY-SENTINEL-9';
+const SPEC_SENTINEL = 'SPEC-CONTENT-SENTINEL-7';
+const PR_BODY_SENTINEL = 'PR-BODY-SENTINEL-5';
+const ISSUE_SENTINEL = 'ISSUE-BODY-SENTINEL-3';
+const KEPT_TITLE = 'FINDING-TITLE-SENTINEL-8';
+const DROPPED_TITLE = 'SPEC-SENTINEL-42 phantom finding';
+/** Everything here is content; none of it may appear in captured pino output. */
+const NEVER_LOGGED = [AWS_KEY, DIFF_SENTINEL, SPEC_SENTINEL, PR_BODY_SENTINEL, ISSUE_SENTINEL, KEPT_TITLE, 'SPEC-SENTINEL-42'];
 
-const summaryConfig = () =>
-  loadConfig({ ...process.env, NODE_ENV: 'test', PROMPT_LOG: '' } as NodeJS.ProcessEnv);
-const verboseConfig = () =>
-  loadConfig({ ...process.env, NODE_ENV: 'test', PROMPT_LOG: 'verbose' } as NodeJS.ProcessEnv);
+const HEAD = 'a1b2c3d4';
+const SPEC_PATH = 'docs/specs/x.md';
 
-const AGENT_MODEL = 'gpt-4.1';
+const DIFF = [
+  'diff --git a/src/config.ts b/src/config.ts',
+  '--- a/src/config.ts',
+  '+++ b/src/config.ts',
+  '@@ -10,3 +10,5 @@',
+  '   port: 3000,',
+  `+  awsKey: "${AWS_KEY}",`,
+  `+  // ${DIFF_SENTINEL}`,
+  '   redisUrl: x,',
+  'diff --git a/src/b.ts b/src/b.ts',
+  '--- a/src/b.ts',
+  '+++ b/src/b.ts',
+  '@@ -1,1 +1,2 @@',
+  ' keep',
+  '+const b = 2;',
+  'diff --git a/src/c.ts b/src/c.ts',
+  '--- a/src/c.ts',
+  '+++ b/src/c.ts',
+  '@@ -1,1 +1,2 @@',
+  ' keep',
+  '+const c = 3;',
+].join('\n');
 
-// The diff carries two of the run's canaries: an untrusted body fragment and a
-// secret-shaped literal — exactly the sort of text a prompt-log leak would expose.
-const DIFF = `diff --git a/src/config.ts b/src/config.ts
---- a/src/config.ts
-+++ b/src/config.ts
-@@ -10,3 +10,4 @@
-   port: 3000,
-+  stripeKey: "sk_live_CANARY4",
-+  // CANARY_DIFF_3
-   redisUrl: x,`;
-
-const REVIEW_FIXTURE: Review = { verdict: 'approve', summary: 'Nothing to flag.', score: 100, findings: [] };
-
-// review_intent's registry default provider is 'openrouter' (contracts/platform.ts) —
-// the classification fixture must validate against PrIntentClassificationSchema.
-const CLASSIFICATION_FIXTURE = {
-  evidence: ['S1: adds a stripe key to config'],
-  intent: 'Add a Stripe key to the app config.',
-  in_scope: ['Add stripeKey to src/config.ts'],
-  out_of_scope: [],
-  ambiguity: 'clear' as const,
+const REVIEW_FIXTURE = {
+  verdict: 'request_changes',
+  summary: 'An AWS key is committed.',
+  score: 40,
+  findings: [
+    {
+      id: 'f-valid',
+      severity: 'CRITICAL',
+      category: 'security',
+      title: KEPT_TITLE,
+      file: 'src/config.ts',
+      start_line: 11,
+      end_line: 11,
+      rationale: 'A live key is committed in source.',
+      confidence: 0.95,
+      kind: 'finding',
+    },
+    {
+      id: 'f-halluc',
+      severity: 'WARNING',
+      category: 'bug',
+      title: DROPPED_TITLE,
+      file: 'src/config.ts',
+      start_line: 999,
+      end_line: 999,
+      rationale: 'This line is not in the diff.',
+      confidence: 0.5,
+      kind: 'finding',
+    },
+  ],
 };
 
-const CANARIES = ['CANARY_TITLE_1', 'CANARY_BODY_2', 'CANARY_DIFF_3', 'sk_live_CANARY4', 'CANARY_SKILL_5'];
+const CLASSIFICATION = {
+  evidence: [{ source: 'description', quote: 'rate limiting' }],
+  intent: 'Add rate limiting to the public API',
+  in_scope: ['api'],
+  out_of_scope: ['billing'],
+  sources_conflict: false,
+};
 
-type CapturedCall = { level: 'info' | 'warn' | 'error' | 'debug'; obj: unknown; msg?: string };
+type Line = { level: string; obj: Record<string, unknown>; msg: string };
 
-function capturingLogger(): { logger: Logger; calls: CapturedCall[] } {
-  const calls: CapturedCall[] = [];
-  const push = (level: CapturedCall['level']) => (obj: unknown, msg?: string) => {
-    calls.push({ level, obj, msg });
+/** A logger that records every call, with `child` bindings merged into each object. */
+function captureLogger() {
+  const lines: Line[] = [];
+  const make = (bindings: Record<string, unknown>): Logger => {
+    const rec = (level: string) => (obj: unknown, msg?: string) =>
+      lines.push({
+        level,
+        obj: { ...bindings, ...(obj && typeof obj === 'object' ? (obj as Record<string, unknown>) : {}) },
+        msg: msg ?? '',
+      });
+    return {
+      info: rec('info'),
+      warn: rec('warn'),
+      error: rec('error'),
+      debug: rec('debug'),
+      child: (b) => make({ ...bindings, ...b }),
+    };
   };
-  return {
-    logger: { info: push('info'), warn: push('warn'), error: push('error'), debug: push('debug') },
-    calls,
-  };
+  return { lines, logger: make({}) };
 }
 
-function llmFor(mock: MockLLMProvider) {
-  return { openai: mock, openrouter: mock };
-}
+const dump = (lines: Line[]) => lines.map((l) => JSON.stringify({ obj: l.obj, msg: l.msg })).join('\n');
 
-/**
- * `waitForPrRuns` only proves the DB row reached a terminal status — set
- * INSIDE `runOneAgent`, before it returns and `executeRuns` logs the "done"
- * line. Poll for that specific log line too, so this assertion is not a race
- * against the caller's own logging call.
- */
-async function waitForCall(
-  calls: CapturedCall[],
-  predicate: (c: CapturedCall) => boolean,
-  timeoutMs = 2000,
-): Promise<CapturedCall | undefined> {
-  const start = Date.now();
-  for (;;) {
-    const found = calls.find(predicate);
-    if (found) return found;
-    if (Date.now() - start > timeoutMs) return undefined;
-    await new Promise((r) => setTimeout(r, 10));
+function allKeys(v: unknown, out: string[] = []): string[] {
+  if (Array.isArray(v)) v.forEach((x) => allKeys(x, out));
+  else if (v && typeof v === 'object') {
+    for (const [k, x] of Object.entries(v)) {
+      out.push(k);
+      allKeys(x, out);
+    }
   }
+  return out;
 }
 
-d('prompt logging (WP5 review wiring + WP6 intent classifier)', () => {
+d('prompt-assembly logging (pg + capturing logger)', () => {
   let pg: PgFixture;
   let workspaceId: string;
-  let repoSeq = 0;
+  let seq = 0;
 
   beforeAll(async () => {
     pg = await startPg();
@@ -108,25 +152,36 @@ d('prompt logging (WP5 review wiring + WP6 intent classifier)', () => {
     await pg?.stop();
   });
 
-  function appWith(llm: MockLLMProvider, config: AppConfig) {
+  /** Hermetic env: nothing from process.env (no real keys, no real NODE_ENV). */
+  const cfg = (extra: Record<string, string> = {}) => loadConfig({ NODE_ENV: 'test', ...extra });
+
+  function appWith(config: ReturnType<typeof cfg>) {
     return buildApp({
       config,
       db: pg.handle.db,
       overrides: {
+        secrets: new MockSecretsProvider(),
         embedder: new MockEmbedder(),
-        git: new MockGitClient({ diff: DIFF }),
-        llm: llmFor(llm),
+        git: new MockGitClient({
+          diff: DIFF,
+          filesAtRef: { [`${HEAD}:${SPEC_PATH}`]: `# Plan\n${SPEC_SENTINEL} the plan body.` },
+        }),
+        github: new MockGitHubClient({
+          issues: { 12: { number: 12, title: 'Throttle the API', body: `${ISSUE_SENTINEL} details`, state: 'open' } },
+        }),
+        llm: {
+          openai: new MockLLMProvider('openai', { structured: REVIEW_FIXTURE }),
+          openrouter: new MockLLMProvider('openai', {
+            structuredBySchema: { PrIntentClassification: CLASSIFICATION },
+          }),
+        },
       },
     });
   }
 
-  /** Fresh PR (title/body carrying canaries) + agent (+ optional enabled skill). */
-  async function setupPrAndAgent(
-    app: Awaited<ReturnType<typeof appWith>>,
-    opts: { withSkill?: boolean } = {},
-  ) {
+  async function setupPr() {
     const db = pg.handle.db;
-    const name = `prompt-log-${repoSeq++}`;
+    const name = `plog-${seq++}`;
     const [repo] = await db
       .insert(t.repos)
       .values({ workspaceId, owner: 'acme', name, fullName: `acme/${name}` })
@@ -137,227 +192,239 @@ d('prompt logging (WP5 review wiring + WP6 intent classifier)', () => {
         workspaceId,
         repoId: repo!.id,
         number: 482,
-        title: 'CANARY_TITLE_1',
+        title: 'Add rate limiting',
         author: 'marisa.koch',
         branch: 'feat/rl',
         base: 'main',
-        headSha: 'a1b2c3d4',
-        additions: 1,
+        headSha: HEAD,
+        additions: 3,
         deletions: 0,
-        filesCount: 1,
+        filesCount: 3,
         status: 'needs_review',
-        body: 'CANARY_BODY_2 explains why this change is needed.',
+        body: `${PR_BODY_SENTINEL} adds rate limiting. See ${SPEC_PATH} for the plan. Closes #12.`,
       })
       .returning();
-    await db.insert(t.prFiles).values({
-      prId: pr!.id,
-      path: 'src/config.ts',
-      additions: 2,
-      deletions: 0,
-      patch: '@@ -10,3 +10,4 @@\n   port: 3000,\n+  stripeKey: "sk_live_CANARY4",\n   redisUrl: x,',
-    });
-
-    const agentRes = await app.inject({
-      method: 'POST',
-      url: '/agents',
-      payload: {
-        name: `Reviewer-${repoSeq}`,
-        provider: 'openai',
-        model: AGENT_MODEL,
-        system_prompt: 'You are a reviewer.',
-      },
-    });
-    const agent = agentRes.json() as { id: string };
-
-    if (opts.withSkill) {
-      const skillRes = await app.inject({
-        method: 'POST',
-        url: '/skills',
-        payload: {
-          name: 'rate-limit-rules',
-          description: 'rate-limit-rules',
-          type: 'custom',
-          body: 'CANARY_SKILL_5',
-          enabled: true,
-        },
-      });
-      const skill = skillRes.json() as { id: string };
-      await app.inject({
-        method: 'POST',
-        url: `/agents/${agent.id}/skills`,
-        payload: { skills: [{ skill_id: skill.id }] },
-      });
-    }
-
-    const agentRow = await app.container.agentsRepo.getById(workspaceId, agent.id);
-    if (!agentRow) throw new Error('expected the just-created agent row to exist');
-    return { pr: pr!, agentRow };
+    return pr!;
   }
 
-  function newLlm() {
-    return new MockLLMProvider('openai', {
-      structuredBySchema: { Review: REVIEW_FIXTURE, PrIntentClassification: CLASSIFICATION_FIXTURE },
-    });
+  async function makeAgents(): Promise<AgentRow[]> {
+    const mk = (name: string, strategy: 'single-pass' | 'map-reduce') =>
+      pg.handle.db
+        .insert(t.agents)
+        .values({
+          workspaceId,
+          name: `${name}-${seq++}`,
+          provider: 'openai',
+          model: 'gpt-4.1',
+          systemPrompt: 'You are the SECURITY agent.',
+          strategy,
+        })
+        .returning()
+        .then((r) => r[0]!);
+    return [await mk('Single', 'single-pass'), await mk('MapReduce', 'map-reduce')];
   }
 
-  it('summary: exactly one feature:"review" scope:"run" record per agent run, text-free', async () => {
-    const llm = newLlm();
-    const app = await appWith(llm, summaryConfig());
-    const { pr, agentRow } = await setupPrAndAgent(app);
-    const { logger, calls } = capturingLogger();
+  /** Run one review batch and wait until every agent has logged its end line. */
+  async function batch(config: ReturnType<typeof cfg>) {
+    const app = await appWith(config);
+    const pr = await setupPr();
+    const agents = await makeAgents();
+    const { lines, logger } = captureLogger();
+    const { runs } = await new ReviewService(app.container).runReview(workspaceId, pr.id, agents, logger);
+    const deadline = Date.now() + 30_000;
+    const ended = () =>
+      lines.filter((l) => /^review: agent ".*" (done|failed|cancelled)/.test(l.msg)).length;
+    while (ended() < agents.length && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25));
+    expect(ended(), 'every agent must finish').toBe(agents.length);
+    return { app, pr, agents, runs, lines };
+  }
 
-    const { runs } = await new ReviewService(app.container).runReview(workspaceId, pr.id, [agentRow], logger);
-    await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+  const assembled = (lines: Line[], kind: string) =>
+    lines.filter((l) => l.msg === 'prompt: assembled' && l.obj.kind === kind);
+  const details = (lines: Line[], kind: string) =>
+    lines.filter((l) => l.msg === 'prompt: detail' && l.obj.kind === kind);
 
-    const reviewPromptCalls = calls.filter(
-      (c) => c.msg === 'prompt: assembled' && (c.obj as { feature?: string }).feature === 'review',
-    );
-    expect(reviewPromptCalls).toHaveLength(1);
-    const rec = reviewPromptCalls[0]!.obj as Record<string, unknown>;
-    expect(rec.correlation_id).toBe(runs[0]!.run_id);
-    expect(rec.run_id).toBe(runs[0]!.run_id);
-    expect(rec.pr_id).toBe(pr.id);
-    expect(rec.provider).toBe('openai');
-    expect(rec.model).toBe(AGENT_MODEL);
-    expect(rec.scope).toBe('run');
-    expect(rec).not.toHaveProperty('skills');
-    expect(rec).not.toHaveProperty('diff_files');
+  // ---------------------------------------------------------------- default
 
-    await app.close();
-  });
+  describe('default mode', () => {
+    let run: Awaited<ReturnType<typeof batch>>;
+    beforeAll(async () => {
+      run = await batch(cfg());
+    });
 
-  it('the "done" line carries the numeric tokensIn/tokensOut the mock LLM reported', async () => {
-    const llm = newLlm();
-    const app = await appWith(llm, summaryConfig());
-    const { pr, agentRow } = await setupPrAndAgent(app);
-    const { logger, calls } = capturingLogger();
+    it('AC-1: no secret, diff body, spec text, PR body, issue body or finding title in any captured line', () => {
+      const out = dump(run.lines);
+      expect(run.lines.length).toBeGreaterThan(5);
+      for (const needle of NEVER_LOGGED) expect(out, needle).not.toContain(needle);
+    });
 
-    await new ReviewService(app.container).runReview(workspaceId, pr.id, [agentRow], logger);
-    await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    it('AC-2: one prompt: assembled per agent run and one for the intent derivation', () => {
+      const reviews = assembled(run.lines, 'review');
+      expect(reviews).toHaveLength(2);
+      expect(reviews.map((l) => l.obj.agent).sort()).toEqual(run.agents.map((a) => a.name).sort());
+      const intents = assembled(run.lines, 'intent');
+      expect(intents).toHaveLength(1);
+      expect(intents[0]!.obj.trigger).toBe('review');
+    });
 
-    const doneCall = await waitForCall(calls, (c) => !!c.msg?.includes(' done — '));
-    expect(doneCall).toBeDefined();
-    const obj = doneCall!.obj as Record<string, unknown>;
-    // MockLLMProvider.completeStructured always reports tokensIn:100, tokensOut:50.
-    expect(obj.tokensIn).toBe(100);
-    expect(obj.tokensOut).toBe(50);
-
-    await app.close();
-  });
-
-  it('verbose: adds skills, diff_files, and a 12-hex fingerprint on every section', async () => {
-    const llm = newLlm();
-    const app = await appWith(llm, verboseConfig());
-    const { pr, agentRow } = await setupPrAndAgent(app, { withSkill: true });
-    const { logger, calls } = capturingLogger();
-
-    await new ReviewService(app.container).runReview(workspaceId, pr.id, [agentRow], logger);
-    await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
-
-    const rec = calls.find(
-      (c) => c.msg === 'prompt: assembled' && (c.obj as { feature?: string }).feature === 'review',
-    )!.obj as Record<string, unknown>;
-
-    expect(rec.skills).toEqual(['rate-limit-rules']);
-    const diffFiles = rec.diff_files as { path: string; chars: number }[];
-    expect(diffFiles[0]!.path).toBe('src/config.ts');
-    expect(diffFiles[0]!.chars).toBeGreaterThan(0);
-    for (const s of rec.sections as { fingerprint?: string }[]) {
-      expect(s.fingerprint).toMatch(/^[0-9a-f]{12}$/);
-    }
-
-    await app.close();
-  });
-
-  it('no canary text reaches any captured log line, in either mode', async () => {
-    for (const config of [summaryConfig(), verboseConfig()]) {
-      const llm = newLlm();
-      const app = await appWith(llm, config);
-      const { pr, agentRow } = await setupPrAndAgent(app, { withSkill: true });
-      const { logger, calls } = capturingLogger();
-
-      await new ReviewService(app.container).runReview(workspaceId, pr.id, [agentRow], logger);
-      await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
-
-      const json = JSON.stringify(calls);
-      for (const canary of CANARIES) {
-        expect(json).not.toContain(canary);
+    it('AC-2: each line has provider, model, kind and sections with name/source/trust/chars/tokensEst, and no sha256 / preview / order / chunk', () => {
+      for (const l of [...assembled(run.lines, 'review'), ...assembled(run.lines, 'intent')]) {
+        expect(typeof l.obj.correlationId).toBe('string');
+        expect(l.obj.provider).toEqual(expect.any(String));
+        expect(l.obj.model).toEqual(expect.any(String));
+        const sections = l.obj.sections as Record<string, unknown>[];
+        expect(sections.length).toBeGreaterThan(2);
+        for (const s of sections) {
+          expect(s).toMatchObject({
+            name: expect.any(String),
+            source: expect.any(String),
+            trust: expect.stringMatching(/^(trusted|untrusted)$/),
+            chars: expect.any(Number),
+            tokensEst: expect.any(Number),
+          });
+          expect(s.tokensEst).toBe(Math.ceil((s.chars as number) / 4));
+        }
+        const keys = allKeys(l.obj);
+        for (const k of ['sha256', 'preview', 'order', 'chunk']) expect(keys).not.toContain(k);
       }
+      const review = assembled(run.lines, 'review')[0]!;
+      expect(review.obj).toMatchObject({ provider: 'openai', model: 'gpt-4.1' });
+      const intent = assembled(run.lines, 'intent')[0]!;
+      expect(intent.obj).toMatchObject({ provider: 'openrouter', model: 'deepseek/deepseek-v4-flash' });
+    });
 
-      await app.close();
-    }
+    it('describes the review prompt sections (intent slot included) and the intent sources by ref', () => {
+      const names = (assembled(run.lines, 'review')[0]!.obj.sections as { name: string }[]).map((s) => s.name);
+      expect(names.slice(0, 2)).toEqual(['system', 'injection_guard']);
+      expect(names[names.length - 1]).toBe('diff');
+      for (const n of ['task', 'pr_description', 'intent']) expect(names).toContain(n);
+      const intentSections = assembled(run.lines, 'intent')[0]!.obj.sections as { name: string; ref?: string }[];
+      expect(intentSections.find((s) => s.name === 'ticket')?.ref).toBe('#12');
+      expect(intentSections.find((s) => s.name === 'spec')?.ref).toBe(SPEC_PATH);
+    });
+
+    it('AC-3: the intent lines and every agent line share one correlationId (a UUID)', () => {
+      const ids = new Set(
+        run.lines
+          .filter((l) => /^(prompt: assembled|intent: derived|review: batch started|review: agent)/.test(l.msg))
+          .map((l) => l.obj.correlationId),
+      );
+      expect(ids.size).toBe(1);
+      expect([...ids][0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      const derived = run.lines.find((l) => l.msg === 'intent: derived')!;
+      expect(derived.obj.inputHash).toMatch(/^[0-9a-f]{12}$/);
+    });
+
+    it('AC-6 default: map-reduce over 3 files logs 1 info line and no debug line', () => {
+      const mr = assembled(run.lines, 'review').find((l) => String(l.obj.agent).startsWith('MapReduce'))!;
+      expect(mr.obj).toMatchObject({ strategy: 'map-reduce', chunks: 3 });
+      // (RunLogger "tool" events already mirror at debug; only the prompt lines are new.)
+      expect(run.lines.filter((l) => l.msg === 'prompt: detail')).toEqual([]);
+    });
+
+    it('AC-10: the dropped finding title is on the run trace, while pino has only a generic line', async () => {
+      const trace = await new ReviewService(run.app.container).getRunTrace(run.runs[0]!.run_id);
+      expect(trace!.log.some((l) => l.msg.includes('SPEC-SENTINEL-42'))).toBe(true);
+      const mirror = run.lines.filter((l) => l.msg.startsWith('grounding dropped'));
+      expect(mirror.length).toBeGreaterThanOrEqual(1);
+      for (const l of mirror) expect(l.msg).toBe('grounding dropped 1 finding(s) (reason: line not in diff)');
+      expect(dump(run.lines)).not.toContain('SPEC-SENTINEL-42');
+    });
+
+    it('AC-2: a second batch on the same head reuses the stored intent: cache hit, no new intent prompt line', async () => {
+      const { lines, logger } = captureLogger();
+      const agents = [run.agents[0]!];
+      await new ReviewService(run.app.container).runReview(workspaceId, run.pr.id, agents, logger);
+      const deadline = Date.now() + 30_000;
+      while (!lines.some((l) => /^review: agent ".*" (done|failed)/.test(l.msg)) && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      expect(assembled(lines, 'intent')).toHaveLength(0);
+      expect(assembled(lines, 'review')).toHaveLength(1);
+      const hit = lines.find((l) => l.msg === 'intent: cache hit')!;
+      expect(hit.obj.inputHash).toMatch(/^[0-9a-f]{12}$/);
+      // A new batch gets a new correlation id.
+      const firstId = run.lines.find((l) => l.msg === 'review: batch started')!.obj.correlationId;
+      expect(lines.find((l) => l.msg === 'review: batch started')!.obj.correlationId).not.toBe(firstId);
+    });
   });
 
-  it('runs to completion without a logger (telemetry is optional)', async () => {
-    const llm = newLlm();
-    const app = await appWith(llm, summaryConfig());
-    const { pr, agentRow } = await setupPrAndAgent(app);
+  // ---------------------------------------------------------------- verbose
 
-    await new ReviewService(app.container).runReview(workspaceId, pr.id, [agentRow], undefined);
-    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
-    expect(runs[0]!.status).toBe('done');
+  describe('verbose mode (NODE_ENV=test + DEVDIGEST_PROMPT_LOG=verbose)', () => {
+    let run: Awaited<ReturnType<typeof batch>>;
+    beforeAll(async () => {
+      run = await batch(cfg({ DEVDIGEST_PROMPT_LOG: 'verbose' }));
+    });
 
-    await app.close();
+    it('AC-1: still no secret, diff body, spec text, PR body, issue body or finding title', () => {
+      const out = dump(run.lines);
+      expect(details(run.lines, 'review').length).toBeGreaterThanOrEqual(1);
+      for (const needle of NEVER_LOGGED) expect(out, needle).not.toContain(needle);
+    });
+
+    it('AC-6 verbose: map-reduce over 3 files logs 1 info line and 3 prompt: detail lines', () => {
+      const mrName = run.agents.find((a) => a.name.startsWith('MapReduce'))!.name;
+      const mine = (ls: Line[]) => ls.filter((l) => l.obj.agent === mrName);
+      expect(mine(assembled(run.lines, 'review'))).toHaveLength(1);
+      const det = mine(details(run.lines, 'review'));
+      expect(det).toHaveLength(3);
+      expect(det.map((l) => l.obj.chunk)).toEqual([
+        { index: 0, of: 3, label: 'src/config.ts' },
+        { index: 1, of: 3, label: 'src/b.ts' },
+        { index: 2, of: 3, label: 'src/c.ts' },
+      ]);
+      expect(det.every((l) => l.level === 'debug')).toBe(true);
+    });
+
+    it('a single-pass agent and the intent derivation each log one detail line', () => {
+      const singleName = run.agents.find((a) => a.name.startsWith('Single'))!.name;
+      expect(details(run.lines, 'review').filter((l) => l.obj.agent === singleName)).toHaveLength(1);
+      expect(details(run.lines, 'intent')).toHaveLength(1);
+    });
+
+    it('AC-7: a preview only on the system section, masked/short; hashes present; info lines stay clean', () => {
+      for (const l of [...details(run.lines, 'review'), ...details(run.lines, 'intent')]) {
+        const secs = l.obj.sections as { name: string; preview?: string; sha256?: string }[];
+        expect(secs.filter((s) => 'preview' in s).map((s) => s.name)).toEqual(['system']);
+        expect(secs[0]!.preview!.length).toBeLessThanOrEqual(121);
+        for (const s of secs) expect(s.sha256).toMatch(/^[0-9a-f]{12}$/);
+      }
+      const reviewDetail = details(run.lines, 'review')[0]!;
+      expect((reviewDetail.obj.sections as { preview?: string }[])[0]!.preview).toBe('You are the SECURITY agent.');
+      for (const l of [...assembled(run.lines, 'review'), ...assembled(run.lines, 'intent')]) {
+        const keys = allKeys(l.obj);
+        for (const k of ['sha256', 'preview', 'order', 'chunk']) expect(keys).not.toContain(k);
+      }
+    });
+
+    it('AC-3: detail lines carry the same correlationId as the info lines', () => {
+      const ids = new Set(
+        run.lines.filter((l) => l.msg.startsWith('prompt: ')).map((l) => l.obj.correlationId),
+      );
+      expect(ids.size).toBe(1);
+    });
+
+    it('AC-10: no dropped-finding title in pino in verbose mode either', () => {
+      expect(run.lines.some((l) => l.msg.startsWith('grounding dropped'))).toBe(true);
+      expect(dump(run.lines)).not.toContain('SPEC-SENTINEL-42');
+    });
   });
 
-  it('review pre-work emits one feature:"intent" scope:"classifier" record, joined by correlation_id', async () => {
-    const llm = newLlm();
-    const app = await appWith(llm, summaryConfig());
-    const { pr, agentRow } = await setupPrAndAgent(app);
-    const { logger, calls } = capturingLogger();
+  // ------------------------------------------------------- manual derivation
 
-    const { runs } = await new ReviewService(app.container).runReview(workspaceId, pr.id, [agentRow], logger);
-    await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
-
-    const intentPromptCalls = calls.filter(
-      (c) => c.msg === 'prompt: assembled' && (c.obj as { feature?: string }).feature === 'intent',
-    );
-    expect(intentPromptCalls).toHaveLength(1);
-    const rec = intentPromptCalls[0]!.obj as Record<string, unknown>;
-    expect(rec.scope).toBe('classifier');
-    expect(rec.run_ids).toEqual([runs[0]!.run_id]);
-    expect(rec.provider).toBe('openrouter');
-    expect(rec.correlation_id).toMatch(new RegExp(`^intent:${pr.id}:`));
-    for (const s of rec.sections as { ref?: unknown }[]) {
-      expect(s).not.toHaveProperty('ref'); // summary mode
-    }
-
-    const derivedCall = calls.find((c) => c.msg === 'intent: derived');
-    expect(derivedCall).toBeDefined();
-    expect((derivedCall!.obj as Record<string, unknown>).correlation_id).toBe(rec.correlation_id);
-
-    await app.close();
-  });
-
-  it('a cached derive (unchanged PR) emits no new intent prompt record', async () => {
-    const llm = newLlm();
-    const app = await appWith(llm, summaryConfig());
-    const { pr, agentRow } = await setupPrAndAgent(app);
-
-    const first = capturingLogger();
-    await new ReviewService(app.container).runReview(workspaceId, pr.id, [agentRow], first.logger);
-    await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
-    const firstIntent = first.calls.filter(
-      (c) => c.msg === 'prompt: assembled' && (c.obj as { feature?: string }).feature === 'intent',
-    );
-    expect(firstIntent).toHaveLength(1);
-    const firstCorrelationId = (firstIntent[0]!.obj as Record<string, unknown>).correlation_id;
-
-    const second = capturingLogger();
-    await new ReviewService(app.container).runReview(workspaceId, pr.id, [agentRow], second.logger);
-    await waitForPrRuns(pg.handle.db, pr.id, { expected: 2 });
-
-    const secondIntent = second.calls.filter(
-      (c) => c.msg === 'prompt: assembled' && (c.obj as { feature?: string }).feature === 'intent',
-    );
-    expect(secondIntent).toHaveLength(0);
-
-    const derivedCall = second.calls.find((c) => c.msg === 'intent: derived');
-    expect(derivedCall).toBeDefined();
-    const obj = derivedCall!.obj as Record<string, unknown>;
-    expect(obj.cached).toBe(true);
-    expect(obj.correlation_id).toBe(firstCorrelationId);
-
-    await app.close();
+  describe('manual intent derivation (AC-4)', () => {
+    it('logs prompt: assembled with the correlationId of the logger it was given, once, with trigger manual', async () => {
+      const app = await appWith(cfg());
+      const pr = await setupPr();
+      const { lines, logger } = captureLogger();
+      await new IntentService(app.container).derive(workspaceId, pr.id, logger.child!({ correlationId: 'req-1' }));
+      const a = assembled(lines, 'intent');
+      expect(a).toHaveLength(1);
+      expect(a[0]!.obj).toMatchObject({ correlationId: 'req-1', trigger: 'manual' });
+      const derived = lines.find((l) => l.msg === 'intent: derived')!;
+      expect(derived.obj.correlationId).toBe('req-1');
+      for (const needle of NEVER_LOGGED) expect(dump(lines), needle).not.toContain(needle);
+    });
   });
 });

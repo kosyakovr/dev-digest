@@ -105,7 +105,7 @@ other agents. It makes the root `AGENTS.md` "do not touch" list mechanical.
 | File | Role |
 |---|---|
 | `implementer-guard.sh` | The guard. POSIX `sh`, no `node`; `jq` when present, `sed` fallback otherwise. |
-| `test-implementer-guard.sh` | 138 offline checks (68 cases × jq/sed, plus 2 under `env -i`). |
+| `test-implementer-guard.sh` | 206 offline checks (102 cases × jq/sed, plus 2 under `env -i`). |
 
 | Tool call | Decision |
 |---|---|
@@ -142,7 +142,7 @@ agents — it runs **only while one of them is active**:
 | File | Role |
 |---|---|
 | `agent-scope-guard.sh` | The guard. POSIX `sh`, no `node`; `jq` when present, `sed` fallback otherwise — the same parser as `implementer-guard.sh`. |
-| `test-agent-scope-guard.sh` | 282 offline checks (139 cases × jq/sed, plus 4 outside that loop: no `CLAUDE_PROJECT_DIR`, three under `env -i`). |
+| `test-agent-scope-guard.sh` | 364 offline checks (180 cases × jq/sed, plus 4 outside that loop: no `CLAUDE_PROJECT_DIR`, three under `env -i`). |
 
 One script rather than four: the Bash rules are identical, and separate copies
 would drift. `implementer-guard.sh` stays separate because it is already
@@ -188,6 +188,30 @@ The red-proof marker is a whole-command exemption: `cp a "$TMPDIR/devdigest-redp
 passes. An unquoted `>` inside an argument (`git log --format=%h>%s`) is
 denied by the read-only profile — rephrase the command. It stops honest
 mistakes; it does not stop an agent that is trying to get around it.
+
+**Quoted `db:*` / `drizzle-kit` runs** (`quoted_db_run`, in both guards with
+each guard's own scope: `agent-scope-guard` covers `db:generate|migrate|seed|push`
+and `drizzle-kit generate|push|drop|migrate|up|check|pull|introspect|studio`;
+`implementer-guard` covers only `db:generate` and `drizzle-kit
+generate|push|drop|migrate`, as its table above says). Quote and backslash
+characters are dropped, the command is split on `; & | ( \`` and newlines, and
+any segment naming a package manager + an in-scope `db:` script or an in-scope
+`drizzle-kit` subcommand is denied — so `pnpm 'db:generate'`,
+`env pnpm "db:generate"`, `{ pnpm db\:generate; }` and
+`find -exec pnpm 'db:generate'` are caught by both, and the `db:push`,
+`db:migrate`, `db:seed` forms by `agent-scope-guard`. `grep`/`rg`/`git
+grep|log|show` segments are data unless the command feeds an executor (a pipe
+into a shell, `xargs` + a runner or shell, or a `<( )` / `>( )`); `echo`/`printf`
+segments are data until the command has a pipe or a process substitution.
+Known gaps, accepted after seven
+self-review rounds (2026-10-02) because each regex patch opened the next edge:
+output piped into a shell the regex does not recognise as one (`| 'sh'`,
+`| (sh)`, `| time sh`, a pipe and `sh` on separate lines), a here-string into a
+shell (`bash <<< "$(…)"`), and command words built by expansion
+(`$(echo pnpm) …`, `P=pnpm; $P …`). Known fail-closed denials: `ugrep`, and
+`grep -l 'db:…' | xargs pnpm <anything>`. If a stronger guarantee is ever
+needed, invert it — check piped `grep`/`git` output unless every later stage is
+an allow-listed data consumer — rather than adding more executor patterns.
 
 **Trusted workspaces only**, as for the implementer guard.
 

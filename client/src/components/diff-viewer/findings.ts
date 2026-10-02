@@ -1,55 +1,67 @@
-/* Finding-marker support for the DiffViewer (Smart Order, L03). Pure helpers
-   + the slot contract the viewer needs; the actual card component lives at
-   the route (`FindingCard`) and is passed in — diff-viewer never imports
-   route-local code (frontend-ui-architecture §2, §10). */
-import type { ComponentType } from "react";
-import type { FindingActionKind, FindingRecord } from "@devdigest/shared";
+/* diff-viewer — findings layer: the contract the host passes in, plus the pure
+   helpers that order findings and anchor them to rendered diff lines. */
+import type { FindingActionKind, FindingRecord, Severity } from "@devdigest/shared";
+import { SEVERITY_RANK } from "@/lib/severity";
+import type { Line } from "./helpers";
 
-/** Props the slotted-in finding card must accept. A real implementation
-    (`FindingCard`) may accept more optional props than this. */
-export interface InlineFindingCardProps {
-  f: FindingRecord;
-  defaultExpanded?: boolean;
-  pending?: boolean;
-  onAction?: (a: FindingActionKind) => void;
-  /** Collapse the card back under its line badge. Absent where there is
-      nothing to collapse to (the unanchored block). */
-  onClose?: () => void;
-}
-
-/** What the viewer needs to read + act on findings, anchored per file. */
+/** Findings of the latest review + the accept/dismiss action, supplied by the host. */
 export interface DiffFindingApi {
-  byFile: ReadonlyMap<string, FindingRecord[]>;
-  Card: ComponentType<InlineFindingCardProps>;
-  pending: boolean;
-  onAction: (findingId: string, a: FindingActionKind) => void;
+  findings: FindingRecord[];
+  /** Finding whose action is in flight (its buttons are disabled). */
+  pendingId: string | null;
+  onAction: (findingId: string, action: FindingActionKind) => void;
 }
 
-/** A finding only ever anchors to its RIGHT (new-side) line — never LEFT,
-    never the nearest line. */
+/** Anchor key of a finding — only the new (RIGHT) side of the diff is anchored. */
 export function findingKey(f: Pick<FindingRecord, "start_line">): string {
   return `RIGHT:${f.start_line}`;
 }
 
-/** Split a file's findings into ones that land on a rendered line vs. ones
-    that don't (deleted file, `patch: null`, or a start_line outside every
-    rendered hunk) — the "unanchored" bucket, never attached to the nearest
-    line (in the spirit of `partitionThreads`). */
+/** Findings anchored to a parsed line — new-side lines only (deleted/hunk lines → []). */
+export function findingsForLine(
+  ln: Line,
+  matched: Map<string, FindingRecord[]>,
+): FindingRecord[] {
+  if (ln.kind === "del" || ln.kind === "hunk") return [];
+  return matched.get(findingKey({ start_line: ln.newNo as number })) ?? [];
+}
+
+/** Severity (CRITICAL first), then start_line, end_line, id — all ascending. */
+export function sortFindings(list: FindingRecord[]): FindingRecord[] {
+  return [...list].sort(
+    (a, b) =>
+      SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
+      a.start_line - b.start_line ||
+      a.end_line - b.end_line ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+}
+
+/** The most severe severity in a non-empty list. */
+export function worstSeverity(list: FindingRecord[]): Severity {
+  return list.reduce<Severity>(
+    (worst, f) => (SEVERITY_RANK[f.severity] < SEVERITY_RANK[worst] ? f.severity : worst),
+    list[0]!.severity,
+  );
+}
+
+/** Split a file's findings into those anchored to a rendered line and the rest. */
 export function partitionFindings(
-  fs: FindingRecord[],
+  fileFindings: FindingRecord[],
   renderedKeys: Set<string>,
-): { byKey: Map<string, FindingRecord[]>; unanchored: FindingRecord[] } {
-  const byKey = new Map<string, FindingRecord[]>();
-  const unanchored: FindingRecord[] = [];
-  for (const f of fs) {
+): { matched: Map<string, FindingRecord[]>; outside: FindingRecord[] } {
+  const matched = new Map<string, FindingRecord[]>();
+  const outside: FindingRecord[] = [];
+  for (const f of fileFindings) {
     const key = findingKey(f);
     if (renderedKeys.has(key)) {
-      const list = byKey.get(key) ?? [];
+      const list = matched.get(key) ?? [];
       list.push(f);
-      byKey.set(key, list);
+      matched.set(key, list);
     } else {
-      unanchored.push(f);
+      outside.push(f);
     }
   }
-  return { byKey, unanchored };
+  for (const [key, list] of matched) matched.set(key, sortFindings(list));
+  return { matched, outside: sortFindings(outside) };
 }

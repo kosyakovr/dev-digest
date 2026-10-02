@@ -52,19 +52,14 @@ export function ImportSkillModal({ onClose }: { onClose: () => void }) {
 
   const confirm = async () => {
     if (!draft) return;
-    try {
-      const skill = await create.mutateAsync({
-        name: draft.name.trim(),
-        description: draft.description.trim(),
-        type: draft.type.trim(),
-        body: draft.body,
-      });
-      onClose();
-      router.push(`/skills/${skill.id}?tab=config`);
-    } catch {
-      // Keep the modal open so the user can retry — the global mutation-error
-      // toast (client/src/lib/providers.tsx) already reported the failure.
-    }
+    const skill = await create.mutateAsync({
+      name: draft.name.trim(),
+      description: draft.description.trim(),
+      type: draft.type.trim(),
+      body: draft.body,
+    });
+    onClose();
+    router.push(`/skills/${skill.id}?tab=config`);
   };
 
   const canConfirm =

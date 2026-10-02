@@ -70,8 +70,8 @@ flowchart TB
     polling["polling<br/>/repos/:id/poll"]
   end
   subgraph Review["Review & runs"]
-    reviews["reviews<br/>/pulls/:id/review · /reviews · /findings/:id/(accept|dismiss)<br/>/runs/:id/(events|trace)"]
-    smartDiff["smart-diff<br/>/pulls/:id/smart-diff"]
+    intent["intent<br/>/pulls/:id/intent (GET · POST)"]
+    reviews["reviews<br/>/pulls/:id/review · /reviews · /smart-diff · /findings/:id/(accept|dismiss)<br/>/runs/:id/(events|trace)"]
   end
   subgraph Agents["Agents"]
     agents["agents<br/>/agents · /agents/:id"]
@@ -97,7 +97,7 @@ flowchart TB
 
 | Var | Default | Notes |
 |-----|---------|-------|
-| `DATABASE_URL` | `postgres://devdigest:devdigest@localhost:5432/devdigest` | required to migrate/serve |
+| `DATABASE_URL` | `postgres://devdigest2:devdigest2@localhost:5432/devdigest2` | required to migrate/serve |
 | `API_PORT` / `WEB_PORT` | `3001` / `3000` | API port; `WEB_PORT` also sets the allowed CORS origin |
 | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `OPENROUTER_API_KEY` | — | optional, per-provider; also settable via Settings UI |
 | `GITHUB_TOKEN` | — | optional; PAT with repo scope (`GITHUB_PAT` accepted as a fallback) |
@@ -105,24 +105,8 @@ flowchart TB
 | `REPO_INTEL_ENABLED` | `true` | repo skeleton + callers in the prompt; `false` → ripgrep-only |
 | `DEVDIGEST_CLONE_DIR` | `./clones` | imported-repo checkouts (git-ignored) |
 | `LOG_LEVEL` | `info` (`silent` in test) | pino level |
-| `PROMPT_LOG` | `summary` | `verbose` locally adds fingerprints, file paths, skill names; ignored (falls back to `summary`, with a startup warning) when `NODE_ENV=production` — see § Prompt logging |
+| `DEVDIGEST_PROMPT_LOG` | `default` | `verbose` adds per-chunk prompt detail (hashes, masked system preview, never content); honoured only when `NODE_ENV` is set explicitly to `development` or `test`; raises the default `LOG_LEVEL` to `debug` |
 | `NODE_ENV` | `development` | `test` → silent logs + global rate-limit disabled |
-
-### Prompt logging
-
-Every assembled LLM prompt (the reviewer's `reviewPullRequest` and the intent
-classifier) writes one structured `logger.info(record, 'prompt: assembled')`
-line: a correlation id, the PR id, provider/model, and per section its
-name/source/role/untrusted flag/chars/`tokens_est` — **never section text**.
-`PROMPT_LOG=verbose` adds a 12-hex sha256 fingerprint per section, the diff's
-file paths with their sizes, skill names, and intent source refs (never the
-title/branch refs — those are the PR author's own text). The diff file sizes
-are the sizes of the **numbered** text actually sent to the model (L03 —
-`numberDiff`), not the raw `sliceDiff` output. Grep for it with
-`grep 'prompt: assembled'`.
-
-This server does **not** load `server/.env.local` (`config.ts:1` loads only
-`.env`) — set `PROMPT_LOG=verbose pnpm dev`, or add the line to `server/.env`.
 
 Secrets (API keys, `GITHUB_TOKEN`) are **not** part of `AppConfig` — they go
 through `SecretsProvider` (`~/.devdigest/secrets.json`, mode `0600`, with

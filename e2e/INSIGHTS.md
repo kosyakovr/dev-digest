@@ -84,6 +84,14 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## Open Questions
 
+- 2026-10-01 — Why does the step `open the PR row` (`find text "Add rate
+  limiting to public API endpoints" click`) fail intermittently on a HERMETIC
+  run, right after `land on the PR list` passes? At HEAD `6e6fbd0` it failed
+  flow 05 (6/8 with flow 02's Cost); on the L03 working tree it failed 04+05
+  in one run and only 05 in the next — so a run of 5/8 or 6/8 with exactly
+  these two plus 02 is the current baseline, not a regression. Suspect the
+  click races the list render (no `wait --text` before `find`).
+
 - 2026-09-22 — Why does flow 02's `wait --text "Cost"` fail on a HERMETIC fresh
   stack (reproducible, twice), when the step before it — the PR title on the
   same page — passes, and `COLUMN_KEYS` in
@@ -92,10 +100,3 @@ Non-obvious findings a future session needs. **Read this before working here.**
   the column is clipped, making the text present but not visible. This predates
   the L02 branch (the flow and the header source last changed in `c8be044` /
   `4146608`) and is the only failure in an otherwise 7/8 hermetic run.
-  - 2026-09-26 — Answered: not clipping. The PR list header row has
-    `textTransform: "uppercase"` (`client/src/app/repos/[repoId]/pulls/styles.ts:106`)
-    and `wait --text` matches the RENDERED text, so "Cost" never appears — only
-    "COST". Switching to `COST` passed that step and the next one then failed the
-    same way on "Findings" → assert CSS-transformed text in its displayed case
-    (`COST`, `FINDINGS`); flow 02 now passes, suite 8/8 hermetic.
-    (ref: e2e/specs/02-repo-pulls-detail.flow.json:8-9)

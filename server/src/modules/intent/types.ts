@@ -1,48 +1,75 @@
+import type { IntentSource, RepoRef, UnifiedDiff } from '@devdigest/shared';
+import type { ReviewIntent } from '@devdigest/reviewer-core';
+import type { PullRow } from '../../db/rows.js';
+import type { RunLogger } from '../../platform/run-logger.js';
+import type { ChildableLogger } from '../../platform/prompt-log.js';
+
 /**
- * L03 — intent module's public facade. Other modules (reviews) reach it only
- * through `container.intent`, never by importing `./service.js` directly
- * (onion-architecture §4/§5 — cross-module access goes through the container).
+ * L03 — intent module types (ring ②). `PrIntentFacade` is the one thing other
+ * modules see: the review executor reaches it through `container.intent`, never
+ * by importing this folder.
  */
-import type { PrIntentRecord } from '@devdigest/shared';
 
-export type IntentEventKind = 'info' | 'tool' | 'result' | 'error';
+/** pino-compatible logger; the shared platform shape. */
+export type IntentLogger = ChildableLogger;
 
-/** Minimal pino-compatible logger (matches platform/run-logger.ts's PinoLike). */
-export interface IntentLoggerLike {
-  info: (obj: unknown, msg?: string) => void;
-  warn: (obj: unknown, msg?: string) => void;
+export interface PrIntentFacade {
+  /**
+   * Intent for a review batch: reuse the stored row when its input hash still
+   * matches, else derive once. NEVER throws — any failure or timeout returns
+   * `undefined` (and logs why) so the review runs without the slot.
+   */
+  resolveForReview(a: {
+    workspaceId: string;
+    pull: PullRow;
+    repo: RepoRef;
+    diff: UnifiedDiff;
+    runLog: RunLogger;
+    logger?: IntentLogger;
+  }): Promise<ReviewIntent | undefined>;
 }
 
-export interface DeriveOptions {
-  /** Bypass the input-hash cache and force a fresh classification. */
-  force: boolean;
-  /** Selects the timeout/retry budget: 'on-demand' (routes.ts, the user is
-      staring at a spinner) vs 'review' (run-executor pre-work, no retry). */
-  budget: 'on-demand' | 'review';
-  /** Live-log sink (RunLogger.event-shaped) — used by the review pre-work
-      path to fan events into every queued run's Live Log / trace. */
-  onEvent?: (kind: IntentEventKind, msg: string) => void;
-  /** Structured stdout logger for ops (pino). */
-  logger?: IntentLoggerLike;
-  /** L03 — review pre-work only: the run ids queued for this classification,
-      logged as `run_ids` on the prompt-log record. Undefined for on-demand
-      derives (routes.ts). */
-  runIds?: string[];
+/** Everything the classifier is shown (all of it untrusted). */
+export interface IntentBundle {
+  title: string;
+  /** Description with HTML comments removed, capped. Empty string when absent. */
+  body: string;
+  branch: string;
+  commits: string[];
+  tickets: { n: number; title: string; body: string }[];
+  specs: { path: string; text: string }[];
+  /** `path (+a/-d)` lines. Not part of the input hash (the head SHA pins it). */
+  files: string[];
+  /** First chars of the diff. Not part of the input hash. */
+  diffExcerpt: string;
 }
 
-export interface DeriveResult {
-  record: PrIntentRecord;
-  /** `true` when the stored record's input_hash already matched (no LLM call
-      was made this time — including when a concurrent derive was in flight
-      and this call awaited its result). */
-  cached: boolean;
+/** What the sources actually contained; confidence is computed from these. */
+export interface SourceFlags {
+  ticket: boolean;
+  spec: boolean;
+  substantiveBody: boolean;
 }
 
-export interface IntentLayer {
-  /** The persisted intent for a PR (or `null` if never derived), with `stale`
-      computed against the PR's current title/body/head_sha. */
-  get(workspaceId: string, prId: string): Promise<PrIntentRecord | null>;
-  /** Derive (or return the cached) intent for a PR. Single-flight per prId
-      for non-`force` calls. */
-  derive(workspaceId: string, prId: string, opts: DeriveOptions): Promise<DeriveResult>;
+export interface GatheredSources {
+  bundle: IntentBundle;
+  sources: IntentSource[];
+  flags: SourceFlags;
+}
+
+/** The minimum of a PR that source gathering needs. */
+export interface GatherPull {
+  number: number;
+  title: string;
+  body: string | null;
+  branch: string;
+  headSha: string;
+}
+
+export interface GatherInput {
+  repo: RepoRef;
+  pull: GatherPull;
+  commits: { message: string }[];
+  files: { path: string; additions: number; deletions: number }[];
+  diffText: string;
 }

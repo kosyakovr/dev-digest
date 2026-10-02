@@ -1,0 +1,1 @@
+ALTER TABLE "pr_intent" ADD CONSTRAINT "pr_intent_confidence_check" CHECK ("pr_intent"."confidence" in ('high', 'medium', 'low'));

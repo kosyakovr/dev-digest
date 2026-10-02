@@ -45,10 +45,7 @@ function renderCard(
   return h;
 }
 
-afterEach(() => {
-  cleanup();
-  vi.unstubAllGlobals();
-});
+afterEach(cleanup);
 
 describe("ConventionCard", () => {
   it("shows the rule, its rationale, the category and the confidence", () => {
@@ -59,10 +56,21 @@ describe("ConventionCard", () => {
     expect(screen.getByLabelText("82% confidence")).toBeInTheDocument();
   });
 
-  // The confidence bar's colour banding is unit-tested directly against
-  // `confidenceColor()` in `../../helpers.test.ts` — asserting it here would
-  // mean reaching into DOM structure and inline styles for logic that already
-  // has a proper unit test.
+  // The bar's colour comes from the score alone, so it cannot disagree with the
+  // number printed beside it.
+  it("grades the confidence bar by the score, not by the triage status", () => {
+    const bandOf = (confidence: number, pct: number) => {
+      cleanup();
+      renderCard({ confidence, status: "accepted" });
+      const row = screen.getByLabelText(`${pct}% confidence`);
+      const fill = row.querySelector("span > span") as HTMLElement;
+      return fill.style.background;
+    };
+    expect(bandOf(0.91, 91)).toBe("var(--ok)");
+    expect(bandOf(0.82, 82)).toBe("var(--yellow)");
+    expect(bandOf(0.64, 64)).toBe("var(--orange)");
+    expect(bandOf(0.42, 42)).toBe("var(--crit)");
+  });
 
   it("renders the verified snippet and deep-links the citation to that line", () => {
     renderCard();
@@ -109,7 +117,7 @@ describe("ConventionCard", () => {
 
   it("copies the snippet, not the model's text, from the evidence header", async () => {
     const writeText = vi.fn();
-    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    Object.assign(navigator, { clipboard: { writeText } });
     renderCard();
     fireEvent.click(screen.getByRole("button", { name: "Copy the evidence snippet" }));
     expect(writeText).toHaveBeenCalledWith("export const UserSchema = z.object({");

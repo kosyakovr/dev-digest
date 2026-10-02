@@ -1,142 +1,46 @@
 # Safe structured logging of prompt assembly
 
-**Status:** in-progress
-**Lesson / ticket:** L03
+**Status:** done
+**Lesson / ticket:** L03 lab-2
 
 ## Goal
-Give a developer or operator a text-free, structured view of how every LLM
-prompt was assembled (sections, sizes, model, correlation), so prompt bloat
-and assembly regressions can be diagnosed from logs. A verbose mode that only
-works locally gives a deeper comparison across runs.
-
-One pino record, `msg: 'prompt: assembled'`, is written per assembled prompt
-for two callers: the reviewer (`reviewPullRequest`) and the intent classifier.
-Each record carries: correlation ID, PR ID, provider/model, and per section
-the name, source, role, untrusted flag, chars and `tokens_est`. It never
-carries section text.
-
-**Verbose mode** (`PROMPT_LOG=verbose`, ignored in production with one
-startup warning) adds:
-- one record per map-reduce chunk;
-- a 12-hex sha256 fingerprint per section;
-- the diff's file paths with their char sizes;
-- skill names;
-- intent source refs (spec paths and `#N`).
+Operators can see, per prompt, which sections went in, where each came from, how big each was (chars and estimated tokens), which provider/model was asked, and which batch or request it belongs to. Secrets, diffs, spec text, issue bodies and PR bodies never appear in the logs, in either mode.
 
 ## Non-goals
-- Other LLM callers (conventions, brief, onboarding …) are not instrumented.
-- `run_traces.prompt_assembly` (full text persisted in the DB,
-  `run-executor.ts:330`) is unchanged.
-- The Live Log / SSE events (`RunLogger.event`) are unchanged: no new
-  RunEventKind, no new SSE message.
-- No `@devdigest/shared` contract, DB schema, migration, dependency or
-  `package.json` change.
-- No exact tokenizer. Counts are estimates only, in the field `tokens_est`.
-- The CI runner (a non-server consumer of reviewer-core) gets no logging.
-  `promptTelemetry` is optional and absent there.
-- Existing log lines outside this feature are not rewritten.
+- No UI or client change; `run_traces` content and the vendored `PromptAssembly` contract are unchanged.
+- No tokenizer: tokens are `ceil(chars / 4)`.
+- Non-prompt LLM calls (conventions, skills import, embeddings) are not logged here.
+- No change to SSE or the Live Log text; masking affects only the pino stdout mirror (and the grounding-drop mirror text, see AM2).
+- No log shipping, rotation or persistence.
 
 ## Contract
-No `@devdigest/shared` change and no route change. Internal shapes only.
+No HTTP or Zod contract change. Additive reviewer-core exports: `SectionTrust`, `PromptSectionMeta`, `estimateTokens`, `describeSection`, `AssembledPrompt.sections`, `ReviewInput.onPrompt`, `ReviewEvent.mirrorMsg`. reviewer-core logs nothing; it hands metadata to the caller.
 
-**reviewer-core** (`prompt.ts`, `review/run.ts`, exported from `index.ts`):
-```ts
-type PromptSectionName = 'system_prompt'|'injection_guard'|'task'|'pr_description'|'intent'|'skills'|'memory'|'repo_map'|'specs'|'callers'|'diff';
-type PromptSectionSource = 'agent'|'engine'|'pull_request'|'intent_layer'|'skills'|'memory'|'repo_intel'|'specs'|'diff';
-interface PromptSection { name; source; role: 'system'|'user'; untrusted: boolean; chars: number; tokens_est: number; fingerprint?: string }
-function estimateTokens(text: string): number            // Math.ceil(text.length / 4)
-function assemblePrompt(parts, opts?: { fingerprint?: (text: string) => string }): AssembledPrompt  // AssembledPrompt += sections: PromptSection[]
-interface PromptAssembledInfo {
-  scope: 'run'|'chunk'; mode: ReviewMode; model: string; chunk_count: number;
-  chunk_index?: number; chunk_label?: string;            // chunk scope only
-  system_chars: number; user_chars: number; total_chars: number; tokens_est: number;
-  sections: PromptSection[]; diff_files?: { path: string; chars: number }[]; // diff_files: verbose, run scope
-}
-interface PromptTelemetryOptions { detail: 'summary'|'verbose'; onPrompt: (i: PromptAssembledInfo) => void; fingerprint?: (text: string) => string }
-// ReviewInput += promptTelemetry?: PromptTelemetryOptions
-```
-Section mapping (`name` → `source`, `role`, `untrusted`):
+**Review sections** (name → source, trust): `system`→`agent.system_prompt` T · `injection_guard`→`reviewer-core.guard` T · `task`→`server.task_line` U · `pr_description`→`pr.body` U · `intent`→`intent.derived` U · `skills`→`agent.skills` T (items) · `memory`→`memory` T (items) · `repo_map`→`repo-intel.map` U · `specs`→`specs` U (items) · `callers`→`repo-intel.callers` U · `diff`→`pr.diff` U. Absent sections are not listed.
 
-| name | source | role | untrusted |
-|---|---|---|---|
-| system_prompt | agent | system | false |
-| injection_guard | engine | system | false |
-| task | pull_request | user | false |
-| pr_description | pull_request | user | true |
-| intent | intent_layer | user | true |
-| skills | skills | user | false |
-| memory | memory | user | false |
-| repo_map | repo_intel | user | true |
-| specs | specs | user | true |
-| callers | repo_intel | user | true |
-| diff | diff | user | true |
+**Intent sections:** `system`→`intent.system_prompt` T · `title`→`pr.title` U · `description`→`pr.body` U · `ticket`→`tracker` U ref `#n` · `spec`→`repo.spec` U ref `<path>` · `commits`→`git.commits` U (items) · `branch`→`pr.branch` U · `files`→`pr.files` U (items) · `diff`→`pr.diff_excerpt` U · `instruction`→`intent.instruction` T.
 
-For a user section, `chars` = the length of the exact string pushed to
-`userSections`, heading and wrapper included.
+**Config:** `DEVDIGEST_PROMPT_LOG` is `default` or `verbose` (empty means unset). `AppConfig.promptLogRequested` is the requested value, `AppConfig.promptLog` the effective one. Verbose is honoured only when the raw env `NODE_ENV` is explicitly set (non-empty) to `development` or `test`; the schema default does not count. Otherwise one boot warn line names the reason (`NODE_ENV not set explicitly` or `NODE_ENV=<value>`). Verbose raises the default `LOG_LEVEL` to `debug`; an explicit `LOG_LEVEL` wins.
 
-**Server log record** (`platform/prompt-log.ts`), logged as
-`logger.info(record, 'prompt: assembled')`:
+**Log lines:**
+- `prompt: assembled` (info), once per agent run and once per intent derivation (not on a cache hit). Carries `correlationId`, `kind`, `provider`, `model`, `totalChars`, `totalTokensEst`, `sections[]` of `{name, source, ref?, trust, chars, tokensEst, items?}`; review lines add `prId`, `runId`, `agent`, `strategy`, `chunks`. Never `sha256`, `preview`, `order` or `chunk`.
+- `prompt: detail` (debug, verbose only), one per chunk: `order`, `chunk {index, of, label}`, sections with `sha256`, and a masked 120-char `preview` on the `system` section only.
+- `correlationId`: a new UUID per `executeRuns` batch; `req.id` for a manual intent POST. `intent: derived` and `intent: cache hit` gain `inputHash` (12 hex).
+- Grounding drops (AM2): the pino mirror logs only the count and a generic reason; the bus/Live Log keeps the finding title.
 
-| field | summary | verbose |
-|---|---|---|
-| `event: 'prompt.assembled'`, `prompt_log`, `feature: 'review'\|'intent'`, `scope: 'run'\|'chunk'\|'classifier'` | yes | yes |
-| `correlation_id`, `pr_id`, `run_id?` (review), `run_ids?` (intent pre-work), `agent?`, `provider`, `model` | yes | yes |
-| `mode?`, `chunk_count?`, `chunk_index?`, `system_chars`, `user_chars`, `total_chars`, `tokens_est` | yes | yes |
-| `sections[]`: `name, source, role, untrusted, chars, tokens_est` | yes | yes |
-| `sections[].fingerprint` (12 lowercase hex) | — | yes |
-| `sections[].ref` (intent only; `null` for title/branch/external_link) | — | yes |
-| `chunk_label`, `diff_files[]`, `skills[]` (names) | — | yes |
-
-- `reqId` is not built by us. It arrives through the pino child bindings of
-  `req.log`.
-- Intent sections are named `system_prompt` (source `intent_classifier`),
-  `header` (source `pull_request`) and `S1…Sn` (source = the
-  `IntentSourceKind`, untrusted).
-
-**Correlation ids.** Review → `runId`. Intent →
-`intent:<prId>:<inputHash[0..12]>`, plus `run_ids` when called from review
-pre-work; the same id is added to both `'intent: derived'` log lines.
-
-**Config:** `AppConfig += promptLog: 'summary'|'verbose'; promptLogVerboseIgnored: boolean`.
-`config.ts` also gains `startupWarnings(config): { obj: Record<string, unknown>; msg: string }[]`.
-
-**`server/.env.local` is not loaded** by this server (`config.ts:1` loads only
-`.env`). Set `PROMPT_LOG=verbose pnpm dev`, or add it to `server/.env`.
+**Never logged:** secrets/API keys, diff body, spec/plan contents, issue bodies, PR body text, model-generated finding text. Content is kept out by never building it into the payload; pino `redact` (`*.diff`, `*.body`, `*.content`, `*.text`, `*.systemPrompt`, ...) and `maskSecrets` on the RunLogger mirror are a backup layer. Runtime secret patterns live in `server/src/platform/secret-mask.ts`; a unit test compares them with the security-reviewer Step 2 table.
 
 ## Acceptance criteria
-- [ ] Mode `summary`. A review run with a logger emits exactly one
-  `'prompt: assembled'` record per agent run.
-  - It has `feature:'review'`, `scope:'run'`, and
-    `correlation_id === run_id === <agent_runs.id>`.
-  - It carries `pr_id`, `provider`, `model`, `mode` and `chunk_count`.
-  - `sections` hold only `name/source/role/untrusted/chars/tokens_est`.
-- [ ] Mode `verbose`, map-reduce over N files: 1 `run` record plus N `chunk`
-  records (`chunk_index` 0…N-1, `chunk_label` = file path).
-  - Every section has a `fingerprint` matching `/^[0-9a-f]{12}$/`.
-  - The run record has `diff_files` (N entries, `{path, chars}`) and
-    `skills` (enabled skill names).
-- [ ] The intent classifier emits one `feature:'intent'`, `scope:'classifier'`
-  record per non-cached classification.
-  - `correlation_id` is `intent:<prId>:<12 chars>` and matches the following
-    `'intent: derived'` line.
-  - In review pre-work, `run_ids` lists the queued run ids.
-- [ ] Across every emitted record, in both modes, none of these canary
-  strings appears: diff body, PR description, PR title, spec/issue text,
-  skill body, memory, callers, repo map, intent summary, a secret-shaped
-  literal.
-- [ ] `loadConfig({NODE_ENV:'production', PROMPT_LOG:'verbose'})` yields
-  `promptLog:'summary'`, and `startupWarnings` returns exactly one warning.
-  In development it yields `'verbose'` and `[]`.
-- [ ] The assembled `messages` / `assembly` for identical inputs are
-  byte-identical to before the change (existing prompt tests are unchanged
-  and green).
-- [ ] A Fastify logger built from `loggerOptions` writes `[REDACTED]` in
-  place of an `apiKey` or `token` value.
+- [ ] AC-1 A review of a diff with `AKIAIOSFODNN7EXAMPLE` and a PR body linking a spec with a sentinel yields captured logs containing neither, in default and verbose mode.
+- [ ] AC-2 Default mode: exactly one `prompt: assembled` per agent run and per intent derivation (none on cache hit), with `correlationId`, `provider`, `model`, `kind`, and sections carrying `name, source, trust, chars, tokensEst`, no `sha256`/`preview`.
+- [ ] AC-3 In one batch the intent lines and every agent's `prompt: assembled` share a `correlationId`.
+- [ ] AC-4 A manual `POST /pulls/:id/intent` logs `prompt: assembled` with `correlationId` equal to the request id.
+- [ ] AC-5 Verbose + `NODE_ENV=development` → `promptLog==='verbose'`, default level `debug`. Verbose + `production` → `default` plus a warn line. Verbose with NODE_ENV unset → `default` plus the warn line.
+- [ ] AC-6 Map-reduce over 3 files, verbose: 1 info line and 3 `prompt: detail` lines; default: 1 info, 0 debug.
+- [ ] AC-7 `preview` only on `system`, at most 120 chars plus mask suffix, secret shapes masked (masked before the cut). It ends in `…` whenever the flattened prompt is longer than 120 chars, even when masking shortened it below that.
+- [ ] AC-8 `assemblePrompt(...).messages` and the intent user prompt are byte-identical to before.
+- [ ] AC-9 Changing a row of the security-reviewer Step 2 table without updating `secret-mask.ts` fails a unit test.
+- [ ] AC-10 A grounding-dropped finding whose title contains `SPEC-SENTINEL-42` shows the title on the bus/trace while captured pino output does not contain it.
 
 ## Test plan
-| Package | Command | Needs Docker? | Covers |
-|---|---|---|---|
-| reviewer-core | `npm run typecheck && npm test` | no | section metadata / prompt telemetry; existing prompt/run tests unchanged |
-| server | `pnpm typecheck && pnpm exec vitest run --exclude '**/*.it.test.ts'` | no | config, startup warning, redact, prompt-log record builder, intent classifier pure part |
-| server | `../scripts/hermetic.sh pnpm exec vitest run .it.test` | yes | review run wiring; intent classifier integration; `skills-prompt.it.test.ts` unchanged |
-| all | `scripts/check-all.sh` (repo root) | yes | everything CI runs |
+reviewer-core: `npm test` (section metadata, `onPrompt`, messages unchanged). server unit: config, `secret-mask` (+ drift test), `prompt-log` payloads, RunLogger mirror. server `.it.test` (via `scripts/checks.sh`): AC-1 to AC-4, AC-10 with a capturing logger that implements `child`.

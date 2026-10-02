@@ -28,6 +28,14 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## What Doesn't Work
 
+- 2026-10-02 — A TanStack Query result can be `{ data: <stale>, isError: true }`
+  at once (a failed REFETCH keeps the last good data), so mocking only
+  `{ isError: true, data: undefined }` lets a fallback written as `!data` pass
+  while it ignores the error: a red-proof mutation dropping `isError` from
+  DiffTab's smart-diff fallback survived until a stale-data case was added →
+  every hook-mocked error test needs a second case with `isError: true` AND
+  `data` set. (ref: client/src/app/repos/[repoId]/pulls/[number]/_components/DiffTab/DiffTab.test.tsx)
+
 - 2026-09-23 — `kit/Checkbox`'s `label` is VISIBLE text, not an accessible name:
   it renders `{label}` inside the wrapping `<label>` (Checkbox.tsx:12, no
   `aria-label` prop), so passing a whole sentence for `getByLabelText` to find —
@@ -68,15 +76,6 @@ Non-obvious findings a future session needs. **Read this before working here.**
   modals shipped this way. (ref: client/src/vendor/ui/kit/Modal.tsx:60)
 
 ## Tool & Library Notes
-
-- 2026-09-26 — In a test-writer red-proof worktree with `client/node_modules`
-  symlinked in, `pnpm exec vitest` tries to reinstall and dies with "workspace
-  hoist directory is not a real directory" — contradicting the claim in
-  `.claude/agents/test-writer.md:185` that the symlinks work for all three
-  packages → call `./node_modules/.bin/vitest run <files>` directly in `W/client`.
-- 2026-09-26 — Correction to the line above: `server/` fails the same way (not
-  client-only), and `.claude/agents/test-writer.md` § Step 5 now documents the
-  binary form for both, incl. `../scripts/hermetic.sh ./node_modules/.bin/vitest`.
 
 - 2026-09-23 — `@testing-library/user-event` is NOT a dependency here (absent
   from `package.json` and `pnpm-lock.yaml`), and importing it fails the whole

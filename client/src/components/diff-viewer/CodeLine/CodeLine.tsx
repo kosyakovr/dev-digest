@@ -1,55 +1,40 @@
 /* CodeLine — one rendered diff line: gutter number, +/- sign, text, plus the
-   hover "+" affordance, any anchored comment threads, an inline composer, and
-   (L03) the finding marker + inline finding cards for this line. */
+   hover "+" affordance, any anchored comment threads, and an inline composer. */
 "use client";
 
 import React from "react";
-import type { FindingRecord, Severity } from "@devdigest/shared";
+import { useTranslations } from "next-intl";
+import { Icon, SEV } from "@devdigest/ui";
+import type { FindingRecord } from "@devdigest/shared";
+import { SEVERITY_LINE_LABEL_KEY } from "../constants";
+import { worstSeverity, type DiffFindingApi } from "../findings";
+import { InlineFinding } from "../InlineFinding";
 import { commentTargetFor, type CommentThread, type DiffCommentApi, cs } from "../comments";
 import { type Line } from "../helpers";
-import { s, lineRowFor, lineSignFor } from "../styles";
+import { s, lineRowFor, lineSignFor, findingStripeFor, findingLabelFor } from "../styles";
 import { CommentThreadView } from "../CommentThreadView";
 import { InlineComposer } from "../InlineComposer";
-import { FindingMarker } from "../FindingMarker";
-import type { DiffFindingApi } from "../findings";
-import { SEVERITY_RANK, isActiveFinding } from "@/lib/severity";
-import { SEV } from "@devdigest/ui";
-
-/** Highest severity in the list, ignoring dismissed state (used only for the
-    muted "all dismissed" case — active findings use `isActiveFinding`). */
-function topSeverityOf(fs: FindingRecord[]): Severity | null {
-  let best: Severity | null = null;
-  for (const f of fs) {
-    if (best === null || SEVERITY_RANK[f.severity] < SEVERITY_RANK[best]) best = f.severity;
-  }
-  return best;
-}
 
 export function CodeLine({
   ln,
   path,
   threads,
   commenting,
-  lineFindings,
+  findings = [],
   findingApi,
 }: {
   ln: Line;
   path: string;
   threads: CommentThread[];
   commenting?: DiffCommentApi;
-  lineFindings?: FindingRecord[];
+  /** Findings anchored to this line, already sorted (see findings.ts). */
+  findings?: FindingRecord[];
   findingApi?: DiffFindingApi;
 }) {
+  const t = useTranslations("shell");
   const [hover, setHover] = React.useState(false);
   const [composing, setComposing] = React.useState(false);
-  // A line with an active finding shows its card(s) by default; a line whose
-  // findings are all dismissed starts collapsed (the badge reopens it). Once
-  // the user has toggled it explicitly, that choice wins over the default —
-  // `override` tracks only the user's choice, not the derived default, so a
-  // finding arriving on a LATER render (e.g. a run that completes after the
-  // diff first painted) still opens the card instead of staying frozen at
-  // whatever `lineFindings` was at mount.
-  const [override, setOverride] = React.useState<boolean | null>(null);
+  const [findingsOpen, setFindingsOpen] = React.useState(true);
 
   if (ln.kind === "hunk") {
     return (
@@ -59,16 +44,11 @@ export function CodeLine({
     );
   }
 
-  const findings = lineFindings ?? [];
-  const activeFindings = findings.filter(isActiveFinding);
-  const findingsOpen = override ?? activeFindings.length > 0;
-  const muted = findings.length > 0 && activeFindings.length === 0;
-  const topSeverity = activeFindings.length > 0 ? topSeverityOf(activeFindings) : topSeverityOf(findings);
-  const labelCount = activeFindings.length > 0 ? activeFindings.length : findings.length;
-
   const sign = ln.kind === "add" ? "+" : ln.kind === "del" ? "−" : "";
   const target = commenting?.canComment ? commentTargetFor(ln) : null;
   const showAdd = hover && !!target && !composing;
+  const worst = findings.length > 0 ? worstSeverity(findings) : null;
+  const WorstIcon = worst ? Icon[SEV[worst].icon] : null;
 
   return (
     <div
@@ -76,7 +56,7 @@ export function CodeLine({
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <div style={lineRowFor(ln.kind, topSeverity ? SEV[topSeverity].c : undefined, muted)}>
+      <div style={{ ...lineRowFor(ln.kind), ...(worst ? findingStripeFor(SEV[worst].c) : {}) }}>
         <span className="mono tnum" style={{ ...s.lineNo, position: "relative" }}>
           {showAdd && target && (
             <button
@@ -97,33 +77,29 @@ export function CodeLine({
         <span className="mono" style={s.lineText}>
           {ln.text || " "}
         </span>
-        {topSeverity && (
-          <FindingMarker
-            severity={topSeverity}
-            count={labelCount}
-            muted={muted}
-            open={findingsOpen}
-            onClick={() => setOverride(!findingsOpen)}
-          />
+        {worst && WorstIcon && (
+          <button
+            type="button"
+            aria-expanded={findingsOpen}
+            onClick={() => setFindingsOpen((o) => !o)}
+            style={findingLabelFor(SEV[worst].c, SEV[worst].bg, findingsOpen)}
+          >
+            <WorstIcon size={12} />
+            {t(SEVERITY_LINE_LABEL_KEY[worst])}
+          </button>
         )}
       </div>
 
-      {findingApi && findingsOpen && findings.length > 0 && (
-        <div style={s.findingCardsWrap}>
-          {[...findings]
-            .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])
-            .map((f) => (
-              <findingApi.Card
-                key={f.id}
-                f={f}
-                defaultExpanded
-                pending={findingApi.pending}
-                onAction={(a) => findingApi.onAction(f.id, a)}
-                onClose={() => setOverride(false)}
-              />
-            ))}
-        </div>
-      )}
+      {findingApi &&
+        findingsOpen &&
+        findings.map((f) => (
+          <InlineFinding
+            key={f.id}
+            f={f}
+            pending={findingApi.pendingId === f.id}
+            onAction={(action) => findingApi.onAction(f.id, action)}
+          />
+        ))}
 
       {commenting &&
         commenting.showComments &&

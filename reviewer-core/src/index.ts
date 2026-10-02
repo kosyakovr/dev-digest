@@ -15,17 +15,31 @@
 export {
   assemblePrompt,
   wrapUntrusted,
-  estimateTokens,
+  renderIntentSection,
+  MAX_INTENT_CHARS,
+  INTENT_CAUTION_HIGH_MEDIUM,
+  INTENT_CAUTION_LOW,
+  type ReviewIntent,
   type PromptParts,
   type AssembledPrompt,
-  type PromptIntent,
-  type PromptSectionName,
-  type PromptSectionSource,
-  type PromptSection,
 } from './prompt.js';
 
+// Content-free prompt section metadata (for logs).
+export {
+  describeSection,
+  estimateTokens,
+  type PromptSectionMeta,
+  type SectionTrust,
+} from './prompt-meta.js';
+
 // Citation grounding — the mandatory mechanical gate for diff findings.
-export { groundFindings, groundingSummary, type GroundingResult } from './grounding.js';
+export {
+  groundFindings,
+  groundingSummary,
+  type GroundingResult,
+  type GroundingReasonCode,
+  type DroppedFinding,
+} from './grounding.js';
 
 // Structured-output helpers (Zod → JSON Schema + parse-with-repair).
 export {
@@ -36,24 +50,8 @@ export {
   type ParseResult,
 } from './llm/structured.js';
 
-// Unified-diff parsing — the single count-driven parse `numberDiff`, `sliceDiff`
-// and the engine's map-reduce chunking are all derived from (L03).
-export {
-  parseDiff,
-  parseUnifiedDiff,
-  type DiffLineKind,
-  type ParsedDiffLine,
-  type ParsedHunk,
-  type ParsedFile,
-  type ParsedDiff,
-} from './diff/parse.js';
-
 // Map-reduce helpers (reduce partials, slice a file's diff).
-export { reduceReviews, scoreFromFindings, sliceDiff } from './review/reduce.js';
-
-// Print each diff line's new-file line number in a gutter (L03 — grounding
-// citations must match a real line, not a hunk-header-counted guess).
-export { numberDiff } from './review/numbered-diff.js';
+export { reduceReviews, sliceDiff } from './review/reduce.js';
 
 // The engine entry point: given (diff + resolved agent inputs + LLM) → grounded Review.
 export {
@@ -63,10 +61,9 @@ export {
   type ReviewInput,
   type ReviewOutcome,
   type ReviewEvent,
+  type PromptEvent,
   type ReviewStrategy,
   type ReviewMode,
-  type PromptAssembledInfo,
-  type PromptTelemetryOptions,
 } from './review/run.js';
 
 // Output: grounded Review → GitHubReviewPayload (body + inline comments + event).

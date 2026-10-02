@@ -1,41 +1,75 @@
-/**
- * L03 — `loadConfig` / `startupWarnings` (platform/config.ts). Pure: every
- * case passes an explicit env object, never `process.env`, so a developer's
- * real `PROMPT_LOG`/`NODE_ENV` can never leak into these assertions.
- */
 import { describe, it, expect } from 'vitest';
-import { loadConfig, startupWarnings } from '../src/platform/config.js';
+import { loadConfig } from '../src/platform/config.js';
 
-describe('loadConfig — PROMPT_LOG (L03 prompt logging)', () => {
-  it('defaults to summary, not verbose-ignored, with no PROMPT_LOG set', () => {
-    const cfg = loadConfig({} as NodeJS.ProcessEnv);
-    expect(cfg.promptLog).toBe('summary');
-    expect(cfg.promptLogVerboseIgnored).toBe(false);
+/**
+ * DEVDIGEST_PROMPT_LOG (server/specs/L03-prompt-logging.md § Config, AC-5, AM1).
+ * `loadConfig` gets an explicit env object, so nothing here reads process.env or .env.
+ * Verbose is honoured only for an EXPLICIT NODE_ENV of development/test; the zod
+ * default ('development') must not count.
+ */
+describe('loadConfig — DEVDIGEST_PROMPT_LOG', () => {
+  it('development + verbose -> verbose, and the default log level rises to debug', () => {
+    const c = loadConfig({ NODE_ENV: 'development', DEVDIGEST_PROMPT_LOG: 'verbose' });
+    expect(c.promptLog).toBe('verbose');
+    expect(c.promptLogRequested).toBe('verbose');
+    expect(c.logLevel).toBe('debug');
+    expect(c.promptLogIgnoredReason).toBeUndefined();
   });
 
-  it('PROMPT_LOG=verbose in development resolves to verbose, with no startup warning', () => {
-    const cfg = loadConfig({ NODE_ENV: 'development', PROMPT_LOG: 'verbose' } as NodeJS.ProcessEnv);
-    expect(cfg.promptLog).toBe('verbose');
-    expect(cfg.promptLogVerboseIgnored).toBe(false);
-    expect(startupWarnings(cfg)).toEqual([]);
+  it('an explicit LOG_LEVEL wins over the verbose default', () => {
+    const c = loadConfig({ NODE_ENV: 'development', DEVDIGEST_PROMPT_LOG: 'verbose', LOG_LEVEL: 'info' });
+    expect(c.promptLog).toBe('verbose');
+    expect(c.logLevel).toBe('info');
   });
 
-  it('PROMPT_LOG=verbose in production is downgraded to summary, with one startup warning', () => {
-    const cfg = loadConfig({ NODE_ENV: 'production', PROMPT_LOG: 'verbose' } as NodeJS.ProcessEnv);
-    expect(cfg.promptLog).toBe('summary');
-    expect(cfg.promptLogVerboseIgnored).toBe(true);
-
-    const warnings = startupWarnings(cfg);
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]!.msg).toContain('PROMPT_LOG=verbose ignored');
+  it('test + verbose -> verbose, but test logs stay silent', () => {
+    const c = loadConfig({ NODE_ENV: 'test', DEVDIGEST_PROMPT_LOG: 'verbose' });
+    expect(c.promptLog).toBe('verbose');
+    expect(c.logLevel).toBe('silent');
   });
 
-  it('PROMPT_LOG="" (as shipped in .env / .env.example) falls through to summary', () => {
-    const cfg = loadConfig({ PROMPT_LOG: '' } as NodeJS.ProcessEnv);
-    expect(cfg.promptLog).toBe('summary');
+  it('production + verbose -> default, the request is remembered, the reason names the env', () => {
+    const c = loadConfig({ NODE_ENV: 'production', DEVDIGEST_PROMPT_LOG: 'verbose' });
+    expect(c.promptLog).toBe('default');
+    expect(c.promptLogRequested).toBe('verbose');
+    expect(c.promptLogIgnoredReason).toBe('NODE_ENV=production');
+    expect(c.logLevel).toBe('info');
   });
 
-  it('an invalid PROMPT_LOG value fails startup, like an invalid LOG_LEVEL', () => {
-    expect(() => loadConfig({ PROMPT_LOG: 'loud' } as NodeJS.ProcessEnv)).toThrow();
+  it('AM1: verbose with NODE_ENV unset -> default (the schema default does not count) and the reason', () => {
+    const c = loadConfig({ DEVDIGEST_PROMPT_LOG: 'verbose' });
+    expect(c.nodeEnv).toBe('development'); // the schema default is what the rest of the app sees
+    expect(c.promptLog).toBe('default');
+    expect(c.promptLogRequested).toBe('verbose');
+    expect(c.promptLogIgnoredReason).toBe('NODE_ENV not set explicitly');
+    expect(c.logLevel).toBe('info');
+  });
+
+  it('AM1: an empty or blank NODE_ENV is not explicit -> default, the reason, and no crash', () => {
+    for (const blank of ['', '   ']) {
+      const c = loadConfig({ NODE_ENV: blank, DEVDIGEST_PROMPT_LOG: 'verbose' });
+      expect(c.nodeEnv, JSON.stringify(blank)).toBe('development');
+      expect(c.promptLog).toBe('default');
+      expect(c.promptLogRequested).toBe('verbose');
+      expect(c.promptLogIgnoredReason).toBe('NODE_ENV not set explicitly');
+      expect(c.logLevel).toBe('info');
+    }
+  });
+
+  it('an empty DEVDIGEST_PROMPT_LOG is unset: default, nothing requested, no reason', () => {
+    const c = loadConfig({ NODE_ENV: 'development', DEVDIGEST_PROMPT_LOG: '' });
+    expect(c.promptLog).toBe('default');
+    expect(c.promptLogRequested).toBe('default');
+    expect(c.promptLogIgnoredReason).toBeUndefined();
+    expect(c.logLevel).toBe('info');
+  });
+
+  it('absent flag and an explicit "default" both leave the log level alone', () => {
+    for (const env of [{ NODE_ENV: 'development' }, { NODE_ENV: 'development', DEVDIGEST_PROMPT_LOG: 'default' }]) {
+      const c = loadConfig(env);
+      expect(c.promptLog).toBe('default');
+      expect(c.promptLogRequested).toBe('default');
+      expect(c.logLevel).toBe('info');
+    }
   });
 });

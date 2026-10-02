@@ -1,1 +1,0 @@
-export { FindingMarker } from "./FindingMarker";

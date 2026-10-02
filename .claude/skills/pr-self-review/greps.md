@@ -78,20 +78,20 @@ with a mechanism — which is what earns a CRITICAL.
 
 ## The patterns
 
-All ten were run at `HEAD` and at the merge-base of this repo on 2026-09-21. The
+The first ten were run at `HEAD` and at the merge-base of this repo on 2026-09-21; `rc-purity` was added 2026-10-01 (0 hits at `438513f`). The
 "both revs" column is the count that cancels out — it is diagnostic, not a
 baseline to maintain, and it will drift as the repo changes. That is fine.
 
 ### From `onion-architecture` §13 — run when `server/src/**` is in the diff
 
-| id | pattern | pathspec | both revs |
-|---|---|---|---|
-| `onion-13-db-in-boundary` | `drizzle-orm` | `:(glob)server/src/modules/*/routes.ts` | 4 |
-| `onion-13-framework-in-service` | `from 'fastify` | `:(glob)server/src/modules/*/service.ts` | 0 |
-| `onion-13-rowtype-leak` | `\$inferSelect` | `:(glob)server/src/modules/*/service.ts` | 0 |
-| `onion-13-cross-module-reach` | `from '\.\./[a-z-]+/repository` | `server/src/modules` | 0 |
-| `onion-13-config-bypass` | `process\.env` | `server/src` `:(exclude)server/src/platform/config.ts` `:(exclude)server/src/adapters/secrets` | 5 |
-| `onion-13-tenancy-guard` | *(files-without-match)* `workspaceId` | `:(glob)server/src/modules/*/repository.ts` | 1 |
+| id | pattern | pathspec | both revs | sample |
+|---|---|---|---|---|
+| `onion-13-db-in-boundary` | `drizzle-orm` | `:(glob)server/src/modules/*/routes.ts` | 4 | `import { eq } from 'drizzle-orm';` |
+| `onion-13-framework-in-service` | `from 'fastify` | `:(glob)server/src/modules/*/service.ts` | 0 | `import type { FastifyInstance } from 'fastify';` |
+| `onion-13-rowtype-leak` | `\$inferSelect` | `:(glob)server/src/modules/*/service.ts` | 0 | `type R = typeof t.$inferSelect;` |
+| `onion-13-cross-module-reach` | `from '\.\./[a-z-]+/repository` | `server/src/modules` | 0 | `import { r } from '../reviews/repository.js';` |
+| `onion-13-config-bypass` | `process\.env` | `server/src` `:(exclude)server/src/platform/config.ts` `:(exclude)server/src/adapters/secrets` | 5 | `const k = process.env.FOO;` |
+| `onion-13-tenancy-guard` | *(files-without-match)* `workspaceId` | `:(glob)server/src/modules/*/repository.ts` | 1 | `const workspaceId = 1;` |
 
 The tenancy check uses `git grep -L`, which works at a revision:
 
@@ -107,12 +107,12 @@ of these, so they should only ever reach you as genuinely new.
 
 ### From `frontend-ui-architecture` §15 — run when `client/src/**` is in the diff
 
-| id | pattern | pathspec | both revs |
-|---|---|---|---|
-| `fe-15-deep-relatives` | `\.\./\.\./\.\.` | `client/src` | 56 |
-| `fe-15-fetch-in-ui` | `[^a-zA-Z.]fetch\(` | `:(glob)client/src/app/**/*.tsx` `:(glob)client/src/components/**/*.tsx` | 0 |
-| `fe-15-wildcard-barrels` | *(files-with-match)* `export \*` | `client/src` | 7 |
-| `fe-15-junk-drawer` | *(path check, see below)* | `client/src` | 0 |
+| id | pattern | pathspec | both revs | sample |
+|---|---|---|---|---|
+| `fe-15-deep-relatives` | `\.\./\.\./\.\.` | `client/src` | 56 | `import m from "../../../a.json";` |
+| `fe-15-fetch-in-ui` | `[^a-zA-Z.]fetch\(` | `:(glob)client/src/app/**/*.tsx` `:(glob)client/src/components/**/*.tsx` | 0 | `const r = await fetch(url);` |
+| `fe-15-wildcard-barrels` | *(files-with-match)* `export \*` | `client/src` | 7 | `export * from './a';` |
+| `fe-15-junk-drawer` | *(path check, see below)* | `client/src` | 0 | `client/src/lib/utils.ts` |
 
 The shipped §15 pattern for the second rule is `fetch(`, which matches
 **`refetch()`** — four false positives in `client/` today, all of them TanStack
@@ -122,48 +122,34 @@ corrected in place.
 The junk-drawer check is a path check, not a content grep:
 
 ```bash
-git ls-tree -r --name-only HEAD -- client/src | grep -E '(^|/)utils(\.ts|/)'
+git ls-tree -r --name-only HEAD -- client/src | grep -E '(^|/)utils(\.ts)?$'
 ```
 
-`ls-tree -r` lists files only, so a `utils/` folder appears as `…/utils/x.ts` —
-the pattern must match `utils/` mid-path, not only at the end. This is the pattern
-`scripts/fitness-greps.sh` runs.
+Run it at both revisions; a path listed at the new revision and not at the base is
+a new hit (`scripts/review-greps.sh` reads the pattern out of this command line and
+the pathspec out of the table row).
 
-## Running them in one command
+### From reviewer-core AGENTS.md — run when reviewer-core/src/** is in the diff
 
-[`scripts/fitness-greps.sh`](../../../scripts/fitness-greps.sh) runs every
-pattern above by this subtraction method — working tree vs `HEAD` with no
-arguments, `<base> <head>` for a range — plus the vendored-twin check
-(`routing.md`), module registration and the reviewer-core purity grep from
-`architecture-reviewer.md`, and prints each new hit with its class from
-§ Scoping a new hit. It is evidence, not a verdict: the hits still have to be
-read. This file stays the source of truth — change a pattern here and there
-together.
+`reviewer-core/AGENTS.md` § Must not break: `reviewer-core/src` imports no DB,
+GitHub, filesystem or process APIs. (Moved here from `architecture-reviewer.md`
+Step 3 — one source.) In a markdown table a literal pipe is written `\|`;
+`scripts/review-greps.sh` unescapes it.
 
-Expected output on the L03 intent-layer change (uncommitted vs `91817b4`,
-2026-09-24) — the same numbers architecture-reviewer got by hand:
+| id | pattern | pathspec | both revs | sample |
+|---|---|---|---|---|
+| `rc-purity` | `from '(pg\|postgres\|drizzle-orm[^']*\|simple-git\|@octokit/[^']*\|node:fs[^']*\|fs\|fs/promises\|node:child_process\|child_process)'` | `reviewer-core/src` | 0 | `import { Pool } from 'pg';` |
 
-```
-onion-13-db-in-boundary          pass          4 → 4    new 0
-onion-13-framework-in-service    pass          0 → 0    new 0
-onion-13-rowtype-leak            pass          0 → 0    new 0
-onion-13-cross-module-reach      pass          1 → 1    new 0
-onion-13-config-bypass           pass          5 → 5    new 0
-onion-13-tenancy-guard           pass          1 → 1    new 0
-fe-15-deep-relatives             pass         95 → 95   new 0
-fe-15-fetch-in-ui                pass          0 → 0    new 0
-fe-15-wildcard-barrels           regression    7 → 8    new 1   ← client/src/lib/hooks/intent.ts: "export *" in a comment (benign)
-fe-15-junk-drawer                pass
-reviewer-core-purity             pass          0 → 0    new 0
-vendored-twin                    pass
-module-registration              pass       intent
-```
+## Machine-readable by design
 
-With a planted `import … from 'fastify'`, `$inferSelect` and `process.env` in
-a new `server/src/modules/zztmp/service.ts` plus a one-sided
-`client/src/vendor/shared/zztmp.ts`, it reports framework-in-service,
-rowtype-leak and config-bypass as WARNING (A-file), vendored-twin as CRITICAL
-and module-registration for `zztmp` — the negative case was run, not assumed.
+`scripts/review-greps.sh` PARSES the tables above (and the secret-pattern table in
+`.claude/agents/security-reviewer.md` Step 2) — it hard-codes no pattern. Keep the
+row shape `| id | pattern | pathspec(s) | both revs | sample |`: pattern and sample
+in backticks, pathspecs in backticks separated by spaces, `\|` for a literal pipe.
+`sample` is a string the pattern MUST match; `review-greps.sh --self-test` asserts
+that with `git grep -E`, so a pattern written in another regex dialect (`\s`) cannot
+ship untested. In a secret-table sample a `¦` is removed before testing, so the
+sample does not itself match the pattern when it sits in a tracked file.
 
 ## Reporting
 

@@ -19,40 +19,8 @@ import { parseUnifiedDiff } from './diff-parser.js';
  */
 const RESYNC_FETCH_DEPTH = 50;
 
-/**
- * `-c` overrides for `diff()` ONLY (not the shared `git()` instance other
- * methods use) — pinned so a host's local/global git config can never change
- * what the parser sees (L03 AC-5). Each one defeats a config knob that would
- * otherwise change the header text `parseUnifiedDiff` reads:
- *  - `core.quotePath=false` — else a non-ASCII path is C-quoted (`"...\NNN"`).
- *  - `diff.noprefix=false` / `diff.mnemonicPrefix=false` — else `a/`/`b/`
- *    disappear or become `i/`/`w/`, breaking the fixed `--src-prefix`/`--dst-prefix` below.
- *  - `diff.relative=false` — else paths are cwd-relative, not repo-root-relative.
- *  - `diff.suppressBlankEmpty=false` — else a blank context line loses its
- *    single leading space, which the parser needs to tell it apart from `''`.
- */
-const DIFF_GIT_CONFIG = [
-  'core.quotePath=false',
-  'diff.noprefix=false',
-  'diff.mnemonicPrefix=false',
-  'diff.relative=false',
-  'diff.suppressBlankEmpty=false',
-];
-
-/**
- * Flags for `diff()` ONLY, alongside `DIFF_GIT_CONFIG` above — belt-and-braces
- * against the same host-config drift, plus `--unified=3` so hunk sizes don't
- * shift with a host's `diff.context`, and no external/textconv/color filter
- * touching the bytes the parser reads.
- */
-const DIFF_FLAGS = [
-  '--no-color',
-  '--no-ext-diff',
-  '--no-textconv',
-  '--unified=3',
-  '--src-prefix=a/',
-  '--dst-prefix=b/',
-];
+/** A commit id `readFileAtRef` accepts: 7-40 lowercase hex chars (never an option or a ref name). */
+const HEX_REF = /^[0-9a-f]{7,40}$/;
 
 /**
  * GitClient over simple-git. Repos clone to
@@ -127,8 +95,7 @@ export class SimpleGitClient implements GitClient {
   }
 
   async diff(repo: RepoRef, base: string, head: string): Promise<UnifiedDiff> {
-    const git = simpleGit({ baseDir: this.clonePathFor(repo), config: DIFF_GIT_CONFIG });
-    const raw = await git.diff([...DIFF_FLAGS, `${base}...${head}`]);
+    const raw = await this.git(repo).diff([`${base}...${head}`]);
     return parseUnifiedDiff(raw);
   }
 
@@ -164,6 +131,38 @@ export class SimpleGitClient implements GitClient {
 
   async readFile(repo: RepoRef, path: string): Promise<string> {
     return readFile(join(this.clonePathFor(repo), path), 'utf8');
+  }
+
+  /**
+   * Reads `<ref>:<path>` from the object database (`git cat-file` / `git show`),
+   * never the working tree, so a path cannot escape the repo through the file
+   * system. Throws on a malformed ref/path; returns null when the object is missing.
+   */
+  async readFileAtRef(
+    repo: RepoRef,
+    ref: string,
+    path: string,
+    maxBytes: number,
+  ): Promise<{ text: string; bytes: number } | null> {
+    if (!HEX_REF.test(ref)) throw new Error(`readFileAtRef: invalid ref "${ref}"`);
+    if (!path || path.startsWith('-') || path.startsWith('/') || path.split('/').includes('..')) {
+      throw new Error(`readFileAtRef: invalid path "${path}"`);
+    }
+    const g = this.git(repo);
+    const spec = `${ref}:${path}`;
+    let bytes: number;
+    try {
+      bytes = Number.parseInt((await g.raw(['cat-file', '-s', spec])).trim(), 10);
+    } catch {
+      return null;
+    }
+    if (!Number.isFinite(bytes)) return null;
+    if (bytes > maxBytes) return { text: '', bytes };
+    try {
+      return { text: await g.raw(['show', spec]), bytes };
+    } catch {
+      return null;
+    }
   }
 }
 

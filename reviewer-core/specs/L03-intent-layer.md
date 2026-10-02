@@ -1,43 +1,28 @@
-# Intent Layer (reviewer-core)
+# Intent Layer — the `## Stated intent` prompt slot (reviewer-core)
 
 **Status:** in-progress
 **Lesson / ticket:** L03
 
-The feature spans `server/`, `reviewer-core/` and `client/`, so it keeps
-**one** spec:
-[../../server/specs/L03-intent-layer.md](../../server/specs/L03-intent-layer.md) —
-goal, non-goals, contracts, routes, data sources, confidence rules and
-acceptance criteria all live there.
+One spec for the feature:
+[../../server/specs/L03-intent-layer.md](../../server/specs/L03-intent-layer.md).
+This file records only the pure-engine part.
 
-This file records only what is reviewer-core-specific.
-
-## Prompt slot
-
-`src/prompt.ts` gains an optional `PromptIntent` slot on `PromptParts.intent`:
-
-```ts
-export interface PromptIntent {
-  summary: string;
-  inScope: string[];
-  outOfScope: string[];
-  confidence: 'high' | 'medium' | 'low';
-}
-```
-
-Rendered right after `## PR description` and before `## Skills / rules`,
-wrapped in `<untrusted source="derived-intent">` and capped at
-`MAX_INTENT_BLOCK_CHARS = 2000` chars. `low` confidence adds a "weak hint"
-line. `assembly.intent` carries the rendered block (or `null`). When
-`intent` is undefined the prompt is byte-identical to the pre-L03 baseline.
-
-`src/review/run.ts` — `ReviewInput.intent?: PromptIntent`, passed through to
-`promptParts` so every map-reduce chunk's prompt carries it too.
-
-`PromptIntent` is exported from `src/index.ts`.
+## Contract
+- `ReviewIntent { statement, inScope, outOfScope, confidence: 'high'|'medium'|'low' }`
+  (exported type), optional `PromptParts.intent` and `ReviewInput.intent`.
+- Rendered right after `## PR description`, before `## Skills / rules`:
+  `## Stated intent (derived from author-controlled text — may be wrong; confidence: <c>)`,
+  an `<untrusted source="intent">` block (`Intent:`, `In scope:`, `Out of scope:`),
+  then a trusted caution line.
+- Caution line by confidence (exported constants `INTENT_CAUTION_HIGH_MEDIUM`,
+  `INTENT_CAUTION_LOW`): high/medium allow a separate scope finding of at most
+  WARNING while a real defect keeps its true severity, including CRITICAL; low says
+  the intent is a weak hint and findings must not be raised solely because the diff
+  differs from it. Neither ever lowers or excuses a real defect.
+- Wrapped content capped at `MAX_INTENT_CHARS = 2000`; `</untrusted>` is escaped by `wrapUntrusted`.
+- Omitted when `intent` is undefined or `statement.trim() === ''`: the prompt is then
+  byte-identical to before. `PromptAssembly.intent` = the section text or `null`.
+- Intent is context only: reviewer-core never filters or downgrades findings by it.
 
 ## Test plan
-
-| File | Covers |
-|------|--------|
-| `test/prompt.test.ts` | placement, omission, cap, escaping, low-confidence hint |
-| `test/run.test.ts` | map-reduce chunks all carry the intent section |
+Deferred in this iteration (`reviewer-core/test/prompt.test.ts`, `run.test.ts` when added).

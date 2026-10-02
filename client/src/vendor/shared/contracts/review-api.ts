@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Finding, Verdict } from './findings.js';
-import { Intent, SmartDiff, IntentConfidence, IntentConfidenceBasis, IntentSource } from './brief.js';
+import { Intent, SmartDiff } from './brief.js';
 
 /**
  * A2 — Review-Core API surface contracts. These extend the core
@@ -56,42 +56,80 @@ export const ReviewRunResponse = z.object({
 });
 export type ReviewRunResponse = z.infer<typeof ReviewRunResponse>;
 
-/**
- * Intent persisted for a PR (L03): the Intent plus the pr_id it scopes, its
- * deterministic confidence, the sources it was derived from, and generation
- * metadata. `stale` is computed at read time (input_hash vs the PR's current
- * title/body/head_sha), not stored.
- */
+/** Confidence in a derived PR intent. Computed in code from the sources found; never model-reported. */
+export const IntentConfidence = z.enum(['high', 'medium', 'low']);
+export type IntentConfidence = z.infer<typeof IntentConfidence>;
+
+/** Where a piece of intent evidence came from. `link` = a URL/path that was found but not read. */
+export const IntentSourceKind = z.enum([
+  'title',
+  'description',
+  'ticket',
+  'spec',
+  'commits',
+  'branch',
+  'files',
+  'diff',
+  'link',
+]);
+export type IntentSourceKind = z.infer<typeof IntentSourceKind>;
+
+/** Why a referenced source could not be used. */
+export const IntentUnresolvedReason = z.enum([
+  'external_not_fetched',
+  'cross_repo',
+  'outside_repo',
+  'unsupported_type',
+  'not_found',
+  'too_large',
+  'is_pull_request',
+  'github_unavailable',
+  'limit_reached',
+]);
+export type IntentUnresolvedReason = z.infer<typeof IntentUnresolvedReason>;
+
+/** `used` carries no reason; `unresolved` always carries one. */
+export const IntentSource = z.discriminatedUnion('status', [
+  z.object({
+    kind: IntentSourceKind,
+    /** '#471' | 'docs/specs/x.md' | URL | null */
+    ref: z.string().nullable(),
+    status: z.literal('used'),
+    reason: z.null(),
+  }),
+  z.object({
+    kind: IntentSourceKind,
+    ref: z.string().nullable(),
+    status: z.literal('unresolved'),
+    reason: IntentUnresolvedReason,
+  }),
+]);
+export type IntentSource = z.infer<typeof IntentSource>;
+
+/** Intent persisted for a PR (the Intent plus the pr_id it scopes). */
 export const PrIntentRecord = Intent.extend({
   pr_id: z.string(),
   confidence: IntentConfidence,
-  confidence_basis: IntentConfidenceBasis,
-  downgraded: z.boolean(),
   sources: z.array(IntentSource),
   head_sha: z.string(),
+  /** true when the PR's head moved since this intent was derived. */
   stale: z.boolean(),
   provider: z.string().nullable(),
   model: z.string().nullable(),
   tokens_in: z.number().int().nullable(),
   tokens_out: z.number().int().nullable(),
-  /** USD spent deriving this intent; null = unknown. Never 0-as-unknown. */
+  /** null = unknown, never 0-as-unknown (server/specs/L01-run-cost.md § Null semantics). */
   cost_usd: z.number().nullable(),
-  generated_at: z.string(),
+  derived_at: z.string(),
 });
 export type PrIntentRecord = z.infer<typeof PrIntentRecord>;
 
-/** Response of `GET /pulls/:id/intent`. */
 export const PrIntentResponse = z.object({ intent: PrIntentRecord.nullable() });
 export type PrIntentResponse = z.infer<typeof PrIntentResponse>;
 
-/** Body of `POST /pulls/:id/intent`. */
-export const DeriveIntentRequest = z.object({ force: z.boolean().default(false) });
-export type DeriveIntentRequest = z.infer<typeof DeriveIntentRequest>;
-
-/** Response of `POST /pulls/:id/intent`. */
-export const DeriveIntentResponse = z.object({ intent: PrIntentRecord, cached: z.boolean() });
-export type DeriveIntentResponse = z.infer<typeof DeriveIntentResponse>;
-
-/** Smart-diff response for a PR (the SmartDiff). */
-export const SmartDiffResponse = SmartDiff;
+/** Smart-diff response for a PR (the SmartDiff + the reviews its finding_lines came from). */
+export const SmartDiffResponse = SmartDiff.extend({
+  /** Reviews the finding_lines were built from; [] = no review yet. */
+  review_ids: z.array(z.string()),
+});
 export type SmartDiffResponse = z.infer<typeof SmartDiffResponse>;

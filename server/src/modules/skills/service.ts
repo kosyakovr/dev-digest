@@ -67,16 +67,18 @@ export class SkillsService {
 
   /**
    * Update a skill. Only a BODY change bumps the version and snapshots history —
-   * the rule lives here (not in the repository) because it is a product rule.
-   * The repository applies it to the row it has locked, so the decision can
-   * never be made against a stale read.
+   * the decision lives here (not in the repository) because it is a product
+   * rule, and the repository is told the answer.
    */
   async update(
     workspaceId: string,
     id: string,
     patch: UpdateSkillInput,
   ): Promise<Skill | undefined> {
-    const row = await this.repo.update(workspaceId, id, patch, (locked) => isBodyChange(locked, patch));
+    const existing = await this.repo.getById(workspaceId, id);
+    if (!existing) return undefined;
+
+    const row = await this.repo.update(workspaceId, id, patch, isBodyChange(existing, patch));
     return row ? toSkillDto(row) : undefined;
   }
 

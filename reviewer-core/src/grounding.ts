@@ -15,9 +15,18 @@ import type { Finding, UnifiedDiff } from '@devdigest/shared';
 
 const FULL_FILE_KINDS = new Set(['secret_leak', 'lethal_trifecta', 'phantom', 'hook']);
 
+/** Machine-readable drop cause; branch on this, never on the `reason` text. */
+export type GroundingReasonCode = 'file_not_in_diff' | 'lines_not_in_hunk';
+
+export interface DroppedFinding {
+  finding: Finding;
+  reason: string;
+  code: GroundingReasonCode;
+}
+
 export interface GroundingResult {
   kept: Finding[];
-  dropped: { finding: Finding; reason: string }[];
+  dropped: DroppedFinding[];
 }
 
 /** Build a quick lookup of file → set of new-side line numbers covered by hunks. */
@@ -53,13 +62,13 @@ export function groundFindings(findings: Finding[], diff: UnifiedDiff): Groundin
   const lineIndex = buildLineIndex(diff);
   const filesInDiff = new Set(diff.files.map((f) => f.path));
   const kept: Finding[] = [];
-  const dropped: { finding: Finding; reason: string }[] = [];
+  const dropped: DroppedFinding[] = [];
 
   for (const finding of findings) {
     const isFullFile = finding.kind ? FULL_FILE_KINDS.has(finding.kind) : false;
 
     if (!filesInDiff.has(finding.file)) {
-      dropped.push({ finding, reason: `file '${finding.file}' not present in diff` });
+      dropped.push({ finding, reason: `file '${finding.file}' not present in diff`, code: 'file_not_in_diff' });
       continue;
     }
 
@@ -76,6 +85,7 @@ export function groundFindings(findings: Finding[], diff: UnifiedDiff): Groundin
       dropped.push({
         finding,
         reason: `lines ${finding.start_line}-${finding.end_line} do not intersect any diff hunk in '${finding.file}'`,
+        code: 'lines_not_in_hunk',
       });
     }
   }

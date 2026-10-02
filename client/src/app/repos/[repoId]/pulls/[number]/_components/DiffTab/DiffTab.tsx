@@ -4,50 +4,41 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { SectionLabel, Button, Skeleton } from "@devdigest/ui";
 import { DiffViewer, type DiffCommentApi, type DiffFindingApi } from "@/components/diff-viewer";
-import { usePrComments, useCreatePrComment, usePrReviews, useFindingAction } from "@/lib/hooks/reviews";
-import { useSmartDiff } from "@/lib/hooks/smart-diff";
+import {
+  usePrComments,
+  useCreatePrComment,
+  usePrReviews,
+  useSmartDiff,
+  useFindingAction,
+} from "@/lib/hooks/reviews";
 import { notify } from "@/lib/toast";
 import type { PrFile } from "@devdigest/shared";
-import { findingsByFile, orderFromParam, orderToParam, type DiffOrder } from "./helpers";
-import { InlineFindingCard } from "./_components/InlineFindingCard";
-import { OrderToggle } from "./_components/OrderToggle";
-import { SmartOrderView } from "./_components/SmartOrderView";
-import { s } from "./styles";
+import { RoleGroup } from "./_components/RoleGroup";
+import { DiffToolbar, type DiffOrder } from "./_components/DiffToolbar";
+import { planGroups, visibleFindings } from "./helpers";
+import { note } from "./styles";
 
 interface DiffTabProps {
   prId: string | null;
+  /** PR-level totals from GitHub (cover every file, even when `files` is capped). */
   filesCount: number;
+  additions: number;
+  deletions: number;
   files: PrFile[];
   /** Inline commenting is offered only on open PRs (GitHub rejects otherwise). */
   canComment?: boolean;
-  /** `?order=` from the URL (`page.tsx` owns it, like `tab` and `trace`). */
-  orderParam: string | null;
-  onOrderParamChange: (v: string | null) => void;
 }
 
-export function DiffTab({
-  prId,
-  filesCount,
-  files,
-  canComment,
-  orderParam,
-  onOrderParamChange,
-}: DiffTabProps) {
+export function DiffTab({ prId, filesCount, additions, deletions, files, canComment }: DiffTabProps) {
   const t = useTranslations("prReview");
-  const order: DiffOrder = orderFromParam(orderParam);
-
   const { data: comments } = usePrComments(prId);
+  const smart = useSmartDiff(prId);
+  const { data: reviews } = usePrReviews(prId);
+  const action = useFindingAction();
   const create = useCreatePrComment(prId);
-  const { data: reviews, isPending: reviewsPending } = usePrReviews(prId);
-  const findingAction = useFindingAction();
-  const {
-    data: smartDiff,
-    isPending: smartPending,
-    isError: smartErrored,
-  } = useSmartDiff(order === "smart" ? prId : null);
-
   // Comments start hidden so the diff is clean by default — toggle to reveal.
   const [showComments, setShowComments] = React.useState(false);
+  const [order, setOrder] = React.useState<DiffOrder>("smart");
 
   const commentCount = comments?.length ?? 0;
 
@@ -68,63 +59,96 @@ export function DiffTab({
     },
   };
 
-  // The single source of truth for finding markers (dots/chips/cards) — see
-  // `server/specs/L03-smart-diff.md` § Contract. Never reads smart-diff's
-  // `finding_lines`.
-  const byFile = React.useMemo(() => findingsByFile(reviews ?? []), [reviews]);
   const findingApi: DiffFindingApi = {
-    byFile,
-    Card: InlineFindingCard,
-    pending: findingAction.isPending,
-    onAction: (findingId, action) =>
-      findingAction.mutate({ findingId, action, prId: prId ?? undefined }),
+    findings: visibleFindings(reviews, smart.data?.review_ids ?? []),
+    pendingId: action.isPending ? (action.variables?.findingId ?? null) : null,
+    onAction: (findingId, act) => action.mutate({ findingId, action: act, prId: prId ?? undefined }),
   };
+
+  const groups = smart.data ? planGroups(smart.data, files) : null;
+  const noReview =
+    !!smart.data && !smart.isError && smart.data.review_ids.length === 0 ? (
+      <p style={note}>{t("smartDiff.noReview")}</p>
+    ) : null;
+  // Findings are the reviews the smart diff names (review_ids), so without its
+  // data there are none to show in either order — say so rather than render a
+  // silently bare diff.
+  const findingsUnavailable =
+    smart.isError && !smart.data ? <p style={note}>{t("smartDiff.findingsUnavailable")}</p> : null;
+  // The flat list in the PR's own order — Original order, and Smart order's fallback.
+  const flat = <DiffViewer files={files} commenting={commenting} findings={findingApi} />;
+
+  let body: React.ReactNode;
+  if (files.length === 0) {
+    body = <DiffViewer files={files} commenting={commenting} />;
+  } else if (order === "original") {
+    body = (
+      <>
+        {noReview}
+        {flat}
+      </>
+    );
+  } else if (smart.isLoading) {
+    body = (
+      <div role="status" aria-label={t("smartDiff.loading")}>
+        <Skeleton />
+      </div>
+    );
+  } else if (smart.isError || !smart.data || !groups) {
+    body = (
+      <>
+        <p style={note}>{t("smartDiff.unavailable")}</p>
+        {flat}
+      </>
+    );
+  } else {
+    body = (
+      <>
+        {noReview}
+        {groups.map((g) => (
+          <RoleGroup
+            key={g.role}
+            role={g.role}
+            files={g.files}
+            filesWithFindings={g.filesWithFindings}
+            commenting={commenting}
+            findings={findingApi}
+          />
+        ))}
+      </>
+    );
+  }
 
   return (
     <section>
       <SectionLabel
         icon="Code"
         right={
-          <div style={s.headerActions}>
-            <OrderToggle order={order} onChange={(o) => onOrderParamChange(orderToParam(o))} />
-            {commentCount > 0 && (
-              <Button
-                kind="ghost"
-                size="sm"
-                icon={showComments ? "EyeOff" : "Eye"}
-                onClick={() => setShowComments((v) => !v)}
-              >
-                {showComments
-                  ? t("diffTab.hideComments", { count: commentCount })
-                  : t("diffTab.showComments", { count: commentCount })}
-              </Button>
-            )}
-          </div>
+          commentCount > 0 ? (
+            <Button
+              kind="ghost"
+              size="sm"
+              icon={showComments ? "EyeOff" : "Eye"}
+              onClick={() => setShowComments((v) => !v)}
+            >
+              {showComments ? "Hide comments" : "Show comments"} ({commentCount})
+            </Button>
+          ) : undefined
         }
       >
-        {t("diffTab.title", { count: filesCount })}
+        Files changed
       </SectionLabel>
-
-      {reviewsPending ? (
-        <Skeleton height={200} />
-      ) : order === "original" ? (
-        <DiffViewer files={files} commenting={commenting} findings={findingApi} />
-      ) : smartPending ? (
-        <Skeleton height={200} />
-      ) : smartErrored || !smartDiff ? (
-        <>
-          <div style={s.unavailable}>{t("smartDiff.unavailable")}</div>
-          <DiffViewer files={files} commenting={commenting} findings={findingApi} />
-        </>
-      ) : (
-        <SmartOrderView
-          files={files}
-          smart={smartDiff}
-          byFile={byFile}
-          commenting={commenting}
-          findings={findingApi}
+      {files.length > 0 && (
+        <DiffToolbar
+          filesCount={filesCount}
+          additions={additions}
+          deletions={deletions}
+          order={order}
+          onOrderChange={setOrder}
         />
       )}
+      {files.length > 0 && findingsUnavailable}
+      {body}
     </section>
   );
 }

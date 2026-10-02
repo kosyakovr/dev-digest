@@ -8,7 +8,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import type { PrFile } from "@/lib/types";
 import { type DiffCommentApi } from "../comments";
-import { type DiffFindingApi } from "../findings";
+import type { DiffFindingApi } from "../findings";
 import { s } from "../styles";
 import { FileCard } from "../FileCard";
 

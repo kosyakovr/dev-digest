@@ -48,8 +48,7 @@ export const PromptAssembly = z.object({
   repo_map: z.string().nullish(),
   /** PR author's description/body (truncated); null when absent. */
   pr_description: z.string().nullish(),
-  /** Derived PR intent block (L03), rendered after PR description; null when
-      unavailable or not derived. */
+  /** Derived PR intent section (untrusted, L03); null when absent. */
   intent: z.string().nullish(),
   user: z.string(),
 });

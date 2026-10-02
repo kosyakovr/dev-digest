@@ -133,14 +133,6 @@ export interface GitHubClient {
   ): Promise<PrReviewComment>;
   openPullRequest(repo: RepoRef, payload: OpenPrPayload): Promise<{ url: string }>;
   getIssue(repo: RepoRef, n: number): Promise<IssueMeta>;
-  /**
-   * Fetch one file's raw text content at a specific ref (Contents API). Used
-   * by the intent layer (L03) to read a linked/in-diff spec at the PR's head
-   * SHA. Returns `null` when the path is a 404, a directory, or not a
-   * regular file (e.g. a submodule); throws on other errors (auth, rate
-   * limit, network).
-   */
-  getFileContent(repo: RepoRef, path: string, ref: string): Promise<string | null>;
   /** GET /user — for "posting as @user". */
   currentLogin(): Promise<string>;
 }
@@ -189,6 +181,18 @@ export interface GitClient {
   blame(repo: RepoRef, path: string): Promise<BlameLine[]>;
   log(repo: RepoRef, path?: string): Promise<GitCommit[]>;
   readFile(repo: RepoRef, path: string): Promise<string>;
+  /**
+   * Read a file as it is at commit `ref` (a hex SHA) via the object database.
+   * `path` is repo-relative. Returns `null` when the object is missing at `ref`.
+   * When the blob is larger than `maxBytes` it returns `{ text: '', bytes }`
+   * without reading the content.
+   */
+  readFileAtRef(
+    repo: RepoRef,
+    ref: string,
+    path: string,
+    maxBytes: number,
+  ): Promise<{ text: string; bytes: number } | null>;
   clonePathFor(repo: RepoRef): string;
 }
 

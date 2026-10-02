@@ -6,6 +6,8 @@ import type {
   CodeIndex,
   Embedder,
   LLMProvider,
+  FeatureModelChoice,
+  FeatureModelId,
 } from '@devdigest/shared';
 import type { AppConfig } from './config.js';
 import type { Db } from '../db/client.js';
@@ -27,13 +29,12 @@ import { AgentsRepository } from '../modules/agents/repository.js';
 import { SkillsRepository } from '../modules/skills/repository.js';
 import { ReviewRepository } from '../modules/reviews/repository.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
-import { RepoIntelService } from '../modules/repo-intel/service.js';
-import type { IntentLayer } from '../modules/intent/types.js';
+import type { PrIntentFacade } from '../modules/intent/types.js';
+import { resolveFeatureModel, getFeatureModelOverride } from '../modules/settings/feature-models.js';
 import { IntentService } from '../modules/intent/service.js';
+import { RepoIntelService } from '../modules/repo-intel/service.js';
 import { type DepGraph, DepCruiseGraph } from '../adapters/depgraph/index.js';
 import { type Tokenizer, TiktokenTokenizer } from '../adapters/tokenizer/index.js';
-import { resolveFeatureModel } from '../modules/settings/feature-models.js';
-import type { FeatureModelChoice, FeatureModelId } from '@devdigest/shared';
 
 /**
  * DI container. One per app instance. Holds config, db, the JobRunner,
@@ -53,11 +54,11 @@ export interface ContainerOverrides {
   llm?: Partial<Record<'openai' | 'anthropic' | 'openrouter', LLMProvider>>;
   /** repo-intel facade (T1.1+) — tests inject mock RepoIntel implementations. */
   repoIntel?: RepoIntel;
-  /** intent facade (L03) — tests inject mock IntentLayer implementations. */
-  intent?: IntentLayer;
   /** repo-intel T3 adapters — only the indexer pipeline reads these. */
   depgraph?: DepGraph;
   tokenizer?: Tokenizer;
+  /** PR intent facade (L03) — tests inject a stub so reviews make no intent LLM/GitHub calls. */
+  intent?: PrIntentFacade;
 }
 
 export class Container {
@@ -81,10 +82,10 @@ export class Container {
   private _skillsRepo?: SkillsRepository;
   private _reviewRepo?: ReviewRepository;
   private _repoIntel?: RepoIntel;
-  private _intent?: IntentLayer;
   private _depgraph?: DepGraph;
   private _tokenizer?: Tokenizer;
   private _priceBook?: PriceBook;
+  private _intent?: PrIntentFacade;
 
   constructor(config: AppConfig, db: Db, private overrides: ContainerOverrides = {}) {
     this.config = config;
@@ -130,25 +131,21 @@ export class Container {
     return this._repoIntel;
   }
 
-  /**
-   * The intent-layer facade (L03). Other modules (reviews' run-executor) reach
-   * it only through this getter, never by importing `modules/intent/service.js`
-   * directly. Tests inject a mock via `ContainerOverrides.intent`.
-   */
-  get intent(): IntentLayer {
+  /** PR intent facade (L03): derived once per review batch, shared by every agent. */
+  get intent(): PrIntentFacade {
     if (this.overrides.intent) return this.overrides.intent;
     this._intent ??= new IntentService(this);
     return this._intent;
   }
 
-  /**
-   * Resolve a per-feature model choice (workspace override, else registry
-   * default). A thin delegate to `modules/settings/feature-models.js` — kept
-   * on the container (the composition root, which may import any module) so
-   * feature modules like `intent/` never sideways-import `../settings/*`.
-   */
-  featureModel(workspaceId: string, id: FeatureModelId): Promise<FeatureModelChoice> {
+  /** Provider+model for a system LLM feature: workspace override, else registry default. */
+  resolveFeatureModel(workspaceId: string, id: FeatureModelId): Promise<FeatureModelChoice> {
     return resolveFeatureModel(this, workspaceId, id);
+  }
+
+  /** The workspace's override for a feature, or undefined — for callers keeping their own default. */
+  getFeatureModelOverride(workspaceId: string, id: FeatureModelId): Promise<FeatureModelChoice | undefined> {
+    return getFeatureModelOverride(this, workspaceId, id);
   }
 
   /** Import-graph builder (dependency-cruiser). T3 indexer pipeline only. */

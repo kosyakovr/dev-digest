@@ -41,17 +41,14 @@
     "viewOnGitHub": "View on GitHub",
     "postedToGitHub": "Posts to GitHub immediately",
     "outdatedTitle": "{count} comment(s) on older revisions",
-    "findingLabel": {
-      "critical": "blocker",
-      "warning": "warning",
-      "suggestion": "suggestion"
+    "findingLine": {
+      "critical": "Blocker",
+      "warning": "Warning",
+      "suggestion": "Suggestion"
     },
-    "findingLabelMore": "{label} +{count}",
-    "findingDot": {
-      "critical": "Highest finding severity: CRITICAL",
-      "warning": "Highest finding severity: WARNING",
-      "suggestion": "Highest finding severity: SUGGESTION"
-    },
-    "unanchoredTitle": "{count} finding(s) not on a line shown in this diff"
+    "fileHasFindings": "Has findings",
+    "findingsOutsideDiff": "Findings outside the visible diff",
+    "lineSingle": "line {start}",
+    "lineRange": "line {start}–{end}"
   }
 }

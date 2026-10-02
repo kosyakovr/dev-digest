@@ -1,154 +1,138 @@
-/**
- * platform/prompt-log.ts — cross-cutting runtime machinery (L03 prompt
- * logging), not a ring. A pure module: no I/O, no `await`, no `container`
- * import. It builds a text-free log record from prompt-assembly metadata —
- * METADATA ONLY, NEVER SECTION TEXT. The only "impure-looking" import is
- * `node:crypto`'s `createHash`, used purely (no filesystem/network), same
- * precedent as `modules/intent/helpers.ts`.
- */
-import { createHash } from 'node:crypto';
-
-export type PromptLogMode = 'summary' | 'verbose';
-
-/** The one message every prompt-log record is written with. */
-export const PROMPT_LOG_MSG = 'prompt: assembled';
-
-/** One section's metadata, as logged. `fingerprint` / `ref` are stripped in
- *  summary mode by `toPromptLogRecord` regardless of whether the caller set
- *  them — the mode is the single source of truth for what leaves the process. */
-export interface PromptLogSection {
-  name: string;
-  source: string;
-  role: 'system' | 'user';
-  untrusted: boolean;
-  chars: number;
-  tokens_est: number;
-  fingerprint?: string;
-  /** Intent classifier sections only; `null` for title/branch/external_link kinds. */
-  ref?: string | null;
-}
-
-/** Everything a caller (review run wiring, intent classifier) can supply.
- *  `toPromptLogRecord` decides, from `mode` alone, which of the verbose-only
- *  fields actually reach the logger. */
-export interface PromptLogInput {
-  feature: 'review' | 'intent';
-  scope: 'run' | 'chunk' | 'classifier';
-  correlation_id: string;
-  pr_id: string;
-  /** Review only. */
-  run_id?: string;
-  /** Intent, when derived from review pre-work. */
-  run_ids?: string[];
-  /** Review only (no agent in the intent classifier). */
-  agent?: string;
-  provider: string;
-  model: string;
-  /** Review only. */
-  mode?: string;
-  chunk_count?: number;
-  chunk_index?: number;
-  /** Verbose only. */
-  chunk_label?: string;
-  system_chars: number;
-  user_chars: number;
-  total_chars: number;
-  tokens_est: number;
-  sections: PromptLogSection[];
-  /** Verbose, run scope only. */
-  diff_files?: { path: string; chars: number }[];
-  /** Verbose only — enabled skill names. */
-  skills?: string[];
-}
-
-export interface PromptLogRecord {
-  event: 'prompt.assembled';
-  prompt_log: PromptLogMode;
-  feature: 'review' | 'intent';
-  scope: 'run' | 'chunk' | 'classifier';
-  correlation_id: string;
-  pr_id: string;
-  run_id?: string;
-  run_ids?: string[];
-  agent?: string;
-  provider: string;
-  model: string;
-  mode?: string;
-  chunk_count?: number;
-  chunk_index?: number;
-  chunk_label?: string;
-  system_chars: number;
-  user_chars: number;
-  total_chars: number;
-  tokens_est: number;
-  sections: PromptLogSection[];
-  diff_files?: { path: string; chars: number }[];
-  skills?: string[];
-}
-
-/** 12 lowercase hex chars of a sha256 digest — short enough to eyeball a
- *  diff, long enough that two unrelated sections won't collide by chance. */
-export function fingerprintText(text: string): string {
-  return createHash('sha256').update(text).digest('hex').slice(0, 12);
-}
+import type { PromptSectionMeta } from '@devdigest/reviewer-core';
+import { maskSecrets } from './secret-mask.js';
 
 /**
- * Build the log record from `input`, field by field (never `{ ...input }` —
- * a future field on `PromptLogInput` must not leak into a log line without
- * an explicit decision here). In `summary` mode, `sections[].fingerprint`,
- * `sections[].ref`, `chunk_label`, `diff_files` and `skills` are omitted.
+ * Prompt-assembly logging helpers (cross-cutting, pure apart from the logger
+ * call). The input type carries section METADATA only; the single content field,
+ * `systemPrompt`, exists for the masked preview and is never logged whole.
+ * Never use `diff`, `body`, `content`, `text` or `systemPrompt` as a logged key:
+ * they are pino redact paths.
  */
-export function toPromptLogRecord(input: PromptLogInput, mode: PromptLogMode): PromptLogRecord {
-  const verbose = mode === 'verbose';
+
+export type PromptLogMode = 'default' | 'verbose';
+
+/** pino-compatible logger; `child` is optional so plain test doubles still fit. */
+export type ChildableLogger = {
+  info: (obj: unknown, msg?: string) => void;
+  warn: (obj: unknown, msg?: string) => void;
+  error: (obj: unknown, msg?: string) => void;
+  debug: (obj: unknown, msg?: string) => void;
+  child?: (bindings: Record<string, unknown>) => ChildableLogger;
+};
+
+/** `logger.child(bindings)` when available, else a wrapper merging bindings into each object. */
+export function childLogger<L extends ChildableLogger>(logger: L, bindings: Record<string, unknown>): L {
+  if (typeof logger.child === 'function') return logger.child(bindings) as L;
+  const wrap =
+    (level: 'info' | 'warn' | 'error' | 'debug') =>
+    (obj: unknown, msg?: string) =>
+      logger[level]({ ...bindings, ...(obj && typeof obj === 'object' ? (obj as object) : {}) }, msg);
   return {
-    event: 'prompt.assembled',
-    prompt_log: mode,
-    feature: input.feature,
-    scope: input.scope,
-    correlation_id: input.correlation_id,
-    pr_id: input.pr_id,
-    ...(input.run_id !== undefined ? { run_id: input.run_id } : {}),
-    ...(input.run_ids !== undefined ? { run_ids: input.run_ids } : {}),
-    ...(input.agent !== undefined ? { agent: input.agent } : {}),
-    provider: input.provider,
-    model: input.model,
-    ...(input.mode !== undefined ? { mode: input.mode } : {}),
-    ...(input.chunk_count !== undefined ? { chunk_count: input.chunk_count } : {}),
-    ...(input.chunk_index !== undefined ? { chunk_index: input.chunk_index } : {}),
-    ...(verbose && input.chunk_label !== undefined ? { chunk_label: input.chunk_label } : {}),
-    system_chars: input.system_chars,
-    user_chars: input.user_chars,
-    total_chars: input.total_chars,
-    tokens_est: input.tokens_est,
-    sections: input.sections.map((s) => ({
-      name: s.name,
-      source: s.source,
-      role: s.role,
-      untrusted: s.untrusted,
-      chars: s.chars,
-      tokens_est: s.tokens_est,
-      ...(verbose && s.fingerprint !== undefined ? { fingerprint: s.fingerprint } : {}),
-      ...(verbose && s.ref !== undefined ? { ref: s.ref } : {}),
-    })),
-    ...(verbose && input.diff_files !== undefined ? { diff_files: input.diff_files } : {}),
-    ...(verbose && input.skills !== undefined ? { skills: input.skills } : {}),
+    info: wrap('info'),
+    warn: wrap('warn'),
+    error: wrap('error'),
+    debug: wrap('debug'),
+  } as L;
+}
+
+export interface PromptLogInput {
+  kind: 'review' | 'intent';
+  provider: string;
+  model: string;
+  /** Review only. */
+  strategy?: string;
+  chunks?: number;
+  /** Intent only. */
+  trigger?: string;
+  /** Whole-prompt sections (review: whole-diff sections). */
+  sections: PromptSectionMeta[];
+  totalChars: number;
+  /** Used ONLY to build the masked preview of the system section. */
+  systemPrompt?: string;
+  /** Verbose detail for chunks; omitted → one detail for the whole prompt. */
+  detailChunks?: { index: number; of: number; label: string; sections: PromptSectionMeta[] }[];
+}
+
+const PREVIEW_CHARS = 120;
+
+function preview(systemPrompt: string): string {
+  // Mask BEFORE cutting: a secret split by the cut no longer matches its pattern.
+  // `…` marks a preview that is not the whole prompt: judged on the flattened
+  // prompt BEFORE masking, so masking that shortens it below the cut keeps the mark.
+  const flat = systemPrompt.replace(/\s+/g, ' ').trim();
+  const masked = maskSecrets(flat);
+  const cut = flat.length > PREVIEW_CHARS || masked.length > PREVIEW_CHARS;
+  return masked.slice(0, PREVIEW_CHARS) + (cut ? '…' : '');
+}
+
+/** The default-mode section shape: no hash, no preview. */
+function plain(s: PromptSectionMeta) {
+  return {
+    name: s.name,
+    source: s.source,
+    ...(s.ref !== undefined ? { ref: s.ref } : {}),
+    trust: s.trust,
+    chars: s.chars,
+    tokensEst: s.tokensEst,
+    ...(s.items !== undefined ? { items: s.items } : {}),
   };
 }
 
-/**
- * Log one `'prompt: assembled'` record. A no-op without a logger; never
- * throws (a broken telemetry call must not break the caller's review /
- * classification).
- */
-export function emitPromptLog(
-  logger: { info(obj: unknown, msg?: string): void } | undefined,
+export function promptLogPayload(
   input: PromptLogInput,
   mode: PromptLogMode,
-): void {
+): { info: Record<string, unknown>; debug: Record<string, unknown>[] } {
+  const info: Record<string, unknown> = {
+    kind: input.kind,
+    provider: input.provider,
+    model: input.model,
+    ...(input.strategy !== undefined ? { strategy: input.strategy } : {}),
+    ...(input.chunks !== undefined ? { chunks: input.chunks } : {}),
+    ...(input.trigger !== undefined ? { trigger: input.trigger } : {}),
+    totalChars: input.totalChars,
+    totalTokensEst: Math.ceil(input.totalChars / 4),
+    sections: input.sections.map(plain),
+  };
+  if (mode !== 'verbose') return { info, debug: [] };
+
+  const detail = (
+    sections: PromptSectionMeta[],
+    chunk?: { index: number; of: number; label: string },
+  ): Record<string, unknown> => ({
+    kind: input.kind,
+    ...(chunk ? { chunk } : {}),
+    order: sections.map((s) => s.name),
+    sections: sections.map((s) => ({
+      ...plain(s),
+      sha256: s.sha256,
+      ...(s.name === 'system' && input.systemPrompt !== undefined
+        ? { preview: preview(input.systemPrompt) }
+        : {}),
+    })),
+  });
+  const debug = input.detailChunks
+    ? input.detailChunks.map((c) => detail(c.sections, { index: c.index, of: c.of, label: c.label }))
+    : [detail(input.sections)];
+  return { info, debug };
+}
+
+/** `prompt: assembled` (info) and, when verbose, `prompt: detail` (debug) per chunk. */
+export function logPrompt(logger: ChildableLogger | undefined, input: PromptLogInput, mode: PromptLogMode): void {
   if (!logger) return;
-  try {
-    logger.info(toPromptLogRecord(input, mode), PROMPT_LOG_MSG);
-  } catch {
-    // Telemetry must never break the caller.
+  const { info, debug } = promptLogPayload(input, mode);
+  logger.info(info, 'prompt: assembled');
+  for (const d of debug) logger.debug(d, 'prompt: detail');
+}
+
+/** Verbose-only `prompt: detail` for one later chunk (the info line was already written for chunk 0). */
+export function logPromptDetail(
+  logger: ChildableLogger | undefined,
+  input: PromptLogInput,
+  chunk: { index: number; of: number; label: string; sections: PromptSectionMeta[] },
+  mode: PromptLogMode,
+): void {
+  if (!logger || mode !== 'verbose') return;
+  for (const d of promptLogPayload({ ...input, detailChunks: [chunk] }, mode).debug) {
+    logger.debug(d, 'prompt: detail');
   }
 }

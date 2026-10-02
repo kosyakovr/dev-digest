@@ -15,7 +15,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-CONTAINER="devdigest-postgres"
+CONTAINER="devdigest2-postgres"
 RUN_SEED=1
 RUN_CLIENT=1
 DB_ONLY=0
@@ -46,7 +46,7 @@ for dir in server client; do
 done
 
 # --- Postgres ----------------------------------------------------------------
-# The container name is fixed (container_name: devdigest-postgres), so if one is
+# The container name is fixed (container_name: devdigest2-postgres), so if one is
 # already running (possibly under another compose project) we reuse it instead
 # of failing on a name conflict. If it exists but is stopped, start it; else
 # create it via compose.

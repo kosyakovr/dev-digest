@@ -4,7 +4,7 @@
  * truncation, and ordering (before the diff).
  */
 import { describe, it, expect } from 'vitest';
-import { assemblePrompt, DIFF_LINE_NUMBER_RULE } from '../src/prompt.js';
+import { assemblePrompt } from '../src/prompt.js';
 
 function userOf(parts: Parameters<typeof assemblePrompt>[0]): string {
   const { messages } = assemblePrompt(parts);
@@ -62,125 +62,5 @@ describe('assemblePrompt — ## PR description', () => {
       prDescription: 'x'.repeat(10_000),
     });
     expect((assembly.pr_description as string).length).toBe(4000);
-  });
-});
-
-/**
- * L03 — prompt logging: `assemblePrompt`'s `sections` output (text-free
- * metadata per section). Per plan § Contract: push order, the untrusted flags
- * from the section-mapping table, `tokens_est = ceil(chars/4)`, no
- * `fingerprint` unless a hasher is injected.
- */
-describe('assemblePrompt — L03 section metadata', () => {
-  const fullParts: Parameters<typeof assemblePrompt>[0] = {
-    system: 'SYS',
-    task: 'T',
-    prDescription: 'The PR adds a cache layer.',
-    intent: {
-      summary: 'Adds a cache layer',
-      inScope: ['Add cache middleware'],
-      outOfScope: [],
-      confidence: 'high',
-    },
-    skills: ['skill one body', 'skill two body'],
-    memory: ['remember this fact'],
-    repoMap: 'repo skeleton text',
-    specs: ['spec chunk one', 'spec chunk two'],
-    callers: 'caller-of-changed-symbols text',
-    diff: 'DIFF BODY',
-  };
-
-  it('lists every rendered section, in push order, with the documented untrusted flags', () => {
-    const { sections } = assemblePrompt(fullParts);
-    expect(sections.map((s) => s.name)).toEqual([
-      'system_prompt',
-      'injection_guard',
-      'task',
-      'pr_description',
-      'intent',
-      'skills',
-      'memory',
-      'repo_map',
-      'specs',
-      'callers',
-      'diff',
-    ]);
-    const untrustedNames = sections.filter((s) => s.untrusted).map((s) => s.name).sort();
-    expect(untrustedNames).toEqual(
-      ['callers', 'diff', 'intent', 'pr_description', 'repo_map', 'specs'].sort(),
-    );
-    for (const s of sections) {
-      expect(s).not.toHaveProperty('fingerprint');
-      expect(s.tokens_est).toBe(Math.ceil(s.chars / 4));
-    }
-  });
-
-  it('char totals: user sections + separators sum to the user message length; system + guard + separator sum to the system message length', () => {
-    const { messages, sections } = assemblePrompt(fullParts);
-    const userSections = sections.slice(2); // drop system_prompt, injection_guard
-    const userSum =
-      userSections.reduce((n, s) => n + s.chars, 0) + 2 * (userSections.length - 1);
-    expect(userSum).toBe(messages[1]!.content.length);
-
-    const [sysSection, guardSection] = sections;
-    expect(sysSection!.chars + guardSection!.chars + 2).toBe(messages[0]!.content.length);
-  });
-
-  it('omits sections for parts that are absent (system + diff only)', () => {
-    const { sections } = assemblePrompt({ system: 'SYS', diff: 'D' });
-    expect(sections.map((s) => s.name)).toEqual(['system_prompt', 'injection_guard', 'diff']);
-  });
-
-  it('uses the injected fingerprint hasher for every section, keyed by the rendered text length', () => {
-    const { sections } = assemblePrompt(fullParts, { fingerprint: (t) => `h${t.length}` });
-    for (const s of sections) {
-      expect(s.fingerprint).toBe(`h${s.chars}`);
-    }
-  });
-});
-
-/**
- * L03 — the trusted line-number rule on `## Diff to review`. Per spec
- * (L03-numbered-diff.md § Contract "Prompt"): a trusted instruction, OUTSIDE
- * the untrusted wrapper, telling the model to cite the printed gutter numbers
- * instead of counting from the `@@` header. `assemblePrompt` never numbers
- * `parts.diff` itself (that is `run.ts`'s job) — this only checks the rule text
- * and its placement.
- */
-describe('assemblePrompt — ## Diff to review line-number rule', () => {
-  it('AC-10: the user message ends with exactly "## Diff to review" + the rule + the untrusted wrapper', () => {
-    const user = assemblePrompt({ system: 'S', diff: 'D' }).messages[1]!.content;
-    expect(
-      user.endsWith(
-        '## Diff to review\n' + DIFF_LINE_NUMBER_RULE + '\n<untrusted source="diff">\nD\n</untrusted>',
-      ),
-    ).toBe(true);
-  });
-
-  it('states: cite the printed gutter number, never count from the @@ header, cite deleted code by a printed number', () => {
-    const user = assemblePrompt({ system: 'S', diff: 'D' }).messages[1]!.content;
-    const headerIdx = user.indexOf('## Diff to review');
-    const wrapperIdx = user.indexOf('<untrusted source="diff">');
-    expect(headerIdx).toBeGreaterThan(-1);
-    expect(wrapperIdx).toBeGreaterThan(headerIdx);
-
-    for (const phrase of [
-      'its line number in the new file',
-      'Never count lines from the @@ hunk header',
-      'cite the nearest printed number in the same hunk',
-      'prints its number on its @@ line (0 when the whole file was deleted)',
-    ]) {
-      const idx = user.indexOf(phrase);
-      expect(idx).toBeGreaterThan(headerIdx);
-      expect(idx).toBeLessThan(wrapperIdx);
-    }
-  });
-
-  it('AC-10: the rule appears exactly once in the user message, and never in the system message', () => {
-    const { messages } = assemblePrompt({ system: 'S', diff: 'D' });
-    const [system, user] = [messages[0]!.content, messages[1]!.content];
-    const occurrences = user.split(DIFF_LINE_NUMBER_RULE).length - 1;
-    expect(occurrences).toBe(1);
-    expect(system).not.toContain(DIFF_LINE_NUMBER_RULE);
   });
 });

@@ -51,7 +51,10 @@ flowchart LR
 
 The review flow end to end: **add a repo** → server clones it and `repo-intel`
 indexes it (the **Indexed** badge) → **import PRs** from GitHub → open a PR and
-**Review** → `reviewer-core` assembles a prompt from the diff + the repo map,
+**Review** → the server derives the PR's **intent** once per head commit (a cheap
+model over title, description, linked ticket/spec and commits; cached by input hash)
+and passes it to every agent as untrusted context, then `reviewer-core` assembles a
+prompt from the diff + the repo map + that intent,
 calls the LLM, validates every finding against the diff (the **grounding gate**
 drops hallucinated line references), and persists structured findings with a
 severity and score. All local; the only outbound calls are to GitHub (PR data)

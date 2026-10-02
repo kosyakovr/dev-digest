@@ -76,11 +76,11 @@ reports only the name arrives; the four newer agents instead **Read** the
 | researcher | A question with scope and an expected answer shape (yes/no, location, list, comparison) | **Repo research** or **External research** report: answer + confidence, findings with `path:line` / URL evidence, inferences, a **Not found** table, open questions | `NEEDS CLARIFICATION` — up to 5 questions and a default assumption |
 | brainstormer | One design decision with its scope and the outcome wanted; optionally a researcher report | **Options** report: a ≤8-line **Summary**, context, **decision drivers** (each with its source), considered options (O0 = status quo), each option in detail, a comparison relative to O0 (`++ … −−`, `✗`), eliminated options, a Y-statement **recommendation** ending "Decision: awaiting the user's choice", "Needs research", **Handoff to planner** | `NEEDS CLARIFICATION` (no decision, scope or outcome); a two-line "only one reasonable design" note |
 | planner | A feature request or change with an outcome and a scope; optionally a researcher report, or a brainstormer report plus the user's pick | **Development Plan**: a ≤12-line **Summary** for the user, goal, non-goals, what already exists, contract, decisions, **Gates**, work packages (files · skills by § · constraints · steps · done when), order, acceptance criteria, test plan, docs to update, risks — then, after a `<!-- test-brief -->` marker, the **Test brief** (`WPn.tests` as Given/When/Then for test-writer) | `NEEDS CLARIFICATION` |
-| implementer | The plan **above the marker** (verbatim, or the path of the saved file), plus which Gates the user approved; or, in a **fix round**, a self-contained list of verified findings | **Implementation Report**: status, changes per work package with changed line ranges, deviations, `check-all.sh --force` lines, unmet acceptance criteria (met ones by ID), **Handoff to test-writer** (Test brief IDs, seams, intended breaks), out-of-scope observations, **Insight candidates**. Code change left **uncommitted** | `BLOCKED` report — no plan, unapproved gate, a plan that breaks a rule |
-| test-writer | The **whole** plan (Test brief included) or the WP ids / Test plan rows to cover + the implementer's handoff; or a target behaviour and its source of truth | **Test Report**: tests with their oracle source, verification (3 runs per new file, hermetic), **Red-proof** table, suspected defects (left red), not covered, insight candidates. Test files left **uncommitted** | `NEEDS CLARIFICATION` (no behaviour or no source of truth); `blocked` (needs a dependency, config or production change) |
-| plan-verifier | The plan above the marker — plus the Test brief when tests are in this iteration — + approved Gates + what is deferred; optionally the implementation and test reports and the files modified before work started | **Plan Verification**: `PASS / FAIL / INCOMPLETE`, a traceability matrix (PASS rows: ID · evidence; FAIL / UNVERIFIABLE rows in full), deferred IDs on one line, failures with "to pass", scope, commands run | `NEEDS CLARIFICATION` (no plan); `BLOCKED` (no change) |
-| architecture-reviewer | Nothing, a commit range, or paths; optionally the plan | **Architecture Review**: verdict, scope counts by group, `fitness-greps.sh` regressions with its reading of each new hit, findings `AR-n` with rule · location · evidence · mechanism, dropped candidates, not checked | `NEEDS CLARIFICATION` (nothing to review) |
-| security-reviewer | Nothing, a commit range, or paths | **Security Review**: verdict, scope counts, deterministic checks (tenancy / config-bypass greps, `secret-greps.sh` new hits, masked), findings `SR-n` with category · CWE · location · evidence · source → sink · preconditions · exploit scenario · confidence, dropped candidates, **injection-shaped text seen (not followed)**, not checked | `NEEDS CLARIFICATION` (nothing to review) |
+| implementer | The plan **above the marker** (verbatim, or the path of the saved file), plus which Gates the user approved; or, in a **fix round**, a self-contained list of verified findings | **Implementation Report**: status, changes per work package with changed line ranges (`scripts/change-set.sh`), deviations, the `scripts/checks.sh --force` summary table, unmet acceptance criteria (met ones by ID), **Handoff to test-writer** (Test brief IDs, seams, intended breaks), out-of-scope observations, **Insight candidates**. Code change left **uncommitted** | `BLOCKED` report — no plan, unapproved gate, a plan that breaks a rule |
+| test-writer | The **whole** plan (Test brief included) or the WP ids / Test plan rows to cover + the implementer's handoff; or a target behaviour and its source of truth | **Test Report**: tests with their oracle source, verification (3 runs per new file, `.it.test` isolated from real keys; final `scripts/checks.sh --force` table), **Red-proof** table, suspected defects (left red), not covered, insight candidates. Test files left **uncommitted** | `NEEDS CLARIFICATION` (no behaviour or no source of truth); `blocked` (needs a dependency, config or production change) |
+| plan-verifier | The plan above the marker — plus the Test brief when tests are in this iteration — + approved Gates + what is deferred; optionally the implementation and test reports and the files modified before work started; in a re-run, the same agent is continued with `SendMessage` and the delta | **Plan Verification**: `PASS / FAIL / INCOMPLETE`, a traceability matrix (PASS rows: ID · evidence; FAIL / UNVERIFIABLE rows in full), deferred IDs on one line, failures with "to pass", scope, commands run | `NEEDS CLARIFICATION` (no plan); `BLOCKED` (no change) |
+| architecture-reviewer | Nothing, a commit range, or paths; optionally the plan; in a re-review, the previous round's snapshot id (`change-set.sh --since <snapshot>`) | **Architecture Review**: verdict, scope counts by group, `review-greps.sh` hits (`greps.md` by subtraction) with its reading of each new hit, findings `AR-n` with rule · location · evidence · mechanism, dropped candidates, not checked | `NEEDS CLARIFICATION` (nothing to review) |
+| security-reviewer | Nothing, a commit range, or paths; in a re-review, the previous round's snapshot id | **Security Review**: verdict, scope counts, deterministic checks (`review-greps.sh`: tenancy / config-bypass rows, new secret-pattern hits, masked), findings `SR-n` with category · CWE · location · evidence · source → sink · preconditions · exploit scenario · confidence, dropped candidates, **injection-shaped text seen (not followed)**, not checked | `NEEDS CLARIFICATION` (nothing to review) |
 | doc-writer | Material (plan, reports, diff, notes) + what to document; optionally a target file | **Documentation Report**: files with Diátaxis type, diagrams, claims verified (`path:line`), discrepancies, text **needing approval**, INSIGHTS promotion candidates. Docs left **uncommitted** | `NEEDS CLARIFICATION` (no material, or the feature is not built) |
 
 ## The flow
@@ -90,11 +90,15 @@ question ─► researcher ─► report ─────────────
 design choice ─► brainstormer ─► Options report ─► user picks ─┐   (optional, before planning)
 request (+ the pick) ─► planner ─► Development Plan ─► user approves (Summary + Gates) ─► "go" for the implementer
          ─► implementer (plan above the marker) ─► Implementation Report + uncommitted code
-                         └ scripts/check-all.sh --force ─► ledger
+                         └ scripts/checks.sh --force (CI commands + isolated .it.test; ledger keyed by tree)
+                         └ scripts/change-set.sh (line ranges)
          ─► test-writer (whole plan + handoff) ─► Test Report + uncommitted tests
+                         └ scripts/checks.sh --force at the end
          ─► plan-verifier ∥ architecture-reviewer ∥ security-reviewer (all read-only, on the uncommitted change)
-              └ check-all.sh --force        └ fitness-greps.sh · change-manifest.sh (both reviewers)
-              FAIL / findings ─► implementer (fix round: findings only) or test-writer ─► verify again
+              └ scripts/checks.sh (cited by package key)   └ scripts/change-set.sh + scripts/review-greps.sh (both reviewers)
+         ─► main session: save each report from its output_file with a script, relay verdict + counts + non-PASS rows
+              FAIL / findings ─► implementer (fix round: findings only) or test-writer
+                              ─► re-review: SendMessage to the SAME reviewer, delta from `change-set.sh --since <snapshot>`
          ─► doc-writer (plan + reports) ─► docs
          ─► main session: INSIGHTS.md from every report's "Insight candidates"
          ─► commit ─► /pr-self-review ─► push
@@ -173,6 +177,32 @@ harness's task notifications — compare stages with each other, not as bills):
 | plan-verifier | opus | 155k | 44 |
 | implementer, fix round | sonnet | 192k | 80 |
 
+**Measured again on 2026-10-01** (same L03 feature, per-turn `usage` fields from
+every transcript — cache read is what each turn re-reads from the prompt cache,
+so it tracks turns × context):
+
+| Stage | Model | Turns | Cache write | Cache read |
+|---|---|---|---|---|
+| main session | opus | 127 | 0.39M | 35.5M |
+| researcher | sonnet | 5 | 44k | 0.13M |
+| planner | opus | 67 | 215k | 8.4M |
+| implementer | sonnet | 39 | 194k | 4.9M |
+| architecture-reviewer r1 / r2 | opus | 35 / 37 | 135k / 163k | 3.1M / 4.0M |
+| plan-verifier r1 / r2 | opus | 37 / 33 | 134k / 127k | 3.0M / 2.9M |
+| security-reviewer | opus | 34 | 119k | 2.6M |
+| implementer fix rounds ×2 | sonnet | 7 + 5 | 56k + 38k | 0.28M + 0.13M |
+
+1. **Cache reads, i.e. turns × context, dominate cost.** Written tokens are small;
+   the same context re-read on every turn is not.
+2. **The main session cost as much as all 10 agents together.** Its context grew
+   from 47k to 413k, so every late main-session turn cost about 3–4 agent turns.
+3. **Reviews and verification were 54% of subagent cost** (both architecture
+   rounds, both plan-verifier rounds, security-reviewer).
+4. **Within an agent the cache works** (24× read/write). **Across spawns it never
+   hit:** the first turn's `cache_read_input_tokens` was 0 on all 10 spawns,
+   including repeat spawns of the same type. Cause not separated (the 5-minute
+   TTL versus a prefix that differs between spawns).
+
 First runs of the two newer agents, 2026-09-28 (behaviour probes, not a
 feature run): security-reviewer on a one-file, 9-line change — opus, 27k, 7
 calls; brainstormer on a five-option `.claude/` decision — opus, 67k, 19 calls.
@@ -192,9 +222,9 @@ repetition, not a check.
 |---|---|---|
 | implementer | plan above `<!-- test-brief -->`; approved Gates | Test brief; in a fix round, the plan at all — only the findings |
 | test-writer | the whole plan + the implementer's handoff | — |
-| plan-verifier | plan above the marker (+ Test brief when tests are in the iteration), what is deferred | reports as evidence (they are claims) |
-| architecture-reviewer | nothing or a range; `change-manifest.sh` → hunks, `fitness-greps.sh` → hits | whole modified files, typecheck/test runs |
-| security-reviewer | nothing or a range; `change-manifest.sh` → hunks, two `fitness-greps.sh` rows, `secret-greps.sh` new hits; follows data beyond the hunk only to a source or sink | the plan, typecheck/test runs |
+| plan-verifier | plan above the marker (+ Test brief when tests are in the iteration), what is deferred; `scripts/change-set.sh`; `scripts/checks.sh` results cited by package key | reports as evidence (they are claims) |
+| architecture-reviewer | nothing or a range; `scripts/change-set.sh` → hunks, `scripts/review-greps.sh` → new hits; in a re-review the delta (`--since`) plus direct callers | whole modified files, typecheck/test runs |
+| security-reviewer | nothing or a range; `scripts/change-set.sh` → hunks, `scripts/review-greps.sh` (two `greps.md` rows, new secret-pattern hits); follows data beyond the hunk only to a source or sink; in a re-review the delta plus direct callers | the plan, typecheck/test runs |
 | brainstormer | the decision, its scope and outcome; optionally a researcher report | a plan (it comes before one) |
 
 **Rules for the main session**
@@ -208,41 +238,110 @@ repetition, not a check.
    3.8k-char fragment, the handback held the 39k-char plan). Relay its
    `## Summary` (`sed -n '/^## Summary/,/^## Goal/p' <file>`) and cut it at
    the marker (`awk '/<!-- test-brief -->/{exit} {print}' <file> > plan-core.md`).
+   **When tests are deferred, always cut:** every agent gets `plan-core.md`; the
+   Test brief goes only to test-writer (and to plan-verifier when tests are in
+   the iteration). Five agents and the main session each re-read a ~25–30k plan
+   on every turn; a quarter of it was test cases nobody in that iteration needed.
 2. **Ask before launching the implementer**, even after the Gates are
    answered — it is the most expensive stage, and a stop after it started
    wastes everything it read.
 3. **A fix round gets a self-contained brief** — each finding with `file:line`,
    the rule and what must hold — and no plan (`implementer.md` Step 1).
-4. **One ledger for checks.** `scripts/check-all.sh --force` runs in the
+4. **Who runs which checks.** The per-package CI commands
+   (`.github/workflows/*.yml`) run through `scripts/checks.sh` (rule 11) in the
    implementer, at the end of test-writer and in plan-verifier (its evidence
-   must be its own). The main session, architecture-reviewer and
-   security-reviewer reuse the ledger: `scripts/check-all.sh` without `--force` prints recorded results for
-   an unchanged tree. Editing docs, specs or `.claude/` does not invalidate it.
-5. **Relay, do not re-read.** Report counts and non-PASS items to the user;
-   open the full report only when asked.
-6. **Stable prefix first.** When the same agent type is spawned more than once,
-   start each delegation prompt with the identical constant block (paths,
-   approved Gates, constraints) and put the variable instruction last — the
-   prompt cache matches on prefixes. Whether a subagent's system prompt stays
-   byte-identical between spawns (it may embed git status) is **unverified**:
-   check `cache_read_input_tokens` in the agents' transcripts before relying
-   on it.
+   must be its own — a ledger result for the same package key is).
+   architecture-reviewer and security-reviewer run none. The server
+   `.it.test` suite runs only through `checks.sh`, which isolates it from real
+   keys (§ Running the integration suite without real keys); test-writer runs
+   a single `.it` file through the same recipe by hand.
+5. **Relay, do not re-read.** Report the verdict, counts and non-PASS items to
+   the user; open the full report only when asked, and never paste a full
+   report back into a later delegation prompt (a fix round gets findings only,
+   rule 3). Rule 9 says how the report reaches a file without entering the
+   main context.
+6. **Do not rely on a stable prefix; continue the agent instead.** The earlier
+   advice (start every delegation prompt with the same constant block so the
+   prompt cache matches on prefixes) is **contradicted by measurement**: on
+   2026-10-01 the first turn's `cache_read_input_tokens` was 0 on all 10
+   spawns, repeat spawns of the same type included (cause not separated: the
+   5-minute TTL or a differing prefix — the system prompt may embed git
+   status). Cross-spawn caching does not happen here, so a fresh spawn always
+   pays full price for its context. To run the same agent again — a re-review,
+   a second verification, a fix round's check — **continue it with
+   `SendMessage`** and the delta only (rule 10); inside one agent the cache
+   works (24× read/write), which is the only caching you can count on.
 7. **One agent per context.** Split the implementer by package when server and
    client work do not share files (the client run then does not carry server
    reads); keep sequential stages that share context in one agent.
-8. **Bundled artifacts:** do not `Artifact read` a bundler page into the main
+8. **Bundled artifacts:** never `Artifact read` a bundler page into the main
    context (it returns base64) — save it and unpack with a script, then grep.
+   On 2026-10-01 one such read put ~40k tokens into the main context, which
+   rode along for ~100 turns ≈ 4M cache reads.
+9. **Reports to file.** Save an agent's full report from its `output_file` with
+   a script (the `SubagentHandback` message, rule 1), and read only the verdict,
+   the counts and the non-PASS rows into the main session. Open the full report
+   only when the user asks.
+10. **Re-review on the delta.** After each review round record
+    `scripts/change-set.sh --snapshot` (a commit id for the exact tree that was
+    reviewed; it touches no index, file or ref). The next round gets
+    `scripts/change-set.sh --since <snapshot>` — only what changed — **plus the
+    direct callers of every changed function**, and goes to the same agent via
+    `SendMessage` where possible (rule 6). The callers are required: a
+    delta-only re-review misses a pre-existing line that a fix newly exposes
+    (2026-10-01: round 1 dropped a finding that round 2 then raised).
+11. **One check ledger.** `scripts/checks.sh` replaces repeated runs: it keys the
+    CI commands by each package's source key (`.git/devdigest/checks/<pkg>/<key>/`) and
+    prints `cached` for a tree it has already checked. On 2026-10-01 the same
+    typecheck and unit suites ran 8 times on near-identical trees. `--force`
+    re-runs; `--no-it` skips the isolated `.it.test` suite; a SKIPPED result
+    (no Docker) is never a pass and is never cached.
+12. **The main session coordinates and does not grind.** Multi-step mechanical
+    work — doc sweeps, serial edits, exploration — goes to an agent with a small
+    context. About 25 main-session turns at ~350k context cost ≈ 0.9M cache
+    reads; the same work in a ~30k-context agent costs ≈ 0.08M.
 
 **Deliberately not done**
 
 - **No model downgrades.** plan-verifier stays on opus: its value is
   re-deriving the implementer's (sonnet) claims on a different model (see
-  "plan-verifier vs the implementer's own check" above). The mechanical work
-  moved to scripts instead, which costs no model tokens at all.
+  "plan-verifier vs the implementer's own check" above). The savings come
+  from shorter reports and passing paths instead of re-typed plans.
 - **Read-only agents still do not write report files.** Letting planner,
   plan-verifier or architecture-reviewer write under `.git/devdigest/` would
   weaken the `read-only` guard; their reports got shorter instead (PASS rows
   as ID + evidence, deferred items as one line, scope as counts).
+
+## Running the integration suite without real keys
+
+`server/test/*.it.test.ts` builds the app with `loadConfig`, whose secrets
+come from `~/.devdigest/secrets.json` and then from `OPENROUTER_API_KEY` /
+`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GITHUB_TOKEN` / `GITHUB_PAT` in the
+environment (`server/src/adapters/secrets/local.ts`). Any test that does not
+inject `llm.<provider>`, `github` or `intent` then makes billed calls. Run
+the suite with an empty `HOME` and those variables unset:
+
+```sh
+cd server
+NODE_BIN="$(asdf which node 2>/dev/null || command -v node)"   # resolve BEFORE HOME changes
+DOCKER_SOCK="$(docker context inspect --format '{{.Endpoints.docker.Host}}')"
+FAKE_HOME=/tmp/devdigest-redproof-home1   # a literal devdigest-redproof- path: agent-scope-guard denies mktemp/rm elsewhere
+mkdir -p "$FAKE_HOME"
+env -u OPENROUTER_API_KEY -u OPENAI_API_KEY -u ANTHROPIC_API_KEY -u GITHUB_TOKEN -u GITHUB_PAT \
+  HOME="$FAKE_HOME" DOCKER_HOST="$DOCKER_SOCK" \
+  TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock \
+  "$NODE_BIN" node_modules/vitest/vitest.mjs run .it.test     # or: run <file>
+rm -rf "$FAKE_HOME"
+```
+
+`scripts/checks.sh` runs exactly this recipe for the full suite (and reports
+SKIPPED, never PASS, when `docker info` fails); run it by hand only for a single
+file. Why each line (verified 2026-10-01, 64/64 green, no secrets file present):
+under a fake `HOME` the asdf `node` shim and Docker-context discovery both
+break, so `node` is called by absolute path and `DOCKER_HOST` is passed
+explicitly; testcontainers' Ryuk sidecar must mount the VM-side socket, hence
+`TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE`. Without Docker every file
+self-skips — that is "skipped", never "passed".
 
 ## Where the rules come from
 
@@ -300,7 +399,7 @@ medium confidence.
 | No tests — hand them to test-writer, including intended breaks; `mocks.ts` stays the implementer's | User decision 2026-09-24; [arXiv 2412.14137](https://arxiv.org/abs/2412.14137) (one model writing both validates its own bugs); enforced by `implementer-guard.sh` |
 | Step 3 verification commands per package | `server/AGENTS.md` § Commands, `client/AGENTS.md`, `reviewer-core/AGENTS.md`, `TESTING.md` |
 | A green `.it.test` run without Docker is "skipped", not "passed" | `TESTING.md` § server-integration (the tests self-skip) |
-| Rule 7 + Step 3: checks through `scripts/check-all.sh`, `.it.test` only via `scripts/hermetic.sh` | [`server/INSIGHTS.md`](../../server/INSIGHTS.md) 2026-09-24 (real stored keys → billed calls, 10 s timeouts); [§ Token budget](#token-budget) (one ledger instead of four runs) |
+| Rule 7 + Step 3: `scripts/checks.sh --force` runs the per-package CI commands; the `.it.test` suite only through it (it isolates), never a bare run | [`server/INSIGHTS.md`](../../server/INSIGHTS.md) 2026-09-24 (real stored keys → billed calls, 10 s timeouts); [§ Running the integration suite without real keys](#running-the-integration-suite-without-real-keys) |
 | Fix round works from the findings, not the plan; report restates nothing | [§ Token budget](#token-budget) |
 | Check `command -v agent-browser` before trusting an e2e run | [`e2e/INSIGHTS.md`](../../e2e/INSIGHTS.md) 2026-09-19 (the script exits 0 with 0 flows run) |
 | reviewer-core change ⇒ run server checks too | Root `AGENTS.md` § Cross-package invariants |
@@ -338,11 +437,11 @@ medium confidence.
 | Finding = rule → `file:line` → quoted line → severity | [dependency-cruiser rules](https://github.com/sverweij/dependency-cruiser/blob/main/doc/rules-reference.md) (rule, severity, location); [fitness functions](https://www.oreilly.com/library/view/building-evolutionary-architectures/9781491986356/ch02.html) |
 | Re-verify each finding; drop the unconfirmed | LLM reviewers hallucinate findings ([HalluJudge, arXiv 2601.19072](https://arxiv.org/html/2601.19072), preprint) |
 | Severity, CRITICAL bar, grandfathering, verdict | [`reviewer-prompt.md`](../skills/pr-self-review/reviewer-prompt.md) — borrowed, not reworded |
-| Grep checks by subtraction, severity ceiling | [`greps.md`](../skills/pr-self-review/greps.md), run by [`scripts/fitness-greps.sh`](../../scripts/fitness-greps.sh) — `greps.md` wins if they disagree |
+| Grep checks by subtraction, severity ceiling | [`greps.md`](../skills/pr-self-review/greps.md), run with `git grep` at both revisions |
 | Groups A and C only; twin check | [`routing.md`](../skills/pr-self-review/routing.md) |
 | Server rules §1–12, §11 exceptions | [`onion-architecture`](../skills/onion-architecture/SKILL.md) |
 | Client rules §1–12 | [`frontend-ui-architecture`](../skills/frontend-ui-architecture/SKILL.md) |
-| reviewer-core purity grep (new, 0 hits at `438513f`) | [`reviewer-core/AGENTS.md`](../../reviewer-core/AGENTS.md) § Must not break — no skill covered it |
+| reviewer-core purity grep (`rc-purity` row in [`greps.md`](../skills/pr-self-review/greps.md), 0 hits at `438513f`; parsed by `scripts/review-greps.sh`) | [`reviewer-core/AGENTS.md`](../../reviewer-core/AGENTS.md) § Must not break — no skill covered it |
 
 ### security-reviewer
 
@@ -362,7 +461,7 @@ medium confidence or could not verify.
 | OWASP category names + CWE, no A-numbers | the product prompt numbers OWASP 2021, `security/SKILL.md` 2025 ([OWASP Top 10:2025](https://owasp.org/Top10/2025/0x00_2025-Introduction/) *(M — order from secondary sources)*) |
 | Three levels, not CVSS or a 4-level scale | [`pr-self-review/SKILL.md`](../skills/pr-self-review/SKILL.md) (no parallel scale); [CVSS v4.0](https://www.first.org/cvss/v4-0/specification-document) and [OWASP Risk Rating](https://community.owasp.org/OWASP_Risk_Rating_Methodology) considered and rejected — per-finding vectors an LLM fills inconsistently |
 | Skill used for categories, confidence table and secret patterns only, under the stack preamble | [`routing.md`](../skills/pr-self-review/routing.md) § Group E — the security stack mismatch |
-| Secret patterns live in [`scripts/secret-greps.sh`](../../scripts/secret-greps.sh), shared with group E; hits subtracted between revisions, masked to 4 characters; `-e` and exit ≥2 = `ERROR`; `--self-test` on planted samples | patterns from [`security/SKILL.md`](../skills/security/SKILL.md) § Secret Detection, adapted (Postgres URL, LLM keys); the brainstormer probe of 2026-09-28 (option O2: one source, no stored counts — [`greps.md`](../skills/pr-self-review/greps.md)'s subtraction); root `INSIGHTS.md` 2026-09-21 and 2026-09-28 |
+| Secret patterns live in `security-reviewer.md` Step 2 (parsed by `scripts/review-greps.sh`, which asserts each row's `sample` in `--self-test`); hits subtracted between revisions, masked to 4 characters; a `git grep` exit ≥2 = not run | patterns from [`security/SKILL.md`](../skills/security/SKILL.md) § Secret Detection, adapted (Postgres URL, LLM keys); the brainstormer probe of 2026-09-28 (option O2: one source, no stored counts — [`greps.md`](../skills/pr-self-review/greps.md)'s subtraction); root `INSIGHTS.md` 2026-09-21 and 2026-09-28 |
 | Tenancy and config-bypass greps | [`greps.md`](../skills/pr-self-review/greps.md) (`onion-13-tenancy-guard` is the one grep that may reach CRITICAL); [`onion-architecture`](../skills/onion-architecture/SKILL.md) §7 |
 
 ### doc-writer
@@ -422,12 +521,17 @@ do run their hooks; that is how the guards are verified end to end.)
   - `planner.md` § Output format ↔ `plan-verifier.md` Step 1 (item IDs per
     plan section) ↔ `test-writer.md` Step 0 (the `<!-- test-brief -->`
     marker and the `WPn.tests` blocks after it);
-  - [`scripts/fitness-greps.sh`](../../scripts/fitness-greps.sh) ↔ `greps.md`
-    § The patterns, `routing.md` § Vendored-contract twin check and
-    `architecture-reviewer.md` Step 3 (reviewer-core purity);
-    [`scripts/check-all.sh`](../../scripts/check-all.sh) ↔ the commands in
-    `.github/workflows/*.yml` ↔ `implementer.md` Step 3, `plan-verifier.md`
-    Step 4, `test-writer.md` Step 4;
+  - `greps.md` § The patterns (row shape `id | pattern | pathspec | both revs |
+    sample`, incl. `rc-purity`) ↔ `routing.md` § Vendored-contract twin check
+    ↔ `architecture-reviewer.md` Step 3 ↔ `scripts/review-greps.sh` (it PARSES
+    the tables and the secret table in `security-reviewer.md` Step 2 — change a
+    table's shape and the parser together, then run `review-greps.sh --self-test`);
+    the commands in `.github/workflows/*.yml` ↔ `scripts/checks.sh` ↔
+    `implementer.md` Step 3, `plan-verifier.md` Step 4, `test-writer.md` Step 4;
+    `scripts/change-set.sh` ↔ Step 1 of both reviewers, `plan-verifier.md`
+    Step 2, `implementer.md` Step 3 (and `checks.sh`, which keys its ledger by
+    `change-set.sh --tree`); the scripts' names ↔ the allow cases in
+    `../hooks/test-agent-scope-guard.sh` and `../hooks/test-implementer-guard.sh`;
   - `implementer.md` report ↔ `test-writer.md` input ("Handoff to
     test-writer") ↔ `plan-verifier.md` rule 2;
   - `implementer.md` skill table, `test-writer.md` Step 1 and
@@ -439,13 +543,11 @@ do run their hooks; that is how the guards are verified end to end.)
   - `security-reviewer.md` ↔ `docs/agent-prompts/security-reviewer.md`
     (scale, verdict, trifecta) ↔ `reviewer-prompt.md` § The CRITICAL bar ↔
     `routing.md` § Group E (the stack preamble, quoted verbatim) ↔
-    `reviewer-core/src/prompt.ts` `INJECTION_GUARD` ↔ `greps.md` /
-    `fitness-greps.sh` row ids `onion-13-tenancy-guard`,
-    `onion-13-config-bypass`;
-  - [`scripts/secret-greps.sh`](../../scripts/secret-greps.sh) (the only copy
-    of the secret patterns; its header holds the expected output — re-run it
-    and `--self-test` after changing a pattern) ↔ `security-reviewer.md` Step 2
-    ↔ `routing.md` § Groups row E and `pr-self-review/SKILL.md` § 3;
+    `reviewer-core/src/prompt.ts` `INJECTION_GUARD` ↔ `greps.md` row ids
+    `onion-13-tenancy-guard`, `onion-13-config-bypass`;
+  - the secret patterns in `security-reviewer.md` Step 2 ↔ `security/SKILL.md`
+    § Secret Detection ↔ `routing.md` § Groups row E and
+    `pr-self-review/SKILL.md` § 3;
   - `brainstormer.md` § Handoff to planner ↔ `planner.md` Step 0 (brainstormer
     report + the user's pick) and § Decisions taken (rejected alternatives);
   - `test-writer.md` rule 3 ↔ `client/INSIGHTS.md` 2026-09-23 (remove the

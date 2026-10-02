@@ -115,29 +115,20 @@ export class SkillsRepository {
    * Update a skill. A BODY change bumps `version` and snapshots the new body
    * into `skill_versions`; a name/description/type-only edit does not (see
    * `isBodyChange`). A submitted type joins the catalogue either way.
-   *
-   * `shouldBump` is the service's product rule, applied here to the LOCKED row:
-   * decided on an unlocked earlier read, two concurrent PUTs of the same new
-   * body would both bump and snapshot an identical body twice.
    */
   async update(
     workspaceId: string,
     id: string,
     patch: UpdateSkill,
-    shouldBump: (locked: SkillRow) => boolean,
+    bumpVersion: boolean,
   ): Promise<SkillRow | undefined> {
     return this.db.transaction(async (tx) => {
-      // Locked so two concurrent body edits can't both read the same
-      // `version`, bump it in memory, and overwrite each other's snapshot
-      // insert — the second commit must see the first's row.
       const [existing] = await tx
         .select()
         .from(t.skills)
-        .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)))
-        .for('update');
+        .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, id)));
       if (!existing) return undefined;
 
-      const bumpVersion = shouldBump(existing);
       const nextVersion = bumpVersion ? existing.version + 1 : existing.version;
 
       const [row] = await tx
@@ -154,10 +145,10 @@ export class SkillsRepository {
         .returning();
 
       if (bumpVersion && row) {
-        // No onConflictDoNothing: with the row locked above, a collision here
-        // means two transactions computed the same `nextVersion` and the
-        // locking was bypassed — that must throw, not silently drop a version.
-        await tx.insert(t.skillVersions).values({ skillId: row.id, version: nextVersion, body: row.body });
+        await tx
+          .insert(t.skillVersions)
+          .values({ skillId: row.id, version: nextVersion, body: row.body })
+          .onConflictDoNothing();
       }
       if (patch.type !== undefined) await this.registerType(tx, workspaceId, patch.type);
 
@@ -200,13 +191,10 @@ export class SkillsRepository {
     version: number,
   ): Promise<SkillRow | undefined> {
     return this.db.transaction(async (tx) => {
-      // Same lock as `update` — a restore racing a concurrent body edit must
-      // not interleave with it.
       const [existing] = await tx
         .select()
         .from(t.skills)
-        .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, skillId)))
-        .for('update');
+        .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.id, skillId)));
       if (!existing) return undefined;
 
       const [snapshot] = await tx
