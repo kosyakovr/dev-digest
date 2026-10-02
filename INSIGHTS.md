@@ -106,6 +106,15 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 
 ## Tool & Library Notes
 
+- 2026-10-02 — Local pnpm is 12.8.1 but CI pins pnpm 10 (`pnpm/action-setup@v4`
+  `version: 10`), so a lock file a session creates for a NEW package is only safe
+  if it is `lockfileVersion: '9.0'` like server/client → after `pnpm install`
+  check `head -1 <pkg>/pnpm-lock.yaml` and prove it with
+  `npx -y pnpm@10 install --frozen-lockfile` on a copy (package.json + lock +
+  `pnpm-workspace.yaml`) in the scratchpad; esbuild also needs
+  `allowBuilds: esbuild: true` in the package's own `pnpm-workspace.yaml`.
+  (ref: mcp-server/pnpm-workspace.yaml, .github/workflows/mcp-server.yml)
+
 - 2026-10-01 — `git grep -E` here does NOT understand `\s`: the secret pattern
   `(secret|key|token|password)\s*[:=]\s*['"][^'"]{8,}` matched 0 files with exit
   1 — indistinguishable from a clean scan — while the same pattern with
@@ -138,9 +147,20 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
   2026-09-22) → treat every §-numbered "Enforcement" section and new flow as
   untested code: run it, and ship its EXPECTED output beside it (known benign
   hits: `.claude/skills/pr-self-review/greps.md` § The patterns).
+- 2026-10-02 — A fourth time, in a PLAN: the L04 "Done when" check
+  `grep -rn "fetch(" mcp-server/src` "lists only http.ts" passed vacuously
+  because the code calls an injected `fetchImpl(` (0 hits = pass), and the core
+  check `grep "^import" | grep -v "'zod'"` could never be empty (intra-core
+  `import type`) → a plan's done-when grep needs one planted hit that must
+  appear and one that must not; prefer a `boundaries.test.ts` that parses
+  imports (mcp-server/test/boundaries.test.ts) over shell greps.
 
 ## Session Notes
 
+- 2026-10-02 — L04 MCP server: new pnpm package `mcp-server/` (stdio, 5 tools,
+  thin HTTP client, onion by analogy routed via pr-self-review group A), verbatim
+  tool descriptions pinned by tests, SR-1 quoted locations (spec:
+  mcp-server/specs/L04-mcp-server.md).
 - 2026-10-02 — L03 Smart Diff: path-only `classifyFile` + `GET /pulls/:id/smart-diff`
   (no migration, `SmartDiffRole` widened to 5 in both vendored copies), role
   groups and inline findings on Files changed (spec: server/specs/L03-smart-diff.md).

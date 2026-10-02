@@ -2,12 +2,12 @@
 # checks.sh — one ledger of package checks, keyed by what each package's checks read, so a
 # stage does not re-run checks on code that has not changed.
 #
-#   checks.sh [--force] [--pkg reviewer-core|server|client]... [--no-it]
+#   checks.sh [--force] [--pkg reviewer-core|server|client|mcp-server]... [--no-it]
 #
 # Key, PER PACKAGE: a hash of the snapshot subtrees (working tree incl. untracked files,
 # via `change-set.sh --tree`; the real index, tree and refs are not touched) that the
 # package's checks compile: reviewer-core = reviewer-core/ + server/src/vendor/shared/,
-# server = server/ + reviewer-core/, client = client/. Edits in .claude/, docs/ or root
+# server = server/ + reviewer-core/, client = client/, mcp-server = mcp-server/. Edits in .claude/, docs/ or root
 # files keep the cache valid. The keys are printed (first 12 chars) on the summary line.
 # Ledger:   .git/devdigest/checks/<pkg>/<key>/<pkg>-<check>.log     full output
 #                                             <pkg>-<check>.status  ONE line:
@@ -19,6 +19,7 @@
 #   reviewer-core  npm run typecheck | npm test
 #   server         pnpm typecheck | pnpm exec vitest run --exclude '**/*.it.test.ts' | the .it.test suite
 #   client         pnpm typecheck | pnpm test
+#   mcp-server     pnpm typecheck | pnpm test
 # The server .it.test suite runs ONLY isolated from real keys — the recipe in
 # .claude/agents/README.md § Running the integration suite without real keys (fake HOME,
 # key env vars unset, absolute node path and DOCKER_HOST resolved BEFORE HOME changes,
@@ -52,15 +53,15 @@ while [ $# -gt 0 ]; do
     --pkg)
       shift
       case "${1:-}" in
-        reviewer-core|server|client) pkgs="$pkgs $1" ;;
-        *) echo "checks.sh: --pkg takes reviewer-core|server|client" >&2; exit 2 ;;
+        reviewer-core|server|client|mcp-server) pkgs="$pkgs $1" ;;
+        *) echo "checks.sh: --pkg takes reviewer-core|server|client|mcp-server" >&2; exit 2 ;;
       esac ;;
-    -h|--help) sed -n '2,36p' "$0"; exit 0 ;;
-    *) echo "usage: checks.sh [--force] [--pkg reviewer-core|server|client]... [--no-it]" >&2; exit 2 ;;
+    -h|--help) sed -n '2,37p' "$0"; exit 0 ;;
+    *) echo "usage: checks.sh [--force] [--pkg reviewer-core|server|client|mcp-server]... [--no-it]" >&2; exit 2 ;;
   esac
   shift
 done
-[ -n "$pkgs" ] || pkgs="reviewer-core server client"
+[ -n "$pkgs" ] || pkgs="reviewer-core server client mcp-server"
 
 tree=$("$HERE/change-set.sh" --tree) || { echo "checks.sh: could not snapshot the tree" >&2; exit 2; }
 ledger_root="$(git rev-parse --absolute-git-dir)/devdigest/checks"
@@ -74,6 +75,7 @@ pkg_key() {
     reviewer-core) printf 'rc %s shared %s\n' "$(subtree reviewer-core)" "$(subtree server/src/vendor/shared)" ;;
     server)        printf 'server %s rc %s\n' "$(subtree server)" "$(subtree reviewer-core)" ;;
     client)        printf 'client %s\n' "$(subtree client)" ;;
+    mcp-server)    printf 'subtree %s\n' "$(subtree mcp-server)" ;;
   esac | git hash-object --stdin
 }
 
@@ -104,6 +106,8 @@ run_cmd() { # pkg check -> runs the CI command inside the package
     server/unit)             ( cd server && pnpm exec vitest run --exclude '**/*.it.test.ts' ) ;;
     client/typecheck)        ( cd client && pnpm typecheck ) ;;
     client/unit)             ( cd client && pnpm test ) ;;
+    mcp-server/typecheck)    ( cd mcp-server && pnpm typecheck ) ;;
+    mcp-server/unit)         ( cd mcp-server && pnpm test ) ;;
   esac
 }
 
