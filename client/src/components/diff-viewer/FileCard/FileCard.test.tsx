@@ -73,8 +73,8 @@ describe("FileCard findings", () => {
 
     expect(screen.getByLabelText("Has findings")).toBeInTheDocument();
     // One label for the line, showing the worst severity of the three.
-    expect(screen.getAllByRole("button", { name: "blocker" })).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: "warning" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Blocker" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Warning" })).toBeNull();
 
     // The outside list comes first, then the stacked cards of line 2.
     expect(cardTitles()).toEqual(["Title Outside", "Title C0", "Title C1", "Title W1"]);
@@ -101,7 +101,7 @@ describe("FileCard findings", () => {
     renderCard(card(), api([anchored]));
     if (note) expect(screen.getByText(note)).toBeInTheDocument();
     expect(within(outsideRegion()).getByRole("article", { name: `Title ${anchored.id}` })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "warning" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Warning" })).toBeNull();
   });
 
   it("without findings for this file (another file's only, or no findings prop) no dot, region, label or card is rendered", () => {
@@ -109,7 +109,7 @@ describe("FileCard findings", () => {
       expect(screen.queryByLabelText("Has findings")).toBeNull();
       expect(screen.queryByRole("region", { name: OUTSIDE_HEADING })).toBeNull();
       expect(screen.queryByText(OUTSIDE_HEADING)).toBeNull();
-      expect(screen.queryByRole("button", { name: "blocker" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Blocker" })).toBeNull();
       expect(screen.queryByRole("article")).toBeNull();
     };
     renderCard(file(), api([finding("X", "CRITICAL", 2, "src/other.ts")]));

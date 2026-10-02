@@ -169,6 +169,8 @@ export default function PRDetailPage() {
           <DiffTab
             prId={prId}
             filesCount={pr.files_count}
+            additions={pr.additions}
+            deletions={pr.deletions}
             files={pr.files}
             canComment={pr.status === "open"}
           />

@@ -50,8 +50,8 @@ const cardTitles = () => screen.queryAllByRole("article").map((a) => a.getAttrib
 describe("CodeLine findings", () => {
   it("several findings on one line: the label shows the worst severity, ALL cards stack in the given order, and the label toggles them", () => {
     renderLine([finding("c1", "CRITICAL"), finding("w1", "WARNING"), finding("s1", "SUGGESTION")]);
-    const label = screen.getByRole("button", { name: "blocker" });
-    expect(screen.queryByRole("button", { name: "warning" })).toBeNull();
+    const label = screen.getByRole("button", { name: "Blocker" });
+    expect(screen.queryByRole("button", { name: "Warning" })).toBeNull();
     expect(label).toHaveAttribute("aria-expanded", "true");
     expect(cardTitles()).toEqual(["Title c1", "Title w1", "Title s1"]);
 
@@ -65,16 +65,28 @@ describe("CodeLine findings", () => {
   });
 
   it.each([
-    { name: "a worst WARNING", findings: [finding("w1", "WARNING"), finding("s1", "SUGGESTION")], label: "warning" },
-    { name: "a lone SUGGESTION", findings: [finding("s1", "SUGGESTION")], label: "suggestion" },
+    {
+      name: "1 CRITICAL and 2 WARNINGs",
+      findings: [finding("c1", "CRITICAL"), finding("w1", "WARNING"), finding("w2", "WARNING")],
+      label: "Blocker",
+    },
+    {
+      name: "2 WARNINGs and 1 SUGGESTION",
+      findings: [finding("w1", "WARNING"), finding("w2", "WARNING"), finding("s1", "SUGGESTION")],
+      label: "Warning",
+    },
+    { name: "a worst WARNING", findings: [finding("w1", "WARNING"), finding("s1", "SUGGESTION")], label: "Warning" },
+    { name: "a lone SUGGESTION", findings: [finding("s1", "SUGGESTION")], label: "Suggestion" },
     { name: "no findings", findings: [], label: null },
   ])("a line with $name is labelled $label", ({ findings, label }) => {
     renderLine(findings);
     if (label) {
-      expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
+      const badge = screen.getByRole("button", { name: label });
+      expect(badge.querySelector("svg")).not.toBeNull(); // the severity icon
+      expect(screen.getAllByRole("button", { name: /^(Blocker|Warning|Suggestion)$/ })).toHaveLength(1);
       expect(screen.getAllByRole("article")).toHaveLength(findings.length);
     } else {
-      expect(screen.queryByRole("button", { name: /blocker|warning|suggestion/ })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Blocker|Warning|Suggestion/ })).toBeNull();
       expect(screen.queryByRole("article")).toBeNull();
     }
   });

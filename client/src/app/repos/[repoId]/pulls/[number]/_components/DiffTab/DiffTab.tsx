@@ -14,18 +14,22 @@ import {
 import { notify } from "@/lib/toast";
 import type { PrFile } from "@devdigest/shared";
 import { RoleGroup } from "./_components/RoleGroup";
+import { DiffToolbar, type DiffOrder } from "./_components/DiffToolbar";
 import { planGroups, visibleFindings } from "./helpers";
 import { note } from "./styles";
 
 interface DiffTabProps {
   prId: string | null;
+  /** PR-level totals from GitHub (cover every file, even when `files` is capped). */
   filesCount: number;
+  additions: number;
+  deletions: number;
   files: PrFile[];
   /** Inline commenting is offered only on open PRs (GitHub rejects otherwise). */
   canComment?: boolean;
 }
 
-export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
+export function DiffTab({ prId, filesCount, additions, deletions, files, canComment }: DiffTabProps) {
   const t = useTranslations("prReview");
   const { data: comments } = usePrComments(prId);
   const smart = useSmartDiff(prId);
@@ -34,6 +38,7 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
   const create = useCreatePrComment(prId);
   // Comments start hidden so the diff is clean by default — toggle to reveal.
   const [showComments, setShowComments] = React.useState(false);
+  const [order, setOrder] = React.useState<DiffOrder>("smart");
 
   const commentCount = comments?.length ?? 0;
 
@@ -61,10 +66,23 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
   };
 
   const groups = smart.data ? planGroups(smart.data, files) : null;
+  const noReview =
+    !!smart.data && !smart.isError && smart.data.review_ids.length === 0 ? (
+      <p style={note}>{t("smartDiff.noReview")}</p>
+    ) : null;
+  // The flat list in the PR's own order — Original order, and Smart order's fallback.
+  const flat = <DiffViewer files={files} commenting={commenting} findings={findingApi} />;
 
   let body: React.ReactNode;
   if (files.length === 0) {
     body = <DiffViewer files={files} commenting={commenting} />;
+  } else if (order === "original") {
+    body = (
+      <>
+        {noReview}
+        {flat}
+      </>
+    );
   } else if (smart.isLoading) {
     body = (
       <div role="status" aria-label={t("smartDiff.loading")}>
@@ -74,23 +92,14 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
   } else if (smart.isError || !smart.data || !groups) {
     body = (
       <>
-        <p style={note}>
-          {t("smartDiff.unavailable")}
-        </p>
-        <DiffViewer files={files} commenting={commenting} />
+        <p style={note}>{t("smartDiff.unavailable")}</p>
+        {flat}
       </>
     );
   } else {
     body = (
       <>
-        <p style={note}>
-          {t("smartDiff.groupedByRole")}
-        </p>
-        {smart.data.review_ids.length === 0 && (
-          <p style={note}>
-            {t("smartDiff.noReview")}
-          </p>
-        )}
+        {noReview}
         {groups.map((g) => (
           <RoleGroup
             key={g.role}
@@ -122,8 +131,17 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
           ) : undefined
         }
       >
-        Files changed · {filesCount} files
+        Files changed
       </SectionLabel>
+      {files.length > 0 && (
+        <DiffToolbar
+          filesCount={filesCount}
+          additions={additions}
+          deletions={deletions}
+          order={order}
+          onOrderChange={setOrder}
+        />
+      )}
       {body}
     </section>
   );

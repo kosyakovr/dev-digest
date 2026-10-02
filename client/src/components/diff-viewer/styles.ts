@@ -96,23 +96,24 @@ export function findingStripeFor(color: string): CSSProperties {
   return { boxShadow: `inset 3px 0 0 ${color}` };
 }
 
-/** The per-line label button that toggles the stacked finding cards. */
-export function findingLabelFor(color: string): CSSProperties {
+/** The per-line badge button that toggles the stacked finding cards: outlined
+    and tinted while the cards are open, text-only while they are hidden. */
+export function findingLabelFor(color: string, bg: string, open: boolean): CSSProperties {
   return {
     display: "inline-flex",
     alignItems: "center",
     gap: 4,
     alignSelf: "center",
     flexShrink: 0,
-    margin: "0 8px",
-    padding: "0 6px",
+    margin: "1px 8px 1px 0",
+    padding: "0 7px",
     fontSize: 11,
     fontWeight: 600,
     lineHeight: "18px",
     color,
-    background: "transparent",
-    border: `1px solid ${color}`,
-    borderRadius: 4,
+    background: open ? bg : "transparent",
+    border: `1px solid ${open ? color : "transparent"}`,
+    borderRadius: 5,
     cursor: "pointer",
   };
 }

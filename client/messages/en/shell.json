@@ -42,9 +42,9 @@
     "postedToGitHub": "Posts to GitHub immediately",
     "outdatedTitle": "{count} comment(s) on older revisions",
     "findingLine": {
-      "critical": "blocker",
-      "warning": "warning",
-      "suggestion": "suggestion"
+      "critical": "Blocker",
+      "warning": "Warning",
+      "suggestion": "Suggestion"
     },
     "fileHasFindings": "Has findings",
     "findingsOutsideDiff": "Findings outside the visible diff",

@@ -1,5 +1,6 @@
 /**
- * DiffTab — the Files changed tab: role groups (Core, Tests, Wiring, Docs,
+ * DiffTab — the Files changed tab: the "N files · +A −D" counter and the Smart
+ * order / Original order toggle, role groups (Core, Tests, Wiring, Docs,
  * Boilerplate) from the smart-diff endpoint, findings of the latest review set
  * inline, and the flat fallback when the grouping is unavailable.
  */
@@ -102,7 +103,14 @@ function setSmart(s: Partial<SmartState>) {
 function renderTab() {
   return render(
     <NextIntlClientProvider locale="en" messages={{ shell, prReview }}>
-      <DiffTab prId="pr1" filesCount={FILES.length} files={FILES} canComment={false} />
+      <DiffTab
+        prId="pr1"
+        filesCount={FILES.length}
+        additions={120}
+        deletions={7}
+        files={FILES}
+        canComment={false}
+      />
     </NextIntlClientProvider>,
   );
 }
@@ -111,6 +119,11 @@ const ROLE_RE = /^(Core|Tests|Wiring|Docs|Boilerplate)\b/;
 const header = (label: string) => screen.getByRole("button", { name: new RegExp(`^${label}\\b`) });
 const UNAVAILABLE = "Smart grouping is unavailable — showing files in original order.";
 const NO_REVIEW = "No review yet — findings will appear here after a review.";
+const PATH_RE = /^(pnpm-lock\.yaml|README\.md|a\.test\.ts|b\.ts|a\.ts)$/;
+/** File-card paths on screen, in DOM order. */
+const shownPaths = () => screen.queryAllByText(PATH_RE).map((e) => e.textContent);
+const orderButton = (name: "Smart order" | "Original order") =>
+  within(screen.getByRole("group", { name: "File order" })).getByRole("button", { name });
 
 beforeEach(() => {
   setSmart({ data: smartResponse() });
@@ -223,5 +236,60 @@ describe("DiffTab", () => {
     renderTab();
     expect(screen.getByText(NO_REVIEW)).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: ROLE_RE })).toHaveLength(4);
+  });
+
+  it("the toolbar shows the PR's file count and +/- totals, and Smart order is selected by default", () => {
+    renderTab();
+    expect(screen.getByText("5 files", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("+120")).toBeInTheDocument();
+    expect(screen.getByText("−7")).toBeInTheDocument();
+    expect(orderButton("Smart order")).toHaveAttribute("aria-pressed", "true");
+    expect(orderButton("Original order")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("Original order: no role groups, every file in the PR's own order, finding cards still under their line; Smart order brings the groups back", () => {
+    h.reviews = [review("R2", [finding("New")])];
+    renderTab();
+    fireEvent.click(orderButton("Original order"));
+    expect(orderButton("Original order")).toHaveAttribute("aria-pressed", "true");
+    expect(orderButton("Smart order")).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("button", { name: ROLE_RE })).toBeNull();
+    expect(shownPaths()).toEqual(PATHS);
+    expect(screen.getAllByRole("article").map((a) => a.getAttribute("aria-label"))).toEqual(["New"]);
+    expect(screen.getByRole("button", { name: "Blocker" })).toBeInTheDocument();
+
+    fireEvent.click(orderButton("Smart order"));
+    expect(screen.getAllByRole("button", { name: ROLE_RE })).toHaveLength(4);
+    expect(shownPaths()).toEqual(["a.ts", "b.ts", "a.test.ts"]); // Docs and Boilerplate collapsed
+    expect(screen.getAllByRole("article").map((a) => a.getAttribute("aria-label"))).toEqual(["New"]);
+  });
+
+  it("Original order does not wait for the smart diff and shows no 'unavailable' notice when it fails", () => {
+    setSmart({ data: undefined, isLoading: true });
+    const { rerender } = renderTab();
+    fireEvent.click(orderButton("Original order"));
+    expect(screen.queryByRole("status", { name: "Loading the smart diff…" })).toBeNull();
+    expect(shownPaths()).toEqual(PATHS);
+
+    setSmart({ data: undefined, isError: true });
+    rerender(
+      <NextIntlClientProvider locale="en" messages={{ shell, prReview }}>
+        <DiffTab prId="pr1" filesCount={5} additions={120} deletions={7} files={FILES} canComment={false} />
+      </NextIntlClientProvider>,
+    );
+    expect(shownPaths()).toEqual(PATHS);
+    expect(screen.queryByText(UNAVAILABLE)).toBeNull();
+  });
+
+  it("the Smart-order fallback (path sets differ) still shows the finding cards of the latest review", () => {
+    h.reviews = [review("R2", [finding("New")])];
+    setSmart({
+      data: smartResponse({
+        groups: [{ role: "core", files: [{ path: "a.ts", additions: 3, deletions: 0, finding_lines: [2] }] }],
+      }),
+    });
+    renderTab();
+    expect(screen.getByText(UNAVAILABLE)).toBeInTheDocument();
+    expect(screen.getAllByRole("article").map((a) => a.getAttribute("aria-label"))).toEqual(["New"]);
   });
 });

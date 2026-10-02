@@ -82,7 +82,7 @@ export function CodeLine({
             type="button"
             aria-expanded={findingsOpen}
             onClick={() => setFindingsOpen((o) => !o)}
-            style={findingLabelFor(SEV[worst].c)}
+            style={findingLabelFor(SEV[worst].c, SEV[worst].bg, findingsOpen)}
           >
             <WorstIcon size={12} />
             {t(SEVERITY_LINE_LABEL_KEY[worst])}
