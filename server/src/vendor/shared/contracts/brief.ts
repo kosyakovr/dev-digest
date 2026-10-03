@@ -25,6 +25,10 @@ export const BlastCaller = z.object({
   name: z.string(),
   file: z.string(),
   line: z.number().int(),
+  /** 1 = direct caller, 2 = caller of a caller. Absent on older payloads. */
+  depth: z.number().int().min(1).optional(),
+  /** For depth >= 2: the depth-1 caller this one reaches the symbol through. */
+  through: z.string().optional(),
 });
 export type BlastCaller = z.infer<typeof BlastCaller>;
 
@@ -36,10 +40,23 @@ export const DownstreamImpact = z.object({
 });
 export type DownstreamImpact = z.infer<typeof DownstreamImpact>;
 
+export const BlastDegradedReason = z.enum([
+  'flag_off',
+  'index_failed',
+  'index_partial',
+  'repo_too_large',
+  'no_data',
+]);
+export type BlastDegradedReason = z.infer<typeof BlastDegradedReason>;
+
 export const BlastRadius = z.object({
   changed_symbols: z.array(ChangedSymbol),
   downstream: z.array(DownstreamImpact),
   summary: z.string(),
+  degraded: z.boolean().optional(),
+  reason: BlastDegradedReason.optional(),
+  /** repo_index_state.last_indexed_sha the rows were read at. */
+  indexed_sha: z.string().optional(),
 });
 export type BlastRadius = z.infer<typeof BlastRadius>;
 
@@ -72,8 +89,13 @@ export const PrHistoryItem = z.object({
 });
 export type PrHistoryItem = z.infer<typeof PrHistoryItem>;
 
+export const PrHistoryReason = z.enum(['github_unavailable', 'github_partial']);
+export type PrHistoryReason = z.infer<typeof PrHistoryReason>;
+
 export const PrHistory = z.object({
   history: z.array(PrHistoryItem),
+  degraded: z.boolean().optional(),
+  reason: PrHistoryReason.optional(),
 });
 export type PrHistory = z.infer<typeof PrHistory>;
 

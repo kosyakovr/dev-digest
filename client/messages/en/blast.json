@@ -13,6 +13,46 @@
   "noDownstream": "{count} changed symbol(s), no downstream callers found.",
   "graph": {
     "empty": "No downstream callers to graph.",
+    "legend": {
+      "changed": "changed symbol",
+      "callers": "callers",
+      "indirect": "indirect callers",
+      "impact": "endpoints & crons (via callers)"
+    },
+    "symbolPicker": "Symbol",
     "ariaLabel": "Blast radius graph"
+  },
+  "title": "Blast radius",
+  "loadError": "Couldn't load the blast radius.",
+  "retry": "Retry",
+  "count": {
+    "symbols": "{count, plural, one {# symbol} other {# symbols}}",
+    "callers": "{count, plural, one {# caller} other {# callers}}",
+    "endpoints": "{count, plural, one {# endpoint} other {# endpoints}}",
+    "crons": "{count, plural, one {# cron/job} other {# cron/jobs}}"
+  },
+  "via": "via {name}",
+  "degraded": {
+    "flag_off": "Repo intelligence is turned off (REPO_INTEL_ENABLED).",
+    "no_data": "This repo has not been indexed yet.",
+    "index_failed": "The last index run failed.",
+    "index_partial": "The index is partial — some callers may be missing.",
+    "repo_too_large": "The repo is too large to index fully."
+  },
+  "resync": "Re-index repo",
+  "resyncing": "Re-indexing…",
+  "resyncError": "Re-index failed: {message}",
+  "resyncTimeout": "Re-indexing is taking longer than expected — reload the page later to see the result.",
+  "history": {
+    "title": "Prior PRs touching these files",
+    "count": "{count, plural, one {# prior PR} other {# prior PRs}}",
+    "empty": "No prior merged PRs found for these files on the default branch.",
+    "loadError": "Couldn't load prior PRs.",
+    "overlap": "{count, plural, one {# file overlaps} other {# files overlap}}",
+    "merged": "merged {date}",
+    "degraded": {
+      "github_unavailable": "GitHub is unavailable — check the token in Settings.",
+      "github_partial": "Some GitHub requests failed — this list may be incomplete."
+    }
   }
 }

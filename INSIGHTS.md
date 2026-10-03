@@ -46,6 +46,29 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 
 ## What Doesn't Work
 
+- 2026-10-02 — The default model `deepseek/deepseek-v4-flash` REASONS before it
+  answers, and its hidden reasoning (0–900 tokens per call, varying by upstream)
+  counts against `maxTokens`, so a cap sized for the JSON alone (intent had 800)
+  cut half the calls off mid-JSON — reported as "structured output failed schema
+  validation", never as truncation (live probe: 7 of 10 attempts
+  `finish_reason: length`, 3 with ZERO content) → size `maxTokens` for reasoning
+  plus answer (intent now 3_000; only generated tokens are billed); to diagnose,
+  log `finish_reason` and `usage.completion_tokens_details.reasoning_tokens`.
+  (ref: server/src/modules/intent/constants.ts, reviewer-core/src/llm/openrouter.ts)
+
+- 2026-10-02 — `pr_files` is written ONLY by `GET /pulls/:id` (it re-fetches the
+  PR from GitHub, `server/src/modules/pulls/routes.ts:314`); PR import/list never
+  writes it, so any non-browser reader keyed on it (MCP tool, script, curl)
+  sees 0 changed files for a PR nobody opened in the web app — `/pulls/:id/blast`
+  answered "0 symbols", not degraded → call `GET /pulls/:id` first, as
+  `mcp-server/src/usecases/blast.ts` does via `syncPull`.
+
+- 2026-10-02 — `git stash push -- <path>` on an UNTRACKED (new) file is a silent
+  no-op, so a "red-proof" that stashes the new component and re-runs its test
+  passes against the very code it meant to remove → for a new file, mutate a
+  copy (`cp` to the scratchpad, edit, run, `cp` back) instead of stashing.
+- 2026-10-02 (ref for the entry above) — (ref: client/src/app/repos/[repoId]/pulls/[number]/_components/OverviewTab/_components/BlastCard/BlastCard.test.tsx, the graph.empty red-proof in L04 Blast radius)
+
 - 2026-10-02 — The isolated `.it.test` recipe in `.claude/agents/README.md:328`
   creates its fake `HOME` with `mktemp -d` and removes it with `rm -rf`, and the
   agent scope guard DENIES both for subagents (writes are allowed only when the
@@ -154,9 +177,18 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
   `import type`) → a plan's done-when grep needs one planted hit that must
   appear and one that must not; prefer a `boundaries.test.ts` that parses
   imports (mcp-server/test/boundaries.test.ts) over shell greps.
+- 2026-10-02 — A fifth time, through `git grep` itself: it skips UNTRACKED files,
+  so every done-when `git grep` over a brand-new folder (`server/src/modules/blast/`,
+  `OverviewTab/_components/BlastCard/`) returned 0 hits = "pass" before the first
+  commit, checking nothing (caught by plan-verifier) → for uncommitted work use
+  `grep -rn` or `git grep --untracked`. (ref: Blast radius plan WP4/WP6 done-when)
 
 ## Session Notes
 
+- 2026-10-02 — L04 Blast radius: `GET /pulls/:id/blast` + `/history` (module
+  `blast/`), repo-intel facade fixed (per-symbol cap, reasons, hop 2, no clone
+  reads), contracts in both vendored copies, Overview card, MCP `get_blast_radius`
+  (spec: server/specs/L04-blast-radius.md).
 - 2026-10-02 — L04 MCP server: new pnpm package `mcp-server/` (stdio, 5 tools,
   thin HTTP client, onion by analogy routed via pr-self-review group A), verbatim
   tool descriptions pinned by tests, SR-1 quoted locations (spec:

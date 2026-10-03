@@ -78,7 +78,13 @@ The adapter rejects a `ref` that is not `/^[0-9a-f]{7,40}$/`.
    `undefined`, writes "Intent unavailable — <reason>; reviewing without it" to the
    live log and a pino warn; agents run with the slot omitted. Budget
    `INTENT_REVIEW_BUDGET_MS = 45_000`. A failed derivation does not reuse an older row.
-5. **Model bounds.** `temperature 0`, `maxTokens 800`, `timeoutMs 20_000`, `maxRetries 1`.
+5. **Model bounds.** `temperature 0`, `maxTokens 3_000`, `timeoutMs 20_000`, `maxRetries 1`.
+   `maxTokens` was 800 until 2026-10-02: the default reasoning model spends its
+   hidden reasoning from the same budget, so half the calls were cut off mid-JSON
+   and failed as "structured output failed schema validation". On OpenRouter a
+   reply cut off at `maxTokens` is now retried as a fresh, identical request
+   (no reprompt with the cut-off text); if every attempt is cut off the error
+   says "cut off at max_tokens".
 
 ### Confidence (deterministic, `modules/intent/helpers.ts`)
 - `ticket` = an issue resolved (not a PR); `spec` = a non-empty spec read;

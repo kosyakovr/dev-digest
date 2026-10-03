@@ -40,6 +40,43 @@ describe('mock adapters (no network)', () => {
   });
 });
 
+describe('MockGitHubClient — prior-PR history seams', () => {
+  const ref = { owner: 'a', name: 'b' };
+  const c1 = { sha: 'c1', message: 'Add x (#41)', date: '2026-03-01T00:00:00Z' };
+
+  it('getPullSummary: a null entry rejects and the call is logged', async () => {
+    const gh = new MockGitHubClient({ pullSummaries: { 7: null } });
+    await expect(gh.getPullSummary(ref, 7)).rejects.toThrow();
+    expect(gh.summaryCalls).toEqual([7]);
+  });
+
+  it('getPullSummary: a missing key yields a merged PR; a given entry is returned as is', async () => {
+    const given = { number: 8, title: 'T', author: 'u', body: 'b', merged_at: '2026-02-02T00:00:00Z' };
+    const gh = new MockGitHubClient({ pullSummaries: { 8: given } });
+    const dflt = await gh.getPullSummary(ref, 9);
+    expect(dflt.number).toBe(9);
+    expect(dflt.merged_at).not.toBeNull();
+    await expect(gh.getPullSummary(ref, 8)).resolves.toEqual(given);
+  });
+
+  it('listCommitsForPath: entry → commits, null → rejects, missing key → []', async () => {
+    const gh = new MockGitHubClient({ commitsByPath: { 'a.ts': [c1], 'b.ts': null } });
+    await expect(gh.listCommitsForPath(ref, 'a.ts', { ref: 'main', perPage: 30 })).resolves.toEqual([c1]);
+    await expect(gh.listCommitsForPath(ref, 'b.ts', { ref: 'main', perPage: 30 })).rejects.toThrow();
+    await expect(gh.listCommitsForPath(ref, 'c.ts', { ref: 'main', perPage: 30 })).resolves.toEqual([]);
+  });
+
+  it('listCommitsForPath logs path, ref and perPage per call, in order', async () => {
+    const gh = new MockGitHubClient({ commitsByPath: { 'a.ts': [c1] } });
+    await gh.listCommitsForPath(ref, 'a.ts', { ref: 'main', perPage: 30 });
+    await gh.listCommitsForPath(ref, 'z.ts', { ref: 'dev', perPage: 5 });
+    expect(gh.commitCalls).toEqual([
+      { path: 'a.ts', ref: 'main', perPage: 30 },
+      { path: 'z.ts', ref: 'dev', perPage: 5 },
+    ]);
+  });
+});
+
 describe('structured review pipeline (mock LLM → grounding)', () => {
   it('runs assemble → completeStructured(Review) → groundFindings end-to-end', async () => {
     // a fixture review where one finding is grounded and one is hallucinated

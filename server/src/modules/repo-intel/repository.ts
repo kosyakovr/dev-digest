@@ -126,6 +126,8 @@ export interface FullSymbolRow {
 export interface ResolvedCallerRow {
   fromPath: string;
   toSymbol: string;
+  /** The file the reference resolved to (references.decl_file). */
+  declFile: string | null;
   line: number;
   rank: number;
 }
@@ -510,6 +512,7 @@ export class RepoIntelRepository {
       .select({
         fromPath: t.references.fromPath,
         toSymbol: t.references.toSymbol,
+        declFile: t.references.declFile,
         line: t.references.line,
         rank: t.fileRank.rank,
       })

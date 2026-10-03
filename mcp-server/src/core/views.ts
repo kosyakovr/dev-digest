@@ -3,7 +3,7 @@
  * renderer. These are internal view models, not wire formats, so they are
  * interfaces rather than schemas. Imports ring-① types only.
  */
-import type { Convention, Finding } from './schemas.ts';
+import type { BlastRadius, Convention, Finding } from './schemas.ts';
 
 export type RunStatus = 'done' | 'failed' | 'cancelled' | 'running';
 export type Severity = 'CRITICAL' | 'WARNING' | 'SUGGESTION';
@@ -40,4 +40,10 @@ export interface ConventionsView {
   items: Convention[];
   total: number;
   offset: number;
+}
+
+export interface BlastView {
+  /** `owner/repo#N`, or the PR uuid when the caller gave one. */
+  prLabel: string;
+  blast: BlastRadius;
 }

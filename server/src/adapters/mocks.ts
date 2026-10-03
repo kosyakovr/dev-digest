@@ -17,6 +17,8 @@ import type {
   OpenPrPayload,
   CommitFilesPayload,
   IssueMeta,
+  PullSummary,
+  PathCommit,
   GitClient,
   CloneOptions,
   UnifiedDiff,
@@ -129,6 +131,10 @@ export interface MockGitHubOptions {
   comments?: PrReviewComment[];
   /** Per-number `getIssue` results; a `null` entry makes `getIssue` throw (simulates 404). */
   issues?: Record<number, IssueMeta | null>;
+  /** Per-number `getPullSummary` results; a `null` entry makes it throw (simulates 404). */
+  pullSummaries?: Record<number, PullSummary | null>;
+  /** Per-path `listCommitsForPath` results; a `null` entry makes it throw. Missing key → `[]`. */
+  commitsByPath?: Record<string, PathCommit[] | null>;
 }
 
 export class MockGitHubClient implements GitHubClient {
@@ -136,6 +142,8 @@ export class MockGitHubClient implements GitHubClient {
   public openedPrs: OpenPrPayload[] = [];
   public committed: CommitFilesPayload[] = [];
   public createdComments: CreateReviewCommentInput[] = [];
+  public summaryCalls: number[] = [];
+  public commitCalls: { path: string; ref: string; perPage: number }[] = [];
 
   constructor(private opts: MockGitHubOptions = {}) {}
 
@@ -239,6 +247,31 @@ export class MockGitHubClient implements GitHubClient {
     if (entry === null) throw new Error(`mock: issue #${n} not found`);
     if (entry) return entry;
     return { number: n, title: `Issue #${n}`, body: 'mock issue', state: 'open' };
+  }
+
+  async getPullSummary(_repo: RepoRef, n: number): Promise<PullSummary> {
+    this.summaryCalls.push(n);
+    const entry = this.opts.pullSummaries?.[n];
+    if (entry === null) throw new Error(`mock: pull #${n} not found`);
+    if (entry) return entry;
+    return {
+      number: n,
+      title: `PR #${n}`,
+      author: 'mock-user',
+      body: null,
+      merged_at: '2026-01-01T00:00:00Z',
+    };
+  }
+
+  async listCommitsForPath(
+    _repo: RepoRef,
+    path: string,
+    opts: { ref: string; perPage: number },
+  ): Promise<PathCommit[]> {
+    this.commitCalls.push({ path, ref: opts.ref, perPage: opts.perPage });
+    const entry = this.opts.commitsByPath?.[path];
+    if (entry === null) throw new Error(`mock: commits for ${path} unavailable`);
+    return entry ?? [];
   }
 
   async currentLogin(): Promise<string> {

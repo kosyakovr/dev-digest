@@ -10,3 +10,4 @@ export * from "./intent";
 export * from "./reviews";
 export * from "./trace";
 export * from "./repo-intel";
+export { usePrBlast, usePrHistory, useBlastResync } from "./blast";

@@ -11,14 +11,15 @@ import type { Clock } from '../core/clock.ts';
 import { DevDigestError } from '../core/errors.ts';
 import type { DevDigestApi } from '../core/port.ts';
 import {
-  BLAST_RADIUS_NOT_IMPLEMENTED,
   renderAgents,
+  renderBlast,
   renderConventions,
   renderError,
   renderFindings,
   renderRunOutcome,
 } from '../format/text.ts';
 import { callsUntil, TIMEOUT_AGENTS_MS } from '../usecases/budget.ts';
+import { getBlastRadius } from '../usecases/blast.ts';
 import { getConventions } from '../usecases/conventions.ts';
 import { getFindings } from '../usecases/findings.ts';
 import { runAgentOnPr } from '../usecases/run-review.ts';
@@ -119,6 +120,10 @@ export function createHandlers(deps: HandlerDeps): Handlers {
         return renderConventions(view, args.response_format);
       }),
 
-    get_blast_radius: () => Promise.resolve(text(BLAST_RADIUS_NOT_IMPLEMENTED, true)),
+    get_blast_radius: (args, extra) =>
+      guard('get_blast_radius', async () => {
+        const view = await getBlastRadius({ api, clock }, { pr: args.pr }, extra.signal);
+        return renderBlast(view, args.response_format);
+      }),
   };
 }

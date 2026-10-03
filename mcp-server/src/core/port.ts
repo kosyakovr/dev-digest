@@ -7,6 +7,7 @@
 import type {
   ActiveRun,
   Agent,
+  BlastRadius,
   Convention,
   Pull,
   Repo,
@@ -32,4 +33,11 @@ export interface DevDigestApi {
   listRuns(prId: string, opts: CallOpts): Promise<RunSummary[]>;
   listReviews(prId: string, opts: CallOpts): Promise<Review[]>;
   listConventions(repoId: string, opts: CallOpts): Promise<Convention[]>;
+  /**
+   * Open the PR detail (`GET /pulls/:id`), as the browser does, so the server
+   * refreshes the PR's changed files from GitHub. The body is not used.
+   */
+  syncPull(prId: string, opts: CallOpts): Promise<void>;
+  /** Blast radius of a PR (`GET /pulls/:id/blast`); reads the persistent index only. */
+  getBlast(prId: string, opts: CallOpts): Promise<BlastRadius>;
 }
