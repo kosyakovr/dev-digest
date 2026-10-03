@@ -30,6 +30,7 @@ If a test wouldn't catch a class of regression we care about, we don't write it.
 | server-unit | `server/` | unit (hermetic) | vitest | `server-unit.yml` | no |
 | server-integration | `server/` | integration (real Postgres) | vitest | `server-integration.yml` | **yes** |
 | reviewer-core | `reviewer-core/` | unit (engine) | vitest | `reviewer-core.yml` | no |
+| mcp-server | `mcp-server/` | unit (fake `DevDigestApi`, in-memory MCP transport) | vitest | `mcp-server.yml` | no |
 | e2e web | `e2e/` | browser e2e (deterministic) | agent-browser + `run.ts` | `e2e-web.yml` | yes (stack) |
 
 ## What each suite covers
@@ -52,6 +53,12 @@ Docker is unavailable.
 **reviewer-core** — the pure engine: `toReview` selection, prompt construction,
 and a `run` with a stubbed model → grounded findings. No DB / GitHub / FS.
 
+**mcp-server** — the MCP tools over a fake `DevDigestApi` and a fake clock (no
+Docker, no DevDigest API): reference parsing, resolution, the `run_agent_on_pr`
+time budget, text rendering and error mapping, the tool surface through the SDK
+client over `InMemoryTransport`, plus the SSE parser and the HTTP adapter
+against a real `node:http` server on `127.0.0.1:0`, and a spawned stdio process.
+
 **e2e web** — see `e2e/README.md`. Deterministic agent-browser flows over the
 main journeys (boot → PR list → PR detail; agents) against a real seeded stack.
 No `chat`, no model key.
@@ -62,6 +69,7 @@ No `chat`, no model key.
 # per package
 cd client        && pnpm test           # + pnpm typecheck
 cd reviewer-core && npm test
+cd mcp-server   && pnpm test           # + pnpm typecheck
 
 # server — the unit/integration split (see note below)
 cd server && pnpm exec vitest run --exclude '**/*.it.test.ts'   # unit, no Docker

@@ -1,0 +1,24 @@
+{
+  "name": "@devdigest/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local stdio MCP server for Claude Code: a thin client of the running DevDigest HTTP API (list agents, run a review on a PR, read findings and conventions). No DB, no import of server/ or reviewer-core/.",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "start": "node src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.8.0",
+    "vitest": "^2.1.8"
+  }
+}

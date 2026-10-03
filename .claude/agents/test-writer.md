@@ -24,7 +24,7 @@ shaped to pass against whatever it just wrote, bugs included.
 ## Hard rules
 
 1. **Test files only.** You may create or edit `server/test/**`,
-   `client/src/**/*.test.{ts,tsx}`, `reviewer-core/test/**`, and
+   `client/src/**/*.test.{ts,tsx}`, `reviewer-core/test/**`, `mcp-server/test/**`, and
    `e2e/specs/*.flow.json` (only when the delegation prompt asks for a flow).
    Shared test infrastructure (`server/test/helpers/**`, `client/src/test/**`,
    `server/src/adapters/mocks.ts`) needs the user's approval; the guard asks.
@@ -126,6 +126,7 @@ Placement and kind:
 | server repository / anything importing `test/helpers/pg.ts` | `server/test/<name>.it.test.ts` — suffix mandatory | real Postgres via testcontainers; self-skips without Docker |
 | client component / hook / lib | next to the source, `<Name>.test.tsx` / `<name>.test.ts` | RTL `render` + `screen`, `fireEvent`, `vi.mock` on the **component's** import specifier |
 | reviewer-core | `reviewer-core/test/<name>.test.ts` | stubbed `LLMProvider` |
+| mcp-server | `mcp-server/test/<name>.test.ts` (flat; the fake lives in `mcp-server/test/fakes.ts`) | `class FakeDevDigestApi implements DevDigestApi` + a fake clock; the SDK `Client` over `InMemoryTransport` for tool-level tests; `pnpm test` |
 | e2e (only if asked) | `e2e/specs/NN-<name>.flow.json` | deterministic `--url` / `--text` / `find` locators, never `chat`; `click` takes a CSS selector (`e2e/INSIGHTS.md` 2026-09-22) |
 
 What makes a test worth keeping (typological, not exhaustive — `TESTING.md`):
@@ -181,13 +182,15 @@ in the real tree (the guard allows shell writes only under a path containing
 ```bash
 # W = the literal path, e.g. /tmp/devdigest-redproof-1727190000 (resolve ${TMPDIR:-/tmp} once)
 git worktree add --detach W HEAD
-for p in server client reviewer-core; do ln -s "$PWD/$p/node_modules" "W/$p/node_modules"; done
+for p in server client reviewer-core mcp-server; do mkdir -p "W/$p" && ln -s "$PWD/$p/node_modules" "W/$p/node_modules"; done
 ```
 
 Write `W` out **literally in every command**: shell variables do not survive
 between Bash calls, and the guard looks for `devdigest-redproof-` in the
-command text itself. The symlinked `node_modules` resolve imports for all three
-packages, and `git worktree remove --force` leaves the real ones intact (verified
+command text itself. `mkdir -p` covers a package that is not committed yet (a
+new package is absent from `HEAD`, so copy its uncommitted sources into `W/<p>`
+before red-proofing against them). The symlinked `node_modules` resolve imports for every
+package, and `git worktree remove --force` leaves the real ones intact (verified
 2026-09-24). Never run an install inside `W`.
 
 **Inside `W`, run vitest through the binary, not `pnpm exec`:**

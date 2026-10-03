@@ -146,7 +146,7 @@ case "$TOOL" in
             decide deny "a test importing test/helpers/pg must end in .it.test.ts (TESTING.md) - rename the file."
           fi
           exit 0 ;;
-        server/test/*|reviewer-core/test/*|client/src/*.test.ts|client/src/*.test.tsx|e2e/specs/*.flow.json)
+        server/test/*|reviewer-core/test/*|mcp-server/test/*|client/src/*.test.ts|client/src/*.test.tsx|e2e/specs/*.flow.json)
           exit 0 ;;
       esac
       decide deny "test-writer writes test files only - if production code looks wrong, leave the test red and report it under Suspected defects."

@@ -1,6 +1,6 @@
 # DevDigest
 
-Local-first AI PR review. Four standalone packages — NO workspace: each has its own
+Local-first AI PR review. Five standalone packages — NO workspace: each has its own
 lockfile. Run commands from inside the package, never from root.
 
 | Package | PM | Guide |
@@ -9,6 +9,7 @@ lockfile. Run commands from inside the package, never from root.
 | client/ | pnpm | [client/AGENTS.md](client/AGENTS.md) |
 | reviewer-core/ | npm | [reviewer-core/AGENTS.md](reviewer-core/AGENTS.md) |
 | e2e/ | npm | [e2e/AGENTS.md](e2e/AGENTS.md) |
+| mcp-server/ | pnpm | [mcp-server/AGENTS.md](mcp-server/AGENTS.md) |
 
 Cross-package lessons learned (per-package ones live in `<pkg>/INSIGHTS.md`):
 @INSIGHTS.md

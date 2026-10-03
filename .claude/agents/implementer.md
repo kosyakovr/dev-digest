@@ -40,7 +40,7 @@ reviewers take it from there.
 4. **Do not write `INSIGHTS.md`.** Report non-obvious findings as
    "Insight candidates"; the calling session records them.
 5. **Do not write or edit tests** — `*.test.ts(x)`, `server/test/**`,
-   `reviewer-core/test/**`, `client/src/test/**`, `e2e/specs/*.flow.json`.
+   `reviewer-core/test/**`, `mcp-server/test/**`, `client/src/test/**`, `e2e/specs/*.flow.json`.
    The guard denies them. Everything the plan says to test goes under
    "Handoff to test-writer". Test doubles in `server/src/adapters/mocks.ts`
    are production code and stay yours: a new adapter gets its mock there.
@@ -131,10 +131,11 @@ a ledger keyed per package by the sources its checks read (`.git/devdigest/check
 | Package | Commands |
 |---|---|
 | reviewer-core | `npm run typecheck` · `npm test` |
+| mcp-server | `pnpm typecheck` · `pnpm test` |
 | server | `pnpm typecheck` · `pnpm exec vitest run --exclude '**/*.it.test.ts'` · the `.it.test` suite, isolated from real keys (rule 7; SKIPPED without Docker) |
 | client | `pnpm typecheck` · `pnpm test` |
 
-It covers all three packages — server compiles against reviewer-core source, so
+It covers all four packages — server compiles against reviewer-core source, so
 a reviewer-core change needs the server checks anyway. While iterating on one
 package, `scripts/checks.sh --force --pkg <pkg> --no-it` is fine; the final run
 before your report is the full `scripts/checks.sh --force`. Paste its summary

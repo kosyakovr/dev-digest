@@ -1,0 +1,50 @@
+# MCP server — typecheck + hermetic unit tests (no network, no Docker).
+#
+# mcp-server/ is a standalone pnpm package: it talks to the DevDigest API over HTTP
+# and imports nothing from server/ or reviewer-core/, so only its own folder is in
+# the path filter. Node must be >=22.18 so `node src/index.ts` runs TypeScript
+# natively (type stripping); `22` resolves to the latest 22.x.
+name: mcp-server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mcp-server/**'
+      - '.github/workflows/mcp-server.yml'
+  pull_request:
+    paths:
+      - 'mcp-server/**'
+      - '.github/workflows/mcp-server.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-server-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp-server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+          cache-dependency-path: mcp-server/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+
+      - run: pnpm test

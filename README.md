@@ -15,6 +15,7 @@ aliases, not published modules):
 | `client/`        | `@devdigest/web`            | Next.js 15 web app (the studio)                       | 3000 |
 | `reviewer-core/` | `@devdigest/reviewer-core`  | Pure review engine: diff → prompt → LLM → findings    | —    |
 | `e2e/`           | `@devdigest/e2e`            | Deterministic browser e2e (agent-browser)             | —    |
+| `mcp-server/`    | `@devdigest/mcp-server`     | Local stdio MCP server for Claude Code (HTTP client of the API) | — |
 | `server/src/vendor/shared` | `@devdigest/shared` | Zod contracts shared across every package             | —    |
 
 `repo-intel` (the codebase indexer that powers the **Indexed** badge and feeds
@@ -85,7 +86,7 @@ These are intentionally **not** in the starter — each lesson adds one back:
 | L01 | Run cost badge · severity filter on findings |
 | L02 | Skills in the product · Conventions extractor |
 | L03 | Intent layer · Smart Diff |
-| L04 | `devdigest-mcp` server · Blast Radius (reads `repo-intel`) |
+| L04 | `devdigest-mcp` server (built: `mcp-server/`) · Blast Radius (reads `repo-intel`) |
 | L05 | Project Context Folder · Onboarding generator · PR Brief card |
 | L06 | Eval pipeline · Secret/Phantom gates · Plan Verifier · Export to CI |
 | L07 | Multi-agent review · Run Trace / Live Log · Persistent memory · per-agent stats |
@@ -135,6 +136,14 @@ cd ../client && pnpm install && pnpm dev               # web on :3000
 (unit/integration split: `pnpm exec vitest run --exclude '**/*.it.test.ts'` / `pnpm exec vitest run .it.test`)
 `client/`: `dev` · `build` · `start` · `test` · `typecheck`
 
+## Use from Claude Code (MCP)
+
+`mcp-server/` is a local stdio MCP server named `devdigest` (tools: `list_agents`,
+`run_agent_on_pr`, `get_findings`, `get_conventions`, `get_blast_radius` (not
+implemented yet)). To use it: start the API (`./scripts/dev.sh`), run
+`cd mcp-server && pnpm install --frozen-lockfile`, then approve `devdigest` in
+`/mcp` (the root `.mcp.json` registers it). Needs Node >= 22.18 for the MCP server. Details: [`mcp-server/README.md`](mcp-server/README.md).
+
 ## Testing & CI
 
 One test suite per package, each gated by its own GitHub Actions workflow with a
@@ -146,6 +155,7 @@ path filter — full strategy in **[`TESTING.md`](TESTING.md)**.
 | server unit (hermetic) | `server-unit.yml` | no |
 | server integration (real Postgres) | `server-integration.yml` | yes |
 | reviewer-core (engine) | `reviewer-core.yml` | no |
+| mcp-server (typecheck + unit) | `mcp-server.yml` | no |
 | web e2e (agent-browser, real stack) | `e2e-web.yml` | yes |
 
 Server tests split by filename: `*.it.test.ts` are DB-backed (testcontainers
