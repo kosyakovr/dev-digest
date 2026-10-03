@@ -30,6 +30,9 @@ Non-obvious findings a future session needs. **Read this before working here.**
   a column or section HEADER (`wait --text "Cost"`), never a value; a value
   assertion either fails or, worse, passes only against a dirty local DB.
   (ref: server/src/db/seed.ts:39-220)
+- 2026-10-03 (correction) — The header-only advice stands, but the example is
+  wrong: the PR list header renders `uppercase`, so the working assertion is
+  `wait --text "COST"`; `"Cost"` times out. See Tool & Library Notes 2026-10-03.
 
 ## Codebase Patterns
 
