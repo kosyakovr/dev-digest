@@ -35,6 +35,16 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## Tool & Library Notes
 
+- 2026-10-03 — agent-browser 0.38.1: `wait --text` matches
+  `document.body.innerText`, which APPLIES CSS `text-transform`, so a header
+  styled `uppercase` must be asserted as `COST`, not `Cost` (the source/i18n
+  casing times out after 25 s); and `find text … click` does NOT wait, it fails
+  at once with "No element found by text" while client-fetched data is loading →
+  write `--text` values as rendered, and put a `wait --text <same text>` before
+  every `find … click` on fetched content. Debug a failing step through an
+  `AGENT_BROWSER_BIN` shim that appends stderr to a log, since `run.ts` prints
+  only the first line ("Command failed: …"). (ref: e2e/specs/02-repo-pulls-detail.flow.json)
+
 - 2026-09-19 — `agent-browser` is an external, globally-installed binary, NOT a
   dependency in `package.json`, so on a machine without it `./scripts/e2e.sh`
   brings the whole stack up, prints `0/7 flows passed` with every step failing
@@ -91,6 +101,9 @@ Non-obvious findings a future session needs. **Read this before working here.**
   in one run and only 05 in the next — so a run of 5/8 or 6/8 with exactly
   these two plus 02 is the current baseline, not a regression. Suspect the
   click races the list render (no `wait --text` before `find`).
+- 2026-10-03 (answer) — Confirmed: `find` does not wait, so it fails whenever
+  the list is still fetching; flows 04/05 now `wait --text` the PR title first.
+  Hermetic run 8/8. See Tool & Library Notes 2026-10-03.
 
 - 2026-09-22 — Why does flow 02's `wait --text "Cost"` fail on a HERMETIC fresh
   stack (reproducible, twice), when the step before it — the PR title on the
@@ -100,3 +113,7 @@ Non-obvious findings a future session needs. **Read this before working here.**
   the column is clipped, making the text present but not visible. This predates
   the L02 branch (the flow and the header source last changed in `c8be044` /
   `4146608`) and is the only failure in an otherwise 7/8 hermetic run.
+- 2026-10-03 (answer) — It was not clipping: `wait --text` reads `innerText`,
+  and the header row's `textTransform: "uppercase"` renders it as `COST`
+  (`client/src/app/repos/[repoId]/pulls/styles.ts` `headRow`). Flow 02 now
+  asserts `COST` / `FINDINGS`. See Tool & Library Notes 2026-10-03.
