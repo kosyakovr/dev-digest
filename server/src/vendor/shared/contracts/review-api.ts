@@ -118,7 +118,7 @@ export const PrIntentRecord = Intent.extend({
   model: z.string().nullable(),
   tokens_in: z.number().int().nullable(),
   tokens_out: z.number().int().nullable(),
-  /** null = unknown, never 0-as-unknown (server/specs/L01-run-cost.md § Null semantics). */
+  /** null = unknown, never 0-as-unknown (docs/specs/L01-run-cost.md § Null semantics). */
   cost_usd: z.number().nullable(),
   derived_at: z.string(),
 });

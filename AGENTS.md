@@ -35,12 +35,14 @@ require it, stop and ask the user first.
 - Editing reviewer prompts → [docs/agent-prompts/README.md](docs/agent-prompts/README.md)
 - The pre-PR gate (what blocks a push, how to waive) → [docs/pr-self-review.md](docs/pr-self-review.md)
 - Subagents (researcher → planner → implementer → test-writer → plan-verifier / architecture-reviewer → doc-writer; the agent guards) → [.claude/agents/README.md](.claude/agents/README.md)
+- Cross-package feature specs → [docs/specs/](docs/specs/README.md)
 - Per-package: `<pkg>/README.md`, `<pkg>/docs/`, `<pkg>/specs/`, `<pkg>/INSIGHTS.md`
 
 ## Workflow
 1. Before the first edit in a package, read `<pkg>/INSIGHTS.md`. Treat it as
    high-confidence guidance unless told otherwise.
-2. New feature → write/find its spec in `<pkg>/specs/` first.
+2. New feature → write/find its spec first: in `<pkg>/specs/` if it touches one
+   package, in `docs/specs/` if it touches several.
 3. Learned something non-obvious → capture it with the `engineering-insights`
    skill, which routes it to the right `INSIGHTS.md`. Do not skip this at the end
    of a task that involved debugging, a failing test or a correction — but write

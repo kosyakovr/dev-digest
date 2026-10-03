@@ -3,7 +3,7 @@
 **Status:** in-progress — implemented; migration `0010` applied in test, not yet
 on any dev/prod database (`pnpm db:migrate`)
 **Lesson / ticket:** L01
-**Scope:** cross-package — `server/` (canonical spec), `client/`, vendored
+**Scope:** cross-package — `server/`, `client/`, vendored
 `@devdigest/shared` contracts. `reviewer-core/` needs no change.
 
 ## Goal

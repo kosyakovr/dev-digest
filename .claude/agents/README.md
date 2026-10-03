@@ -165,6 +165,12 @@ holistic score because it agrees with human judgement markedly better
 
 ## Token budget
 
+To measure a run, use the [`workflow-retro`](../skills/workflow-retro/SKILL.md)
+skill: per-agent tokens, cache, time and cost from the transcripts, findings
+against the rules below, and one row per run in
+[`docs/retros/ledger.md`](../../docs/retros/ledger.md). Subagent transcripts
+miss part of the output tokens — its § Transcript format says how they are estimated.
+
 Measured on the L03 Intent Layer run, 2026-09-24 (subagent totals from the
 harness's task notifications — compare stages with each other, not as bills):
 
@@ -372,7 +378,7 @@ medium confidence.
 | Rule in [`planner.md`](planner.md) | Source |
 |---|---|
 | Step 0: return questions instead of guessing | Subagents have no `AskUserQuestion` — [subagent docs](https://code.claude.com/docs/en/sub-agents) |
-| Step 1: read `<pkg>/AGENTS.md` + `INSIGHTS.md`, find or update the spec, note docs to change | Root [`AGENTS.md`](../../AGENTS.md) § Workflow 1, 2, 4; `<pkg>/specs/_template.md`; test plan from [`TESTING.md`](../../TESTING.md) |
+| Step 1: read `<pkg>/AGENTS.md` + `INSIGHTS.md`, find or update the spec, note docs to change | Root [`AGENTS.md`](../../AGENTS.md) § Workflow 1, 2, 4; `<pkg>/specs/_template.md`, cross-package specs in `docs/specs/`; test plan from [`TESTING.md`](../../TESTING.md) |
 | Step 2: search what already exists, including `git log --all` | Root [`INSIGHTS.md`](../../INSIGHTS.md) 2026-09-23 (reverted lesson work reachable only via `--all`) |
 | Step 2: a Zod contract does not prove a route serves it | Root `INSIGHTS.md` 2026-09-19 (contracts with no server implementation) |
 | Step 3: map every file to routing groups A–F and cite skill rules by § | [`pr-self-review/routing.md`](../skills/pr-self-review/routing.md) § Groups — the same table the pre-PR review uses; the §s are in each `../skills/<name>/SKILL.md` |
@@ -472,7 +478,7 @@ medium confidence or could not verify.
 | One page, one purpose | [Diátaxis](https://diataxis.fr/) |
 | Link, do not duplicate; README short, depth in `<pkg>/docs/` | `<pkg>/docs/README.md`; the course author's reverted `docs/README.md` (`git show 84e2c1e:docs/README.md`: "do not restate README.md, link to it"; intent → `specs/`) |
 | ADRs in `<pkg>/docs/adr/NNNN-<title>.md` | `<pkg>/docs/README.md`; [Nygard](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions.html), [adr.github.io](https://adr.github.io/) |
-| Intent goes to specs, not docs; one spec per cross-package feature | `<pkg>/specs/README.md` |
+| Intent goes to specs, not docs; one spec per cross-package feature, in `docs/specs/` | `<pkg>/specs/README.md`; [`docs/specs/README.md`](../../docs/specs/README.md) |
 | INSIGHTS.md read-only, settled entries proposed for promotion | Root [`INSIGHTS.md`](../../INSIGHTS.md) header ("settled knowledge moves to docs/"); `engineering-insights` |
 | Mermaid in markdown, type by content, one C4 level | [`mermaid-diagram`](../skills/mermaid-diagram/SKILL.md); [GitHub renders Mermaid](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-diagrams); [C4](https://c4model.com/) |
 

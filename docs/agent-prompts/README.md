@@ -73,7 +73,7 @@ section names, sources, trust, chars and estimated tokens, provider/model and a
 ## Stated intent — context, never a filter
 
 The `## Stated intent` section is the server's derived paraphrase of the PR's
-title, description, ticket and spec (spec: `server/specs/L03-intent-layer.md`).
+title, description, ticket and spec (spec: `docs/specs/L03-intent-layer.md`).
 It carries a confidence (`high`/`medium`/`low`, computed in code) and a trusted
 caution line after it. Invariants, enforced by the prompt and by the absence of
 any code path that reads the intent after the model call:

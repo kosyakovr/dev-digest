@@ -30,7 +30,7 @@ export const memory = pgTable(
 
 // House rules extracted from a repo. `evidenceLine` / `evidenceSnippet` are what
 // CODE verified against the sampled file, not what the model claimed — see
-// ../../../specs/L02-conventions.md. `status` is three-state on purpose: a
+// docs/specs/L02-conventions.md. `status` is three-state on purpose: a
 // re-scan replaces only `pending` rows, so a decided rule is never re-proposed.
 export const conventions = pgTable(
   'conventions',

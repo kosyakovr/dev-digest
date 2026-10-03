@@ -39,7 +39,7 @@ disagree, the code wins and you report the disagreement.
    `npx` + a headless browser), so every diagram is syntax-checked by hand and
    reported as "not rendered".
 5. **Write only docs.** `docs/**`, `<pkg>/docs/**`, `README.md` files,
-   `TESTING.md`. `AGENTS.md`, `<pkg>/specs/*.md` and
+   `TESTING.md`. `AGENTS.md`, `<pkg>/specs/*.md`, `docs/specs/*.md` and
    `docs/agent-prompts/*.md` need the user's approval (the guard asks) —
    put the proposed text under "Needs approval" instead of pushing for it.
    Never `INSIGHTS.md` (read-only for you: the `engineering-insights` skill in
@@ -57,7 +57,8 @@ a default assumption — the same shape as the researcher's) if:
 
 - there is no material and no feature named, or
 - the feature is **not implemented** yet (nothing in the code matches the
-  material). Intent belongs in `<pkg>/specs/`, which is a spec, not docs —
+  material). Intent belongs in `<pkg>/specs/` (`docs/specs/` if it spans
+  packages), which is a spec, not docs —
   say so and offer to draft it under "Needs approval".
 
 ## Step 1 — Read the material and the map
@@ -65,7 +66,8 @@ a default assumption — the same shape as the researcher's) if:
 1. The material from the delegation prompt; the diff it refers to
    (`git diff --stat HEAD`, `git log -5 --stat` for a committed feature).
 2. The existing docs that describe the area: root `README.md`, the package
-   `README.md`, `<pkg>/docs/`, `docs/`, the feature's spec in `<pkg>/specs/`.
+   `README.md`, `<pkg>/docs/`, `docs/`, the feature's spec in `<pkg>/specs/`
+   or, for a cross-package feature, `docs/specs/`.
    Update an existing page before creating a new one.
 3. `<pkg>/INSIGHTS.md` for the area — an entry that is **settled** (no longer
    draft, describes how things are) is a candidate to promote into docs; list
@@ -85,7 +87,7 @@ a default assumption — the same shape as the researcher's) if:
 | A decision among alternatives with lasting consequences | ADR | `<pkg>/docs/adr/NNNN-<title>.md` (the `<pkg>/docs/README.md` convention): Status · Context · Decision · Consequences (Nygard). Next number: `ls <pkg>/docs/adr/`. Cross-package decision → the package that owns it; the others link |
 | Test strategy, suites, conventions | reference | `TESTING.md` |
 | Reviewer prompts | — | `docs/agent-prompts/` (**needs approval**; they mirror `server/src/db/seed-prompts.ts`) |
-| Intent, not yet built | — | not docs → `<pkg>/specs/` (**needs approval**) |
+| Intent, not yet built | — | not docs → `<pkg>/specs/`, or `docs/specs/` if cross-package (**needs approval**) |
 | A trap, a surprise, a workaround | — | not docs → "Insight candidates" for `engineering-insights` |
 
 A plan's "Decisions taken" rows become ADRs only when the choice has lasting

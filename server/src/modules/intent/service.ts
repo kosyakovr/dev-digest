@@ -41,7 +41,7 @@ import type { GatherInput, IntentLogger, PrIntentFacade } from './types.js';
  *
  * Intent is context for the reviewers, never a filter: nothing in this module
  * (or in the executor) drops or downgrades a finding because of it.
- * See ../../../specs/L03-intent-layer.md.
+ * See docs/specs/L03-intent-layer.md.
  */
 export class IntentService implements PrIntentFacade {
   constructor(private container: Container) {}
@@ -238,7 +238,7 @@ export class IntentService implements PrIntentFacade {
       model: res.model,
       tokensIn: res.tokensIn,
       tokensOut: res.tokensOut,
-      // null stays null: unknown is not free (server/specs/L01-run-cost.md § Null semantics).
+      // null stays null: unknown is not free (docs/specs/L01-run-cost.md § Null semantics).
       costUsd: res.costUsd,
       derivedAt: new Date(),
     };

@@ -119,6 +119,11 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 
 ## Codebase Patterns
 
+- 2026-10-03 — Cross-package specs moved from `server/specs/` to `docs/specs/`
+  (same file names), so every older `(spec: server/specs/L0x-….md)` in the
+  INSIGHTS files is a dead path → read it as `docs/specs/<same name>`;
+  single-package specs stay in `<pkg>/specs/`. (ref: docs/specs/README.md)
+
 - 2026-09-22 — Per-run dollar cost is plumbed end-to-end: `agent_runs.cost_usd`
   exists again (`0010_add_agent_run_cost.sql`, `schema/runs.ts:22`) and
   `run-executor` persists `ReviewOutcome.costUsd` → read the stored value, never

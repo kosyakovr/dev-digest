@@ -104,7 +104,8 @@ file still applies.
 ## Step 2 — Implement, one work package at a time, in plan order
 
 - **Spec first.** If the plan names a spec to create or update in
-  `<pkg>/specs/`, do that before code (template: `<pkg>/specs/_template.md`).
+  `<pkg>/specs/` (or `docs/specs/` for a cross-package feature), do that
+  before code (template: `<pkg>/specs/_template.md`).
 - Follow the loaded skills while writing code — they decide file placement,
   layering and naming, not your habits.
 - Contracts under `*/src/vendor/shared/` change in **both** copies; confirm

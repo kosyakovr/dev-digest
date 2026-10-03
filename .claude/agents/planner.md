@@ -82,8 +82,9 @@ each package the change touches, read before planning:
 
 - `<pkg>/AGENTS.md` and `<pkg>/INSIGHTS.md` — commands, must-not-break rules,
   recorded traps.
-- `<pkg>/specs/` — an existing spec for this feature (update it rather than
-  writing a new one) and `_template.md`.
+- `<pkg>/specs/` — or `docs/specs/` when the feature spans several packages —
+  an existing spec for this feature (update it rather than writing a new one)
+  and `_template.md`.
 - `README.md` / `<pkg>/docs/` sections describing the behaviour you will
   change — they go into "Docs to update".
 - `TESTING.md` — for the test plan.
@@ -184,7 +185,7 @@ come back UNVERIFIABLE.
 
 ```markdown
 # Development Plan: <feature>
-Packages: <server, client, …> · Spec: <pkg>/specs/<file>.md (new | update) · Lesson/ticket: <…>
+Packages: <server, client, …> · Spec: <pkg>/specs/<file>.md, or docs/specs/<file>.md if cross-package (new | update) · Lesson/ticket: <…>
 
 ## Summary
 <≤12 lines for the user: what gets built, the Gates, the open questions with

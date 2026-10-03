@@ -4,7 +4,7 @@
 **Lesson / ticket:** L01-b
 
 Cross-package feature — the canonical spec lives in
-[`server/specs/L01-findings-visibility.md`](../../server/specs/L01-findings-visibility.md).
+[`docs/specs/L01-findings-visibility.md`](../../docs/specs/L01-findings-visibility.md).
 
 Client-side surfaces it covers — see the spec's **UI component map** for the
 agreed placement:
