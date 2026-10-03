@@ -1,6 +1,7 @@
 // Self-test for retro.mjs: a synthetic session with planted problems, each detector
 // asserted both ways (a planted hit must appear, a planted non-hit must not).
-//   node --test .claude/skills/workflow-retro/scripts/
+//   node --test .claude/skills/workflow-retro/scripts/*.test.mjs
+// (a bare directory argument fails on Node 26 with MODULE_NOT_FOUND)
 // Runs in a throwaway HOME; touches nothing in the repo or ~/.claude.
 
 import { test } from 'node:test';
@@ -29,7 +30,7 @@ function fixture() {
   const P = (r) => path.join(proj, r);
   const agentDef = (name, hook) => `---\nname: ${name}\ntools: Read, Bash${hook === 'read-only' ? '' : ', Edit, Write'}\nhooks:\n  - command: "\\"$CLAUDE_PROJECT_DIR/.claude/hooks/${hook === 'implementer' ? 'implementer-guard.sh' : `agent-scope-guard.sh\\" ${hook}`}"\n---\nbody\n`;
   fs.mkdirSync(P('.claude/agents'), { recursive: true });
-  for (const [name, hook] of [['planner', 'read-only'], ['implementer', 'implementer'], ['test-writer', 'test-writer'], ['plan-verifier', 'read-only'], ['architecture-reviewer', 'read-only']])
+  for (const [name, hook] of [['spec-creator', 'spec-creator'], ['implementation-planner', 'read-only'], ['implementer', 'implementer'], ['test-writer', 'test-writer'], ['plan-verifier', 'read-only'], ['architecture-reviewer', 'read-only']])
     fs.writeFileSync(P(`.claude/agents/${name}.md`), agentDef(name, hook));
   fs.mkdirSync(P('docs/retros'), { recursive: true });
   fs.writeFileSync(P('docs/retros/ledger.md'), '# Ledger\n\n| a |\n|---|\n');
@@ -42,7 +43,8 @@ function fixture() {
 
   write(path.join(tdir, `${sid}.jsonl`), [
     human(0, 'build feature X'),
-    spawn(1, 'sp1', 'planner', 'x'.repeat(9000)),            // planted: >8k delegation prompt
+    spawn(0.2, 'sp0', 'spec-creator'),
+    spawn(1, 'sp1', 'implementation-planner', 'x'.repeat(9000)),            // planted: >8k delegation prompt
     spawn(12, 'sp2', 'implementer'),                           // planted: no human turn after the plan
     spawn(30, 'sp3', 'test-writer'),
     spawn(45, 'sp4', 'plan-verifier'),
@@ -58,7 +60,12 @@ function fixture() {
     write(path.join(tdir, sid, 'subagents', `agent-${id}.jsonl`), [{ type: 'user', timestamp: entries[0].timestamp, message: { content: 'task' } }, ...entries]);
     fs.writeFileSync(path.join(tdir, sid, 'subagents', `agent-${id}.meta.json`), JSON.stringify({ agentType: type, toolUseId }));
   };
-  sub('aplanner0001', 'planner', 'sp1', [
+  sub('aspec0000001', 'spec-creator', 'sp0', [
+    asst(0.3, [use('s1', 'Write', { file_path: P('docs/specs/L05-x.md') })], 'claude-opus-5-5'), res(0.3, 's1', 'ok'),            // non-hit: its own spec, and not "docs updated"
+    asst(0.4, [use('s2', 'Edit', { file_path: P('client/src/app/page.tsx') })], 'claude-opus-5-5'), res(0.4, 's2', 'ok'),        // planted: outside the spec folders
+    handback(0.8, 's3', '# Spec Report: X\nStatus: ready to plan'),
+  ]);
+  sub('aplanner0001', 'implementation-planner', 'sp1', [
     asst(2, [use('p1', 'Read', { file_path: P('server/INSIGHTS.md') })], 'claude-opus-5-5'), res(2, 'p1', 'insights'),
     asst(3, [use('p2', 'Read', { file_path: P('server/src/modules/a/service.ts') })], 'claude-opus-5-5'), res(3, 'p2', 'S'.repeat(4000)),
     handback(10, 'p3', '# Plan\nWP1: `server/src/modules/a/service.ts`'),
@@ -108,6 +115,9 @@ test('planted problems are found, planted non-problems are not', () => {
 
   has(/\[crit\] scope: implementer#\w+ wrote outside its scope.*/);
   has(/\[crit\] scope: plan-verifier#averi wrote outside its scope \(read-only\)/);
+  has(/\[crit\] scope: spec-creator#\w+ wrote outside its scope \(spec-creator\)/);
+  assert.match(json.findings.find((f) => /spec-creator#\w+ wrote outside/.test(f.title)).evidence, /client\/src\/app\/page\.tsx \(spec-creator wrote outside the spec folders\)/);
+  assert.doesNotMatch(json.findings.find((f) => /spec-creator#\w+ wrote outside/.test(f.title)).evidence, /docs\/specs/);
   has(/\[warn\] scope: test-writer#\w+: 1 denied call/);
   has(/\[crit\] skipped: vendored contract changed on one side only: server\/src\/vendor\/shared\/contracts\/x\.ts/);
   has(/\[info\] scope: implementer#\w+ edited 4 file\(s\) the plan does not name/); // vendor x.ts, a.test.ts + the two shell writes
@@ -122,7 +132,7 @@ test('planted problems are found, planted non-problems are not', () => {
   has(/\[warn\] skipped: plan-verifier spawned fresh 2×/);
   has(/\[warn\] parallel: .*plan-verifier.*architecture-reviewer.* ran one after another/);
   has(/\[warn\] re-ask: plan-verifier#averi: 1 hand-back\(s\), 0 continuation\(s\), NEEDS CLARIFICATION/);
-  has(/\[info\] skipped: planner#\w+ got a 9k-char delegation prompt/);
+  has(/\[info\] skipped: implementation-planner#\w+ got a 9k-char delegation prompt/);
   has(/\[info\] skipped: main session read an agent transcript\/report directly/);
   has(/\[info\] re-read: server\/src\/modules\/a\/service\.ts read 3× by 3 thread/); // the `cd server && cat src/...` read resolves to the same file
 
@@ -184,6 +194,6 @@ test('ledger: one row per run, never twice', () => {
   assert.match(second.out, /already exists/);
   const rows = fs.readFileSync(path.join(fx.proj, 'docs/retros/ledger.md'), 'utf8').split('\n').filter((l) => l.includes('`aaaaaaaa@'));
   assert.equal(rows.length, 1);
-  assert.match(rows[0], /\| feature X \| 6 \|/);
+  assert.match(rows[0], /\| feature X \| 7 \|/); // 7 spawns, spec-creator included
   assert.match(rows[0], /implementer\.md → x \|$/);
 });

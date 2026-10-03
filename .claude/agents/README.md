@@ -14,8 +14,9 @@ prompt. A session that started before this folder existed does not see it at all
 | Agent | Responsibility | Not its job | Model |
 |---|---|---|---|
 | [`researcher`](researcher.md) | Answers **one concrete question** with evidence — from the repo (code, config, docs, git history), external sources, or both | Changing anything; many-source narrative reports (`/deep-research`) | `sonnet` |
-| [`brainstormer`](brainstormer.md) | Compares **2–4 genuinely different options** for one design decision (+ the status quo) against drivers fixed first from the repo, recommends one, leaves the pick to the user; hands the pick to planner | Planning work packages, code, web research (→ researcher), deciding for the user | `opus`, `effort: high` |
-| [`planner`](planner.md) | Turns a request into a **Development Plan**: what already exists, work packages per file, the skills that bind each one, gates, acceptance criteria, test plan | Writing code, web research, review steps | `opus`, `effort: high` |
+| [`brainstormer`](brainstormer.md) | Compares **2–4 genuinely different options** for one design decision (+ the status quo) against drivers fixed first from the repo, recommends one, leaves the pick to the user; hands the pick to implementation-planner | Planning work packages, code, web research (→ researcher), deciding for the user | `opus`, `effort: high` |
+| [`spec-creator`](spec-creator.md) | Writes the **feature spec** before any plan, from the request and the design sources the main session saved (text, images, Figma / Claude Design exports, code, a local checkout): analyses the design for missing states, edge cases, cross-package hops and UX gaps, then fills `docs/specs/_template.md` — EARS acceptance criteria, a source on every requirement, assumptions, proposals, ≤3 `[NEEDS CLARIFICATION]` markers; one package → `<pkg>/specs/`, several → `docs/specs/` | Plans, code, docs, fetching links (the main session saves them), deciding open questions or accepting its own proposals, moving a spec past `draft` | `opus`, `effort: high` |
+| [`implementation-planner`](implementation-planner.md) | Reviews the **requirements we already have** (spec, request, brainstormer pick) for gaps, conflicts and untestable items, then turns them into an **Implementation Plan**: what already exists, work packages per file, the skills that bind each one, gates, acceptance criteria, test plan, recommendations, and the **multi-agent vs single-agent** question for the user | Writing or updating **specs** (input only), code, web research, review steps, choosing the execution mode for the user | `opus`, `effort: high` |
 | [`implementer`](implementer.md) | Executes an **approved** plan in `server/`, `client/` (and `reviewer-core/` or `mcp-server/` when the plan says so), runs the existing checks, compares its diff to the plan, hands the tests to test-writer | **Writing tests**, planning, architecture/security review, `/pr-self-review`, commits, pushes, PRs, writing `INSIGHTS.md` | `sonnet` |
 | [`test-writer`](test-writer.md) | Writes **all** tests — server, client, reviewer-core, mcp-server, e2e flows on request — with assertions taken from the plan or spec, and proves each new test fails without its behaviour (**red-proof** in a throwaway worktree) | Production code, configs, dependencies, weakening a red test | `sonnet`, `effort: high` |
 | [`plan-verifier`](plan-verifier.md) | Grades **every item** of a plan — goal, non-goals, contract, decisions, gates, each work package, acceptance criteria, test plan, docs — PASS / FAIL / UNVERIFIABLE in a traceability matrix, with its own code and test evidence | Advice, code review, an overall score | `opus`, `effort: high` |
@@ -25,17 +26,17 @@ prompt. A session that started before this folder existed does not see it at all
 
 ## Permissions
 
-| | researcher | brainstormer | planner | implementer | test-writer | plan-verifier | architecture-reviewer | security-reviewer | doc-writer |
-|---|---|---|---|---|---|---|---|---|---|
-| `tools` | Read, Grep, Glob, Bash, WebSearch, WebFetch | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash, Edit, Write, Skill, TodoWrite | Read, Grep, Glob, Bash, Edit, Write, TodoWrite | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash, Edit, Write, TodoWrite |
-| `disallowedTools` | Write, Edit, NotebookEdit, Skill | same as planner | Write, Edit, NotebookEdit, Skill, WebFetch, WebSearch, Agent, ExitPlanMode | Agent, WebFetch, WebSearch, NotebookEdit | Agent, Skill, WebFetch, WebSearch, NotebookEdit | Write, Edit, NotebookEdit, Skill, WebFetch, WebSearch, Agent, ExitPlanMode | same as plan-verifier | same as plan-verifier | Agent, Skill, WebFetch, WebSearch, NotebookEdit |
-| `permissionMode` | inherited | `default` | `default` ⚠ | `acceptEdits` | `acceptEdits` | `default` | `default` | `default` | `acceptEdits` |
-| Writes files? | no | no | no | yes, guarded — no tests | test files only, guarded | no | no | no | markdown docs only, guarded |
-| Bash | inspection only — by prompt | inspection only, **guarded read-only** | inspection only — by prompt, **guarded read-only** | anything except what the guard denies | + shell writes inside the red-proof worktree | inspection + test commands, **guarded read-only** | inspection, **guarded read-only** | inspection, **guarded read-only** | inspection, no shell writes |
-| Hook | — | `agent-scope-guard.sh` `read-only` | `agent-scope-guard.sh` `read-only` | [`implementer-guard.sh`](../hooks/implementer-guard.sh) | [`agent-scope-guard.sh`](../hooks/agent-scope-guard.sh) `test-writer` | `agent-scope-guard.sh` `read-only` | `agent-scope-guard.sh` `read-only` | `agent-scope-guard.sh` `read-only` | `agent-scope-guard.sh` `doc-writer` |
+| | researcher | brainstormer | implementation-planner | implementer | test-writer | plan-verifier | architecture-reviewer | security-reviewer | doc-writer | spec-creator |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `tools` | Read, Grep, Glob, Bash, WebSearch, WebFetch | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash, Edit, Write, Skill, TodoWrite | Read, Grep, Glob, Bash, Edit, Write, TodoWrite | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash | Read, Grep, Glob, Bash, Edit, Write, TodoWrite | Read, Grep, Glob, Bash, Edit, Write, TodoWrite + 4 read-only `mcp__devdigest__*` tools |
+| `disallowedTools` | Write, Edit, NotebookEdit, Skill | same as implementation-planner | Write, Edit, NotebookEdit, Skill, WebFetch, WebSearch, Agent, ExitPlanMode | Agent, WebFetch, WebSearch, NotebookEdit | Agent, Skill, WebFetch, WebSearch, NotebookEdit | Write, Edit, NotebookEdit, Skill, WebFetch, WebSearch, Agent, ExitPlanMode | same as plan-verifier | same as plan-verifier | Agent, Skill, WebFetch, WebSearch, NotebookEdit | Agent, Skill, WebFetch, WebSearch, NotebookEdit, `mcp__devdigest__run_agent_on_pr` |
+| `permissionMode` | inherited | `default` | `default` ⚠ | `acceptEdits` | `acceptEdits` | `default` | `default` | `default` | `acceptEdits` | `acceptEdits` |
+| Writes files? | no | no | no | yes, guarded — no tests | test files only, guarded | no | no | no | markdown docs only, guarded | draft specs only (`docs/specs/`, `<pkg>/specs/`), guarded |
+| Bash | inspection only — by prompt | inspection only, **guarded read-only** | inspection only — by prompt, **guarded read-only** | anything except what the guard denies | + shell writes inside the red-proof worktree | inspection + test commands, **guarded read-only** | inspection, **guarded read-only** | inspection, **guarded read-only** | inspection, no shell writes | inspection, no shell writes |
+| Hook | — | `agent-scope-guard.sh` `read-only` | `agent-scope-guard.sh` `read-only` | [`implementer-guard.sh`](../hooks/implementer-guard.sh) | [`agent-scope-guard.sh`](../hooks/agent-scope-guard.sh) `test-writer` | `agent-scope-guard.sh` `read-only` | `agent-scope-guard.sh` `read-only` | `agent-scope-guard.sh` `read-only` | `agent-scope-guard.sh` `doc-writer` | `agent-scope-guard.sh` `spec-creator` |
 
 Read-only for researcher is **two layers**: no write tools in frontmatter, and
-a prompt rule against writing through Bash. brainstormer, planner,
+a prompt rule against writing through Bash. brainstormer, implementation-planner,
 plan-verifier, architecture-reviewer and security-reviewer get a **third**
 layer — they need Bash for real work (`git log --all`, `git grep` at two
 revisions, `git diff` of an uncommitted change, running the test plan): the
@@ -54,12 +55,22 @@ The guard also denies `curl`, `wget` and `gh api`, but it matches text and is
 not a sandbox. brainstormer leaves external questions to researcher, which
 keeps one agent's source discipline for the web.
 
+**No web tools for spec-creator either** (user decision 2026-10-03). Its
+design sources — a Figma file, a Claude Design artifact, another repository —
+are untrusted text, and the agent reads private repo data and writes files
+the planner trusts. So the main session fetches every link first (`Artifact
+read` for a Claude Design link, a Figma MCP if one is connected, researcher
+or a local checkout for a repository), saves it to the scratchpad and passes
+the path; the agent reads only files. Its MCP access is an allowlist of the
+four read-only devdigest tools — `run_agent_on_pr` (a paid LLM call) is in
+`disallowedTools`.
+
 ⚠ **`permissionMode: plan` overrides `model: opus`.** Measured 2026-09-24 on
 2.1.281: two otherwise identical subagents with `model: opus` ran on
 `claude-sonnet-5` under `plan` and on `claude-opus-5-5` under `default`; the
-`planner` ran on `claude-sonnet-5` while it had `plan`. So no agent here uses
+planner (then `planner`, now `implementation-planner`) ran on `claude-sonnet-5` while it had `plan`. So no agent here uses
 plan mode: the read-only ones use `default` and rely on their tools and the
-guard (planner switched on the user's decision, 2026-09-24).
+guard (the planner switched on the user's decision, 2026-09-24).
 
 No agent uses the `skills:` frontmatter or `memory:`. `skills:` is documented to
 inject the full skill, but [anthropics/claude-code#67251](https://github.com/anthropics/claude-code/issues/67251)
@@ -74,8 +85,9 @@ reports only the name arrives; the four newer agents instead **Read** the
 | Agent | Input (the delegation prompt) | Output (its final message) | Stops early with |
 |---|---|---|---|
 | researcher | A question with scope and an expected answer shape (yes/no, location, list, comparison) | **Repo research** or **External research** report: answer + confidence, findings with `path:line` / URL evidence, inferences, a **Not found** table, open questions | `NEEDS CLARIFICATION` — up to 5 questions and a default assumption |
-| brainstormer | One design decision with its scope and the outcome wanted; optionally a researcher report | **Options** report: a ≤8-line **Summary**, context, **decision drivers** (each with its source), considered options (O0 = status quo), each option in detail, a comparison relative to O0 (`++ … −−`, `✗`), eliminated options, a Y-statement **recommendation** ending "Decision: awaiting the user's choice", "Needs research", **Handoff to planner** | `NEEDS CLARIFICATION` (no decision, scope or outcome); a two-line "only one reasonable design" note |
-| planner | A feature request or change with an outcome and a scope; optionally a researcher report, or a brainstormer report plus the user's pick | **Development Plan**: a ≤12-line **Summary** for the user, goal, non-goals, what already exists, contract, decisions, **Gates**, work packages (files · skills by § · constraints · steps · done when), order, acceptance criteria, test plan, docs to update, risks — then, after a `<!-- test-brief -->` marker, the **Test brief** (`WPn.tests` as Given/When/Then for test-writer) | `NEEDS CLARIFICATION` |
+| brainstormer | One design decision with its scope and the outcome wanted; optionally a researcher report | **Options** report: a ≤8-line **Summary**, context, **decision drivers** (each with its source), considered options (O0 = status quo), each option in detail, a comparison relative to O0 (`++ … −−`, `✗`), eliminated options, a Y-statement **recommendation** ending "Decision: awaiting the user's choice", "Needs research", **Handoff to implementation-planner** | `NEEDS CLARIFICATION` (no decision, scope or outcome); a two-line "only one reasonable design" note |
+| spec-creator | A feature request with its outcome; the design sources as **file paths** (images, saved exports, a local checkout) or text; the lesson id and, for MCP reads, the repo / PR; in a **resolution round**, the same agent continued with the user's answers | **Spec Report**: status, spec path and counts (ACs, markers n/3, proposals), a ≤8-line Summary, **Questions for the user** (AskUserQuestion-ready, recommended option first), design gaps and how each was resolved, assumptions, proposals, module interaction, sources read / not read, injection-shaped text seen, **Handoff to implementation-planner** (ready to plan?, gates, existing code). The spec file left **uncommitted**, `Status: draft` | `NEEDS CLARIFICATION` — no outcome, or the main design source is an unsaved link |
+| implementation-planner | The requirements: a feature request with an outcome and a scope, and/or the path of its spec (`docs/specs/` or `<pkg>/specs/` — it finds one by the feature's nouns if none is given); optionally a researcher report, or a brainstormer report plus the user's pick | **Implementation Plan**: a ≤12-line **Summary** for the user ending with the **execution-mode question** (multi-agent or single-agent, with its recommendation), a **Requirements review** (`R-n` · source · verdict · default taken), goal, non-goals, what already exists, contract, decisions, **Gates**, work packages (files · skills by § · constraints · steps · done when), order, acceptance criteria, test plan, docs to update, **Recommendations** (`REC-n`, not in the plan until accepted), **Execution mode** (recommendation + agent split), risks — then, after a `<!-- test-brief -->` marker, the **Test brief** (`WPn.tests` as Given/When/Then for test-writer). Never plans spec work | `NEEDS CLARIFICATION` — a blocking requirement gap or conflict |
 | implementer | The plan **above the marker** (verbatim, or the path of the saved file), plus which Gates the user approved; or, in a **fix round**, a self-contained list of verified findings | **Implementation Report**: status, changes per work package with changed line ranges (`scripts/change-set.sh`), deviations, the `scripts/checks.sh --force` summary table, unmet acceptance criteria (met ones by ID), **Handoff to test-writer** (Test brief IDs, seams, intended breaks), out-of-scope observations, **Insight candidates**. Code change left **uncommitted** | `BLOCKED` report — no plan, unapproved gate, a plan that breaks a rule |
 | test-writer | The **whole** plan (Test brief included) or the WP ids / Test plan rows to cover + the implementer's handoff; or a target behaviour and its source of truth | **Test Report**: tests with their oracle source, verification (3 runs per new file, `.it.test` isolated from real keys; final `scripts/checks.sh --force` table), **Red-proof** table, suspected defects (left red), not covered, insight candidates. Test files left **uncommitted** | `NEEDS CLARIFICATION` (no behaviour or no source of truth); `blocked` (needs a dependency, config or production change) |
 | plan-verifier | The plan above the marker — plus the Test brief when tests are in this iteration — + approved Gates + what is deferred; optionally the implementation and test reports and the files modified before work started; in a re-run, the same agent is continued with `SendMessage` and the delta | **Plan Verification**: `PASS / FAIL / INCOMPLETE`, a traceability matrix (PASS rows: ID · evidence; FAIL / UNVERIFIABLE rows in full), deferred IDs on one line, failures with "to pass", scope, commands run | `NEEDS CLARIFICATION` (no plan); `BLOCKED` (no change) |
@@ -88,7 +100,16 @@ reports only the name arrives; the four newer agents instead **Read** the
 ```
 question ─► researcher ─► report ────────────────────┐   (optional, any stage)
 design choice ─► brainstormer ─► Options report ─► user picks ─┐   (optional, before planning)
-request (+ the pick) ─► planner ─► Development Plan ─► user approves (Summary + Gates) ─► "go" for the implementer
+request + design sources ─► main session saves links/exports to files (Artifact read, Figma MCP, researcher for a remote repo)
+         ─► spec-creator ─► draft spec (docs/specs/ or <pkg>/specs/) + Spec Report
+         ─► user answers the markers and proposals (AskUserQuestion in the main session)
+              └ SendMessage to the SAME spec-creator ─► markers folded in (repeat until none)
+spec (no open markers) + request (+ the pick)
+         ─► implementation-planner ─► Implementation Plan
+         ─► user answers (Summary + Gates + accepted REC-n + execution mode)
+              accepted REC-n ─► SendMessage to the SAME implementation-planner ─► revised plan
+              single-agent  ─► main session implements, writes the Test brief's tests, scripts/checks.sh ─► commit ─► …
+              multi-agent   ─► "go" for the implementer, continue below
          ─► implementer (plan above the marker) ─► Implementation Report + uncommitted code
                          └ scripts/checks.sh --force (CI commands + isolated .it.test; ledger keyed by tree)
                          └ scripts/change-set.sh (line ranges)
@@ -106,7 +127,10 @@ request (+ the pick) ─► planner ─► Development Plan ─► user approves
 
 Subagents cannot ask the user anything (`AskUserQuestion` is never given to a
 subagent), so each one returns a `NEEDS CLARIFICATION` or `BLOCKED` block
-instead, and the main session relays it. Subagents do not see the conversation
+instead, and the main session relays it. The same holds for the
+implementation-planner's **execution-mode question**: the main session puts it
+to the user (with `AskUserQuestion`) before anything runs, and never answers
+it for them. Subagents do not see the conversation
 either: the plan reaches each agent only through the delegation prompt, so pass
 it **verbatim** or as the path of the file it was saved to, together with which
 Gates the user approved. See [§ Token budget](#token-budget) for which part of
@@ -145,13 +169,23 @@ scale — and neither replaces nor is replaced by the other two. A tenancy
 hit (`onion-13-tenancy-guard`) may be reported by both reviewers; the main
 session merges them when relaying.
 
-**brainstormer vs researcher vs planner.** researcher answers one question
+**spec-creator vs implementation-planner vs doc-writer.** All three write
+about one feature at different times. spec-creator writes the intent before
+anything is planned — WHAT and WHY plus the contract between packages, as
+EARS criteria with a source each — and is the only agent that writes specs.
+implementation-planner reads the spec and decides HOW; it reviews the spec
+(`R-n`) but never edits it, and an open `[NEEDS CLARIFICATION]` stops it.
+doc-writer describes what was built, after the fact. When a design choice
+blocks the spec, spec-creator marks it and the main session may run
+brainstormer before answering.
+
+**brainstormer vs researcher vs implementation-planner.** researcher answers one question
 with evidence; brainstormer makes the options for one decision comparable;
-planner plans one chosen design. brainstormer goes first only when there is
-a real choice (planner's Step 0 otherwise stops at "a decision between A and
+implementation-planner plans one chosen design. brainstormer goes first only when there is
+a real choice (implementation-planner's Step 0 otherwise stops at "a decision between A and
 B"), has no web tools and hands external unknowns to researcher, and ends
-with a **Handoff to planner** block: the decision, the user's pick, the
-drivers to honour and each rejected option — which planner copies into its
+with a **Handoff to implementation-planner** block: the decision, the user's pick, the
+drivers to honour and each rejected option — which implementation-planner copies into its
 Decisions table as the rejected alternatives.
 
 **plan-verifier vs the implementer's own check.** The implementer's "check the
@@ -177,7 +211,7 @@ harness's task notifications — compare stages with each other, not as bills):
 | Stage | Model | Tokens | Tool calls |
 |---|---|---|---|
 | researcher | sonnet | 38k | 14 |
-| planner | opus | 235k | 68 |
+| planner (now implementation-planner) | opus | 235k | 68 |
 | implementer, WP0–WP8, three packages | sonnet | **417k** | **222** |
 | architecture-reviewer | opus | 108k | 34 |
 | plan-verifier | opus | 155k | 44 |
@@ -191,7 +225,7 @@ so it tracks turns × context):
 |---|---|---|---|---|
 | main session | opus | 127 | 0.39M | 35.5M |
 | researcher | sonnet | 5 | 44k | 0.13M |
-| planner | opus | 67 | 215k | 8.4M |
+| planner (now implementation-planner) | opus | 67 | 215k | 8.4M |
 | implementer | sonnet | 39 | 194k | 4.9M |
 | architecture-reviewer r1 / r2 | opus | 35 / 37 | 135k / 163k | 3.1M / 4.0M |
 | plan-verifier r1 / r2 | opus | 37 / 33 | 134k / 127k | 3.0M / 2.9M |
@@ -250,7 +284,9 @@ repetition, not a check.
    on every turn; a quarter of it was test cases nobody in that iteration needed.
 2. **Ask before launching the implementer**, even after the Gates are
    answered — it is the most expensive stage, and a stop after it started
-   wastes everything it read.
+   wastes everything it read. Ask it together with the plan's execution-mode
+   question (multi-agent or single-agent); in a single-agent pass no
+   implementer is launched at all.
 3. **A fix round gets a self-contained brief** — each finding with `file:line`,
    the rule and what must hold — and no plan (`implementer.md` Step 1).
 4. **Who runs which checks.** The per-package CI commands
@@ -313,7 +349,7 @@ repetition, not a check.
   re-deriving the implementer's (sonnet) claims on a different model (see
   "plan-verifier vs the implementer's own check" above). The savings come
   from shorter reports and passing paths instead of re-typed plans.
-- **Read-only agents still do not write report files.** Letting planner,
+- **Read-only agents still do not write report files.** Letting implementation-planner,
   plan-verifier or architecture-reviewer write under `.git/devdigest/` would
   weaken the `read-only` guard; their reports got shorter instead (PASS rows
   as ID + evidence, deferred items as one line, scope as counts).
@@ -371,14 +407,42 @@ medium confidence.
 | Recommendation as a Y-statement | [Y-statements](https://medium.com/olzzio/y-statements-10eb07b5a177) |
 | No web; external unknowns → researcher | [`researcher.md`](researcher.md) § External research — method (one agent's source discipline) |
 | `git log --all` for reverted lesson work, and say so | Root [`INSIGHTS.md`](../../INSIGHTS.md) 2026-09-23 |
-| Handoff to planner | [`planner.md`](planner.md) Step 0 ("a decision between A and B") — the two files are coupled |
+| Handoff to implementation-planner | [`implementation-planner.md`](implementation-planner.md) Step 0 ("a decision between A and B") — the two files are coupled |
 
-### planner
+### spec-creator
 
-| Rule in [`planner.md`](planner.md) | Source |
+External sources were read on 2026-10-03 through a researcher (fetches were
+summarised, so quotes are not byte-exact); *(M)* marks medium confidence.
+
+| Rule in [`spec-creator.md`](spec-creator.md) | Source |
 |---|---|
-| Step 0: return questions instead of guessing | Subagents have no `AskUserQuestion` — [subagent docs](https://code.claude.com/docs/en/sub-agents) |
-| Step 1: read `<pkg>/AGENTS.md` + `INSIGHTS.md`, find or update the spec, note docs to change | Root [`AGENTS.md`](../../AGENTS.md) § Workflow 1, 2, 4; `<pkg>/specs/_template.md`, cross-package specs in `docs/specs/`; test plan from [`TESTING.md`](../../TESTING.md) |
+| Specs before plans; one package → `<pkg>/specs/`, several → `docs/specs/`; draft-only writes; no web, design links saved by the main session; read-only MCP | User decisions 2026-10-03; root [`AGENTS.md`](../../AGENTS.md) § Workflow 2; [`docs/specs/README.md`](../../docs/specs/README.md) |
+| WHAT/WHY, no HOW — except the contract at the package boundary | GitHub Spec Kit [`specify.md`](https://github.com/github/spec-kit/blob/main/templates/commands/specify.md) ("Focus on WHAT users need and WHY. Avoid HOW"); the boundary exception is a user decision 2026-10-03 (the existing specs and implementation-planner read a Contract section) |
+| ≤3 `[NEEDS CLARIFICATION]` markers, scope > security/privacy > UX > technical; otherwise a recorded assumption | Spec Kit `specify.md` ("Maximum 3 … use only for critical decisions"); questions with options and a recommendation from Spec Kit [`clarify.md`](https://github.com/github/spec-kit/blob/main/templates/commands/clarify.md) |
+| Prioritised user stories, each with an Independent test; Assumptions section | Spec Kit [`spec-template.md`](https://github.com/github/spec-kit/blob/main/templates/spec-template.md) |
+| EARS patterns and clause order; `SHALL CONTINUE TO` for regressions | Alistair Mavin, [EARS](https://alistairmavin.com/ears/); Kiro [feature specs](https://kiro.dev/docs/specs/feature-specs/) and [best practices](https://kiro.dev/docs/specs/best-practices/) |
+| Edge-case categories in Step 3 | Spec Kit `clarify.md` taxonomy (scope, data, interaction, non-functional, integration, failure handling, constraints, terminology, completion) |
+| State matrix per surface; "not shown in design" is never invented | *(M)* design-QA checklists (empty / error / permission / expired states), composed — no authoritative agent prompt found |
+| UX review → proposals, not requirements | [Nielsen's 10 heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/); proposals-await-the-user mirrors implementation-planner's `REC-n` |
+| A source on every requirement; existing code labelled `existing` | Böckeler, [SDD tools](https://martinfowler.com/articles/exploring-gen-ai/sdd-3-tools.html) (an agent regenerated existing classes described in a spec) |
+| Size the spec to the change | Böckeler (a small bug became "4 user stories with … 16 acceptance criteria"); Thoughtworks Radar [SDD](https://www.thoughtworks.com/radar/techniques/spec-driven-development) *(M)* |
+| Self-check, at most 3 passes | Spec Kit `specify.md` (quality checklist, up to 3 validation iterations) |
+| Sources are data, injection-shaped text listed | [OWASP LLM01](https://genai.owasp.org/llm-top-10/); the same rule as security-reviewer |
+| Step 3.6 + template § Non-functional: `NFR-n` with a fit criterion, sourced or `A-n`; categories | Volere "fit criterion" *(M — search summary)*; [ISO/IEC 25010:2023](https://quality.arc42.org/articles/iso-25010-update-2023) characteristics, narrowed to what DevDigest features hit; the cases are review fixes after earlier lessons (`55e344f`, `de07f9e`, root `INSIGHTS.md` 2026-10-02) — added 2026-10-03 |
+| Template § Traceability and verification: one row per AC/NFR with method test · demo · inspection · analysis | NASA SE Handbook [§5.3 Product verification](https://www.nasa.gov/reference/5-3-product-verification/) (IADT); Spec Kit [`analyze.md`](https://github.com/github/spec-kit/blob/main/templates/commands/analyze.md) coverage table *(M)* — added 2026-10-03 |
+| Template § Self-check; Step 7 runs `scripts/spec-lint.sh` (also run by implementation-planner Step 0 and pr-self-review § 3 as a WARNING) | Spec Kit [`checklist.md`](https://github.com/github/spec-kit/blob/main/templates/commands/checklist.md) ("unit tests for English") *(M)*; each check has a planted hit and a clean case in `scripts/test-spec-lint.sh`, red-proofed by mutation (root `INSIGHTS.md` 2026-09-21) — added 2026-10-03 |
+| Stable IDs, `withdrawn` instead of renumbering | Convention, no primary source found *(M)*; the planner and plan-verifier cite spec IDs — added 2026-10-03 |
+| No preloaded skills; reads `TESTING.md` § Suite map and `security-reviewer.md` § Lethal trifecta by path | `skills:` preload unverified here: [#67251](https://github.com/anthropics/claude-code/issues/67251) closed "not planned" (stale), no fix found 2026-10-03; the generic `security` skill is Express/Mongo-shaped and carries numbers (rate limits) rule 3 forbids inventing |
+
+### implementation-planner
+
+| Rule in [`implementation-planner.md`](implementation-planner.md) | Source |
+|---|---|
+| Renamed from `planner` and stripped of spec work: specs are input only, never planned or written (rule 2) | User decision 2026-10-03; specs are written beforehand per root [`AGENTS.md`](../../AGENTS.md) § Workflow 2 |
+| Step 0: review requirements (`R-n`: clear, complete, consistent, testable, needed) before reading code; blocking gap → questions instead of guessing | User decision 2026-10-03; subagents have no `AskUserQuestion` — [subagent docs](https://code.claude.com/docs/en/sub-agents); "verifiable requirement", ISO/IEC/IEEE 29148 (as in plan-verifier) |
+| Step 0: find the spec in `docs/specs/` or `<pkg>/specs/`; no spec is non-blocking but stated | Root `AGENTS.md` § Workflow 2; [`docs/specs/README.md`](../../docs/specs/README.md) |
+| Step 0: an open `[NEEDS CLARIFICATION]` in the spec is blocking; spec IDs are cited, `P-n` left out unless accepted | User decision 2026-10-03 (spec-creator → implementation-planner chain); [`spec-creator.md`](spec-creator.md) — the two files are coupled |
+| Step 1: read `<pkg>/AGENTS.md` + `INSIGHTS.md`, note docs (not specs) to change | Root `AGENTS.md` § Workflow 1, 4; test plan from [`TESTING.md`](../../TESTING.md) |
 | Step 2: search what already exists, including `git log --all` | Root [`INSIGHTS.md`](../../INSIGHTS.md) 2026-09-23 (reverted lesson work reachable only via `--all`) |
 | Step 2: a Zod contract does not prove a route serves it | Root `INSIGHTS.md` 2026-09-19 (contracts with no server implementation) |
 | Step 3: map every file to routing groups A–F and cite skill rules by § | [`pr-self-review/routing.md`](../skills/pr-self-review/routing.md) § Groups — the same table the pre-PR review uses; the §s are in each `../skills/<name>/SKILL.md` |
@@ -391,6 +455,8 @@ medium confidence.
 | Step 5: plan only what the implementer may do | [`implementer.md`](implementer.md) hard rules — the two files are coupled |
 | Step 5: tests are test-writer's brief, written as Given/When/Then; no test file in a WP's Files | [`test-writer.md`](test-writer.md) Step 2 (oracles before the code); user decision 2026-09-24 to take tests away from the implementer |
 | Step 5: every AC / Done when / Non-goal observable | [`plan-verifier.md`](plan-verifier.md) rule 4 — a vague item is graded UNVERIFIABLE; Given/When/Then per [Agile Alliance](https://agilealliance.org/glossary/given-when-then/) |
+| Step 6: recommendations are listed, never folded into a WP until accepted | User decision 2026-10-03 (the planner advises how to do it better; the user decides) |
+| Step 6: always ask multi-agent vs single-agent, with a recommendation; the size heuristic is not measured | User decision 2026-10-03; trade-off from [§ Token budget](#token-budget) (coordination cost) and "Why tests are a separate agent" (independent oracles) |
 
 ### implementer
 
@@ -400,7 +466,7 @@ medium confidence.
 | Never create `CLAUDE.md` / `CLAUDE.local.md` | Root [`INSIGHTS.md`](../../INSIGHTS.md) 2026-09-20 (one such file silently drops every `AGENTS.md`) |
 | A guard denial is final; the guard decides `ask` when it cannot parse input | [`implementer-guard.sh`](../hooks/implementer-guard.sh); [`../hooks/README.md`](../hooks/README.md) § The `node` resolution problem (a hook that errors fails **open**) |
 | Load skills per file, following `routing.md` over its own table | [`pr-self-review/routing.md`](../skills/pr-self-review/routing.md) § Groups — so implementation and pre-PR review apply the same rules |
-| Spec first; update listed docs in the same change | Root `AGENTS.md` § Workflow 2, 4 |
+| Spec is input only, never edited; update listed docs in the same change | Root `AGENTS.md` § Workflow 2, 4; [`implementation-planner.md`](implementation-planner.md) rule 2 (user decision 2026-10-03) |
 | Contracts in both copies, checked with `diff -r` | Root `AGENTS.md` § Cross-package invariants; `routing.md` § Vendored-contract twin check |
 | No tests — hand them to test-writer, including intended breaks; `mocks.ts` stays the implementer's | User decision 2026-09-24; [arXiv 2412.14137](https://arxiv.org/abs/2412.14137) (one model writing both validates its own bugs); enforced by `implementer-guard.sh` |
 | Step 3 verification commands per package | `server/AGENTS.md` § Commands, `client/AGENTS.md`, `reviewer-core/AGENTS.md`, `TESTING.md` |
@@ -433,7 +499,7 @@ medium confidence.
 | Every item gets its own PASS / FAIL / UNVERIFIABLE; no score, no advice | CheckEval [arXiv 2403.18771](https://arxiv.org/abs/2403.18771), TICK [arXiv 2410.03608](https://arxiv.org/abs/2410.03608), [Anthropic develop tests](https://platform.claude.com/docs/en/test-and-evaluate/develop-tests), [OpenAI graders](https://developers.openai.com/api/docs/guides/graders) |
 | Requirement → code evidence → test evidence | Requirements traceability matrix ([Jama](https://www.jamasoftware.com/requirements-management-guide/requirements-traceability/traceability-matrix/)) |
 | Vague item ⇒ UNVERIFIABLE; restate as Given/When/Then | "Verifiable requirement", ISO/IEC/IEEE 29148 (paywalled — via secondary sources); [Agile Alliance](https://agilealliance.org/glossary/given-when-then/) |
-| Item IDs follow the plan's sections | [`planner.md`](planner.md) § Output format — the two files are coupled |
+| Item IDs follow the plan's sections | [`implementation-planner.md`](implementation-planner.md) § Output format — the two files are coupled |
 | `.it.test` without Docker is UNVERIFIABLE; e2e needs `agent-browser` | `TESTING.md` § server-integration; `e2e/INSIGHTS.md` 2026-09-19 |
 
 ### architecture-reviewer
@@ -492,22 +558,22 @@ precedence, frontmatter hooks), the
 (third-person what + when descriptions, template outputs, feedback loops), and
 Anthropic's [multi-agent guidance](https://claude.com/blog/building-multi-agent-systems-when-and-how-to-use-them)
 (verifiers that report every failure). That same post warns that splitting one
-feature into planner → implementer phases costs coordination tokens; the split
+feature into implementation-planner → implementer phases costs coordination tokens; the split
 is kept here because the plan is a human-approved gate, handed over once.
 
 ## The guards
 
-Eight of the nine agents declare a `PreToolUse` hook in their frontmatter
-(researcher, which has no Bash guard, is the ninth):
+Nine of the ten agents declare a `PreToolUse` hook in their frontmatter
+(researcher, which has no Bash guard, is the tenth):
 
 - `implementer` → [`../hooks/implementer-guard.sh`](../hooks/implementer-guard.sh)
   turns the "do not touch" rules of the root `AGENTS.md` into denials, denies
   test files (test-writer owns them), and asks the user before a
   `server/src/db/schema*` or `package.json` edit.
-- `brainstormer`, `planner`, `test-writer`, `doc-writer`, `plan-verifier`,
-  `architecture-reviewer`, `security-reviewer` →
+- `brainstormer`, `implementation-planner`, `test-writer`, `doc-writer`, `spec-creator`,
+  `plan-verifier`, `architecture-reviewer`, `security-reviewer` →
   [`../hooks/agent-scope-guard.sh`](../hooks/agent-scope-guard.sh) with a
-  profile argument (`test-writer`, `doc-writer`, `read-only`): the same deny
+  profile argument (`test-writer`, `doc-writer`, `spec-creator`, `read-only`): the same deny
   core plus an allowlist of what that agent may write.
 
 Decision tables and tests: [`../hooks/README.md`](../hooks/README.md).
@@ -522,9 +588,19 @@ do run their hooks; that is how the guards are verified end to end.)
 ## Changing an agent
 
 - **Change together:**
-  - `planner.md` Step 5 ↔ `implementer.md` hard rules ↔ `test-writer.md`
+  - `docs/specs/_template.md` (sections, `AC-n` / `A-n` / `P-n` IDs, the
+    `**Status:** draft` line) ↔ `spec-creator.md` Steps 5 and 7 and its report ↔
+    `implementation-planner.md` Step 0 (open markers block, IDs cited) ↔ the
+    draft check in `agent-scope-guard.sh` `spec-creator` ↔ `scripts/spec-lint.sh`
+    (the `- **AC-n**` / `| AC-n |` / `### US-n` / `| S-n |` shapes and the
+    section headings it reads; run `scripts/test-spec-lint.sh` after a change);
+  - `implementation-planner.md` Step 5 ↔ `implementer.md` hard rules ↔ `test-writer.md`
     (who writes tests, and the shape of a WP's Tests line);
-  - `planner.md` § Output format ↔ `plan-verifier.md` Step 1 (item IDs per
+  - `implementation-planner.md` rule 2 ↔ `implementer.md` Step 2 (the spec is
+    input; neither plans nor edits it);
+  - `implementation-planner.md` Step 6 ↔ § The flow and § Token budget rule 2
+    (the execution-mode question the main session asks);
+  - `implementation-planner.md` § Output format ↔ `plan-verifier.md` Step 1 (item IDs per
     plan section) ↔ `test-writer.md` Step 0 (the `<!-- test-brief -->`
     marker and the `WPn.tests` blocks after it);
   - `greps.md` § The patterns (row shape `id | pattern | pathspec | both revs |
@@ -554,7 +630,7 @@ do run their hooks; that is how the guards are verified end to end.)
   - the secret patterns in `security-reviewer.md` Step 2 ↔ `security/SKILL.md`
     § Secret Detection ↔ `routing.md` § Groups row E and
     `pr-self-review/SKILL.md` § 3;
-  - `brainstormer.md` § Handoff to planner ↔ `planner.md` Step 0 (brainstormer
+  - `brainstormer.md` § Handoff to implementation-planner ↔ `implementation-planner.md` Step 0 (brainstormer
     report + the user's pick) and § Decisions taken (rejected alternatives);
   - `test-writer.md` rule 3 ↔ `client/INSIGHTS.md` 2026-09-23 (remove the
     override if `user-event` / `msw` are ever installed).
@@ -573,6 +649,6 @@ do run their hooks; that is how the guards are verified end to end.)
     such event — read `message.model` from the transcript named by the
     `system/task_notification` event's `output_file`. Do check it: this is how
     `permissionMode: plan` was caught replacing `model: opus` with
-    `claude-sonnet-5` (planner ran on Sonnet until it moved to `default` + the
+    `claude-sonnet-5` (the planner ran on Sonnet until it moved to `default` + the
     read-only guard; it now runs on `claude-opus-5-5`, 2026-09-24, 2.1.281).
   - Never report such a check as done when it could not run.

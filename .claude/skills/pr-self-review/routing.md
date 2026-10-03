@@ -94,7 +94,7 @@ should be named, not implied.
 
 ---
 
-# The two deterministic checks that run here
+# The three deterministic checks that run here
 
 ## Routing drift guard
 
@@ -134,3 +134,14 @@ emit a synthetic finding:
 Set difference on two path lists. No false positives, and it catches a real bug
 class — distinct from the no-touch exclusions above, which are about files that
 must not be edited at all.
+
+## Spec lint
+
+`AGENTS.md` → Workflow 2: a feature starts from a spec, and
+`implementation-planner` cites its IDs. For each changed `docs/specs/*.md` or
+`<pkg>/specs/*.md` (not deleted), run `scripts/spec-lint.sh <path>`; each line
+it prints becomes a synthetic **WARNING** (`category: "style"`,
+`source_skill: "docs/specs/_template.md"`, `source_rule: "<check>"`, `file` and
+`line` from the output, confidence 1.0). It never blocks a push. Specs written
+before the template (no `## Traceability and verification`), `README.md` and
+`_template.md` are skipped by the script itself.

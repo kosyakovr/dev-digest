@@ -44,7 +44,8 @@ satisfies the gate.
    silently dropped: every path lands in `changed_files`, `excluded_files` or
    `unrouted_files`.
 3. **Deterministic checks** — free, always run: the routing drift guard, the
-   vendored-contract twin check, and the greps.
+   vendored-contract twin check, the spec lint (`scripts/spec-lint.sh` on a
+   changed spec, WARNING only) and the greps.
 4. **Review** — one sub-agent per active group, ≤3 concurrent, each told to *read*
    its skill files by path and given only its own slice of the diff at `-U10`.
 5. **Ground** — findings whose file, line range or `+`-line evidence does not exist

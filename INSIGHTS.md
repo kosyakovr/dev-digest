@@ -156,6 +156,13 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
   non-zero EXIT rather than a wrong result, so inside a `||`-chained script it
   looks like a passing check → avoid backreferences and match the positive form
   directly. (ref: .claude/skills/onion-architecture/SKILL.md §13)
+- 2026-10-03 (correction) — ugrep is only the Bash TOOL's `grep`: `type grep`
+  there shows a zsh shell function (from `~/.claude/shell-snapshots/`) that
+  re-runs the claude binary as ugrep. It is not exported, so a `bash` script
+  (`scripts/*.sh`, hooks) runs BSD `/usr/bin/grep`, and a pattern proven at the
+  tool prompt is proven against ugrep only → prove a script's patterns by
+  running the script itself, under `bash` and `/bin/bash` 3.2.
+  (ref: scripts/test-spec-lint.sh)
 
 - 2026-09-21 — A fresh headless session IS available in a VSCode-extension session
   with no `claude` on `PATH`: `"$CLAUDE_CODE_EXECPATH" -p '…'` (2.1.281) → use it

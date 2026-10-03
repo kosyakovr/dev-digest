@@ -101,6 +101,8 @@ const mainAll = readJsonl(MAIN_FILE);
 
 // ---------- helpers ----------
 const ts = (e) => (e.timestamp ? Date.parse(e.timestamp) : NaN);
+// `planner` is the name in transcripts recorded before the 2026-10-03 rename.
+const isPlanner = (type) => type === 'implementation-planner' || type === 'planner';
 const blocks = (e) => (Array.isArray(e?.message?.content) ? e.message.content : []);
 const textOf = (c) => (typeof c === 'string' ? c : Array.isArray(c) ? c.map((b) => b.text ?? (typeof b.content === 'string' ? b.content : '')).join('\n') : '');
 function rel(p) {
@@ -112,6 +114,7 @@ const PKGS = ['server', 'client', 'reviewer-core', 'e2e', 'mcp-server'];
 const pkgOf = (r) => PKGS.find((p) => r.startsWith(p + '/'));
 const isTest = (r) => /\.test\.tsx?$|(^|\/)(server|reviewer-core|mcp-server)\/test\/|client\/src\/test\/|e2e\/specs\/.*\.flow\.json$/.test(r);
 const isDoc = (r) => /\.md$/.test(r) && !/INSIGHTS\.md$/.test(r);
+const isSpec = (r) => /^(docs|server|client|reviewer-core|mcp-server)\/specs\/[^/]+\.md$/.test(r);
 const isCode = (r) => !!pkgOf(r) && /\/src\//.test(r) && !isTest(r) && !/\.md$/.test(r);
 
 // ---------- the run window ----------
@@ -359,7 +362,7 @@ for (const [file, rs] of reads) {
 reRead.sort((a, b) => b.wastedTokens - a.wastedTokens);
 for (const r of reRead.slice(0, 8)) add('re-read', 'info', `${r.file} read ${r.reads}× by ${Object.keys(r.threads).length} thread(s)`,
   `${Object.entries(r.threads).map(([k, v]) => `${k}×${v}`).join(', ')} · ≈${r.wastedTokens} tokens of repeat reads`,
-  /^\.claude\/skills\//.test(r.file) ? 'planner.md (quote the binding § in the plan) or the reading agents' : '.claude/agents/README.md § Token budget (pass the path/excerpt once)');
+  /^\.claude\/skills\//.test(r.file) ? 'implementation-planner.md (quote the binding § in the plan) or the reading agents' : '.claude/agents/README.md § Token budget (pass the path/excerpt once)');
 
 // 2. Who went back to the orchestrator.
 for (const a of agents) {
@@ -421,6 +424,7 @@ for (const th of threads) {
         th.profile === 'test-writer' && !isTest(r) && !/devdigest-redproof-/.test(r) ? 'test-writer wrote a non-test file' :
         th.profile === 'doc-writer' && !isDoc(r) ? 'doc-writer wrote a non-markdown file' :
         th.profile === 'doc-writer' && /(^|\/)(AGENTS\.md|specs\/)/.test(r) ? 'needs approval (AGENTS.md / spec)' :
+        th.profile === 'spec-creator' && !isSpec(r) ? 'spec-creator wrote outside the spec folders' :
         th.profile === 'implementer' && isTest(r) ? 'implementer wrote a test' : null;
       if (out) bad.push(`${r} (${out}${e.via === 'bash' ? ', via shell' : ''})`);
     }
@@ -444,14 +448,14 @@ for (const th of threads) {
   }
 }
 // 3b. Implementer edits the plan never mentions.
-const plannerText = agents.filter((a) => a.type === 'planner').flatMap((a) => a.handbacks).join('\n');
+const plannerText = agents.filter((a) => isPlanner(a.type)).flatMap((a) => a.handbacks).join('\n');
 if (plannerText) {
   const planned = new Set([...plannerText.matchAll(/[\w@.[\]-]+(?:\/[\w@.[\]-]+)+/g)].map((m) => m[0].replace(/[.,:;)]+$/, '')));
   const plannedDirs = [...planned];
   for (const a of agents.filter((x) => x.type === 'implementer')) {
     const edited = new Set(edits.filter((e) => e.thread === a && inProject(e.file)).map((e) => e.file));
     const off = [...edited].filter((r) => !planned.has(r) && !plannedDirs.some((p) => p.endsWith('/') ? r.startsWith(p) : r.startsWith(p + '/')));
-    if (off.length) add('scope', 'info', `${label(a)} edited ${off.length} file(s) the plan does not name`, off.slice(0, 5).join(', ') + ' — check the report lists them under Deviations', '.claude/agents/implementer.md (deviation reporting) or planner.md (file list)');
+    if (off.length) add('scope', 'info', `${label(a)} edited ${off.length} file(s) the plan does not name`, off.slice(0, 5).join(', ') + ' — check the report lists them under Deviations', '.claude/agents/implementer.md (deviation reporting) or implementation-planner.md (file list)');
   }
 }
 
@@ -487,9 +491,9 @@ for (const th of threads) {
 // 4d. spec and docs
 for (const p of new Set(codeEdited.map(pkgOf))) {
   const specSeen = [...reads.keys(), ...editedFiles].some((f) => f.startsWith(`${p}/specs/`) || /^docs\/specs\//.test(f));
-  if (!specSeen) add('skipped', 'info', `${p}/ code changed but no spec was read or written`, `no ${p}/specs/*.md or docs/specs/*.md touched in the run`, 'AGENTS.md § Workflow 2 / planner.md');
+  if (!specSeen) add('skipped', 'info', `${p}/ code changed but no spec was read or written`, `no ${p}/specs/*.md or docs/specs/*.md touched in the run`, 'AGENTS.md § Workflow 2 / implementation-planner.md');
 }
-if (codeEdited.length && ![...editedFiles].some(isDoc) && !agents.some((a) => a.type === 'doc-writer'))
+if (codeEdited.length && ![...editedFiles].some((f) => isDoc(f) && !isSpec(f)) && !agents.some((a) => a.type === 'doc-writer'))
   add('skipped', 'warn', 'code changed but no docs were updated and doc-writer never ran', `${codeEdited.length} source file(s) edited`, 'AGENTS.md § Workflow 4 / .claude/agents/README.md § The flow');
 // 4e. the flow
 const has = (t) => agents.some((a) => a.type === t);
@@ -509,11 +513,11 @@ for (const t of ['plan-verifier', 'architecture-reviewer', 'security-reviewer'])
   if (n > 1) add('skipped', 'warn', `${t} spawned fresh ${n}× — re-runs should continue the same agent`, 'a fresh spawn re-reads its whole context (cross-spawn cache never hits)', '.claude/agents/README.md § Token budget rules 6 and 10');
 }
 {
-  const planDone = agents.find((a) => a.type === 'planner')?.end;
+  const planDone = agents.find((a) => isPlanner(a.type))?.end;
   const impl = agents.find((a) => a.type === 'implementer');
   if (planDone && impl) {
     const human = main.some((e) => e.type === 'user' && e.origin?.kind === 'human' && ts(e) > planDone && ts(e) < impl.spawnedAt);
-    if (!human) add('skipped', 'warn', 'implementer launched with no user turn after the plan', 'no human message between the planner hand-back and the implementer spawn', '.claude/agents/README.md § Token budget rule 2');
+    if (!human) add('skipped', 'warn', 'implementer launched with no user turn after the plan', 'no human message between the implementation-planner hand-back and the implementer spawn', '.claude/agents/README.md § Token budget rule 2');
   }
 }
 // 4f. main-session hygiene (Token budget rules)

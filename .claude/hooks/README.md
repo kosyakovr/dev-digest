@@ -130,19 +130,20 @@ until the folder is trusted, and a `claude -p` session never counts as trusted.
 
 ## `agent-scope-guard`
 
-One `PreToolUse` hook, three profiles, declared in the frontmatter of seven
+One `PreToolUse` hook, four profiles, declared in the frontmatter of eight
 agents — it runs **only while one of them is active**:
 
 | Agent | Hook command |
 |---|---|
 | [`test-writer`](../agents/test-writer.md) | `agent-scope-guard.sh test-writer` |
 | [`doc-writer`](../agents/doc-writer.md) | `agent-scope-guard.sh doc-writer` |
-| [`brainstormer`](../agents/brainstormer.md), [`planner`](../agents/planner.md), [`plan-verifier`](../agents/plan-verifier.md), [`architecture-reviewer`](../agents/architecture-reviewer.md), [`security-reviewer`](../agents/security-reviewer.md) | `agent-scope-guard.sh read-only` |
+| [`spec-creator`](../agents/spec-creator.md) | `agent-scope-guard.sh spec-creator` |
+| [`brainstormer`](../agents/brainstormer.md), [`implementation-planner`](../agents/implementation-planner.md), [`plan-verifier`](../agents/plan-verifier.md), [`architecture-reviewer`](../agents/architecture-reviewer.md), [`security-reviewer`](../agents/security-reviewer.md) | `agent-scope-guard.sh read-only` |
 
 | File | Role |
 |---|---|
 | `agent-scope-guard.sh` | The guard. POSIX `sh`, no `node`; `jq` when present, `sed` fallback otherwise — the same parser as `implementer-guard.sh`. |
-| `test-agent-scope-guard.sh` | 368 offline checks (182 cases × jq/sed, plus 4 outside that loop: no `CLAUDE_PROJECT_DIR`, three under `env -i`). |
+| `test-agent-scope-guard.sh` | 440 offline checks (218 cases × jq/sed, plus 4 outside that loop: no `CLAUDE_PROJECT_DIR`, three under `env -i`). |
 
 One script rather than four: the Bash rules are identical, and separate copies
 would drift. `implementer-guard.sh` stays separate because it is already
@@ -153,21 +154,28 @@ verified and its profile differs (it may write production code).
 The path is made repo-relative with `$CLAUDE_PROJECT_DIR`; without that
 variable an absolute path cannot be placed, so the answer is `ask`.
 
-| Path | test-writer | doc-writer | read-only |
-|---|---|---|---|
-| anything | — | — | `deny` |
-| contains `..`, or outside the project | `deny` (except a path containing `devdigest-redproof-`) | `deny` | `deny` |
-| migrations, lock files, `.claude/**`, `CLAUDE.md`, `INSIGHTS.md`, `package.json`, `*vitest.config.*`, `tsconfig*.json`, `next.config.*`, `drizzle.config.*`, `*/src/vendor/**` | `deny` | `deny` | `deny` |
-| `server/test/**`, `reviewer-core/test/**`, `mcp-server/test/**`, `client/src/**/*.test.{ts,tsx}`, `e2e/specs/*.flow.json` | allow | `deny` | `deny` |
-| `server/test/*.test.ts` (not `.it.test.ts`) whose content mentions `helpers/pg` | `deny` — rename to `.it.test.ts` | — | — |
-| `server/test/helpers/**`, `client/src/test/**`, `server/src/adapters/mocks.ts` | `ask` | `deny` | `deny` |
-| `AGENTS.md`, `*/specs/*.md`, `docs/agent-prompts/*.md` (not its README) | `deny` | `ask` | `deny` |
-| `docs/**/*.md`, `<pkg>/docs/**/*.md`, any `README.md`, `TESTING.md` | `deny` | allow | `deny` |
-| anything else | `deny` | `deny` | `deny` |
+| Path | test-writer | doc-writer | spec-creator | read-only |
+|---|---|---|---|---|
+| anything | — | — | — | `deny` |
+| contains `..`, or outside the project | `deny` (except a path containing `devdigest-redproof-`) | `deny` | `deny` | `deny` |
+| migrations, lock files, `.claude/**`, `CLAUDE.md`, `INSIGHTS.md`, `package.json`, `*vitest.config.*`, `tsconfig*.json`, `next.config.*`, `drizzle.config.*`, `*/src/vendor/**` | `deny` | `deny` | `deny` | `deny` |
+| `server/test/**`, `reviewer-core/test/**`, `mcp-server/test/**`, `client/src/**/*.test.{ts,tsx}`, `e2e/specs/*.flow.json` | allow | `deny` | `deny` | `deny` |
+| `server/test/*.test.ts` (not `.it.test.ts`) whose content mentions `helpers/pg` | `deny` — rename to `.it.test.ts` | — | — | — |
+| `server/test/helpers/**`, `client/src/test/**`, `server/src/adapters/mocks.ts` | `ask` | `deny` | `deny` | `deny` |
+| `docs/specs/*.md`, `{server,client,reviewer-core,mcp-server}/specs/*.md` — a new file, or an existing one whose `**Status:**` line is `draft` | `deny` | `ask` | allow | `deny` |
+| the same, but the file exists and is not a draft (`in-progress`, `done`, no status line), or the new content sets `**Status:** in-progress` / `done` | `deny` | `ask` | `ask` | `deny` |
+| a spec folder's `README.md` or `_template.md`, a subfolder of it, a non-`.md` file, `e2e/specs/**` | `deny` (`e2e/specs/*.flow.json`: allow) | `ask` for `.md`, else `deny` | `deny` | `deny` |
+| `AGENTS.md`, `docs/agent-prompts/*.md` (not its README) | `deny` | `ask` | `deny` | `deny` |
+| `docs/**/*.md`, `<pkg>/docs/**/*.md`, any `README.md`, `TESTING.md` | `deny` | allow | `deny` | `deny` |
+| anything else | `deny` | `deny` | `deny` | `deny` |
+
+The spec-creator's draft check reads the file on disk (`$CLAUDE_PROJECT_DIR/<path>`):
+a spec becomes off-limits to it the moment someone moves its status past
+`draft`, without a list to maintain.
 
 ### Bash
 
-| Command | test-writer | doc-writer, read-only |
+| Command | test-writer | doc-writer, spec-creator, read-only |
 |---|---|---|
 | git state changes (`commit/push/reset/checkout/stash/restore/…`), `gh pr/release/repo/issue/api` | `deny` | `deny`; also `git add/rm/mv/fetch/config/gc/notes/update-ref/update-index` |
 | `git worktree add/remove/…` | only with `devdigest-redproof-` in the command; `prune` always | `deny` (`list` is fine) |

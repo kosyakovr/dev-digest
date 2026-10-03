@@ -11,7 +11,7 @@ description: >-
   serial reviewers). Prints a compact table and at most 5 action items "agent
   file → what to change", and appends one row to docs/retros/ledger.md.
   Recommends only — never edits agents, skills, hooks or AGENTS.md. Use after a
-  planner → implementer →
+  implementation-planner → implementer →
   reviewers run, or when the user says "/workflow-retro", "ретро прогону",
   "ретроспектива", "розбери мультиагентний прогін", "скільки коштував прогін",
   "workflow retro", "retrospective of the run".
@@ -129,8 +129,8 @@ Typical targets:
 
 | Problem | Usually fixed in |
 |---|---|
-| plan / report re-read by many agents | delegation prompt per `.claude/agents/README.md` § Token budget rule 1 (WP excerpt, not the whole plan); `planner.md` § Output format if the plan itself is too long |
-| a skill file re-read by several agents | `planner.md` Step 3 (put the binding § numbers in the WP so agents read sections, not whole files) |
+| plan / report re-read by many agents | delegation prompt per `.claude/agents/README.md` § Token budget rule 1 (WP excerpt, not the whole plan); `implementation-planner.md` § Output format if the plan itself is too long |
+| a skill file re-read by several agents | `implementation-planner.md` Step 3 (put the binding § numbers in the WP so agents read sections, not whole files) |
 | a source file re-read by reviewers | `architecture-reviewer.md` / `security-reviewer.md` Step 1 (hunks from `scripts/change-set.sh`) |
 | NEEDS CLARIFICATION / BLOCKED | the agent's `## Step 0` / `## NEEDS CLARIFICATION` input list, and the main session's delegation prompt (what was missing) |
 | extra rounds via SendMessage | rule 10 (delta only) or the agent's report format, if the round was spent re-asking for a missing field |
@@ -138,7 +138,7 @@ Typical targets:
 | project files written through the shell | the agent's `## Hard rules` (Edit/Write only) and its guard's Bash branch — the path rules (no tests for the implementer, ask before `schema`/`package.json`, test files only for test-writer) see only Edit/Write, and `python3 - <<EOF … open(p,'w')` passes every Bash pattern |
 | write outside scope that went through | the guard in `.claude/hooks/` plus the agent's hard rules — always `crit` |
 | package INSIGHTS not read before an edit | the agent's Step 1 (`implementer.md`, `test-writer.md`) or the main session (`AGENTS.md` § Workflow 1) |
-| vendored contract changed on one side | `implementer.md` § Hard rules and the planner's WP for the contract |
+| vendored contract changed on one side | `implementer.md` § Hard rules and the implementation-planner's WP for the contract |
 | INSIGHTS candidates never captured | the main session's wrap-up (`AGENTS.md` § Workflow 3; `engineering-insights`) |
 | raw test/typecheck runs | `implementer.md` Step 3, `test-writer.md` Step 4 → `scripts/checks.sh` (rule 11) |
 | reviewers run one after another | the main session: launch them in one message (`.claude/agents/README.md` § The flow) |

@@ -76,6 +76,8 @@ Also specified in [routing.md](routing.md):
   `server/src/vendor/shared` and `client/src/vendor/shared` and `AGENTS.md`
   requires them to change together. A one-sided edit is a synthetic **CRITICAL**
   (`source_skill: "AGENTS.md"`, `source_rule: "Cross-package invariants"`).
+- **Spec lint** — `scripts/spec-lint.sh` on each changed spec; every line it
+  prints is a synthetic **WARNING** (never blocking).
 - **The greps** — [greps.md](greps.md), run at two revisions and subtracted.
 
 ## 4. Spawn reviewers
