@@ -85,6 +85,31 @@ Also specified in [routing.md](routing.md):
 One `Agent` (`general-purpose`) per active group, **all in one message, at most 3
 at a time**. A group with no matching files is not spawned.
 
+**Groups the pre-commit reviewers already covered.** Before spawning A, C or E,
+ask whether `architecture-reviewer` / `security-reviewer` reviewed exactly
+these files, as they are at `HEAD`, against the same skills (the main session
+records each final round with `scripts/review-record.sh add`):
+
+```bash
+scripts/review-record.sh covered architecture-reviewer "$MB" <group C files>   # C
+scripts/review-record.sh covered architecture-reviewer "$MB" <group A files>   # A
+scripts/review-record.sh covered security-reviewer     "$MB" <group E files>   # E
+```
+
+| Exit | Group C | Group A | Group E |
+|---|---|---|---|
+| 0 — covered | not spawned | spawned with only the skills `architecture-reviewer` does not read: `fastify-best-practices` if `server/src/**` is touched, `zod` if `mcp-server/**` is; neither → not spawned | not spawned |
+| 1 — not covered (it prints why) | spawned as usual | spawned as usual | spawned as usual |
+| 2 — error | spawned as usual; say so in the summary | same | same |
+
+A covered group still goes through steps 1–3 (routing, the twin check and the
+greps run on every change), so the deterministic checks never depend on a
+record. Write it to `groups_run[]` as `{name, covered_by, record}` — `record`
+is the line the script printed — and say in the summary which groups were
+covered and by which review. The record never carries findings forward: the
+WARNINGs and SUGGESTIONs of that review were relayed when it ran. Groups B, D
+and F are always spawned — no pre-commit agent reviews them.
+
 Give each agent file *paths to read*, never inlined skill text — that keeps this
 orchestrator's context small and lets the agent follow a skill's own links when a
 call is contested:

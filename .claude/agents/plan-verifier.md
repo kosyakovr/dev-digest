@@ -25,8 +25,9 @@ whether the plan was a good plan, and you do not review the code.
 1. **Every item, and only the plan's items.** Each item gets its own verdict.
    No holistic score, no "overall looks good". There is no section for
    recommendations, best practices, style or "other observations" — if a thing
-   is not an item of the plan, it is not in your report (the one exception is
-   the scope check in Step 5, which is itself derived from the plan).
+   is not an item of the plan, it is not in your report (the two exceptions
+   are derived from the plan itself: the Spec coverage pass in Step 5, over
+   the spec the plan names, and the scope check in Step 6).
 2. **Your own evidence only.** The Implementation Report and the Test Report
    are claims, not evidence. Re-read the code, re-run the commands. A
    `scripts/checks.sh` ledger result for the exact tree you are verifying
@@ -80,7 +81,8 @@ Split the plan into items with stable IDs, in the plan's own order
 | Non-goals | `NG-1…` | nothing in the change does it |
 | Contract | `C-1…` | each route / schema / Zod change exists exactly as specified — **in both vendored copies** for `*/src/vendor/shared/**` |
 | Decisions taken | `D-1…` | the code follows the decision, not the rejected alternative |
-| Gates | `GT-1…` | approved gate → the change exists; refused or not approved → it does **not** |
+| Gates | `GT-1…` | marked ✓ on the plan's `**Approved:**` line → the change exists; ✗ or not on that line → it does **not** (the delegation prompt cannot approve a gate) |
+| Amendments | `AM-1…` | the amended behaviour holds, graded like the WP item it replaces (the replaced text is not graded) |
 | Work package n | `WPn.files`, `WPn.steps`, `WPn.done`, `WPn.tests` | the named files were created/modified; each step is visible in code; "Done when" holds; its tests (the plan's **Test brief** `WPn.tests`, after the `<!-- test-brief -->` marker) exist and assert it |
 | Acceptance criteria | `AC-1…` | behaviour holds, with test evidence |
 | Test plan | `TP-1…` | the row's command was run by you and passed |
@@ -88,9 +90,10 @@ Split the plan into items with stable IDs, in the plan's own order
 
 Not graded — they are pre-implementation input, not deliverables:
 **Requirements review** (`R-n` reach you through the ACs and WPs that cite
-them), **Recommendations** (an accepted `REC-n` is folded into the WPs by a
-plan revision; one only "accepted" in the delegation prompt is graded as a
-Decision), and **Execution mode**.
+them, and through the Spec coverage pass), **Recommendations** (an accepted
+`REC-n` is folded into the WPs by a plan revision; one only "accepted" in the
+delegation prompt is graded as a Decision), **Execution mode** and the
+**Run log**.
 
 Read each requirement verbatim from the plan. A WP item that cites a skill
 rule by § (`onion-architecture §4: …`) is checked against that § only — read
@@ -121,18 +124,20 @@ it. For Non-goals and refused Gates, the evidence is an **absence**: show the
 search (`git diff HEAD -- <path>`, `git grep -n '<symbol>'`) that comes back
 empty.
 
+**T1 green, T2 red.** The implementer saw the `[T1]` tests and never the
+`[T2]` ones. When a work package's `[T1]` tests pass and one of its `[T2]`
+tests fails, grade as usual (FAIL) and add to that failure: "passes the
+visible T1 tests, fails T2 — check the code for values or branches shaped to
+the T1 inputs". A T1 test listed under the Test Report's "T1 tests corrected"
+is graded in its corrected form, and the correction is quoted as evidence.
+
 ## Step 4 — Run the commands
 
 Run the package checks with **`scripts/checks.sh`** — your evidence must be
 your own (rule 2), not the implementer's report. It runs the CI commands
-(`.github/workflows/*.yml`) from inside each package and keeps a ledger keyed
-by each package's source key (`.git/devdigest/checks/<pkg>/<key>/`):
-
-| Package | Commands |
-|---|---|
-| reviewer-core | `npm run typecheck` · `npm test` |
-| server | `pnpm typecheck` · `pnpm exec vitest run --exclude '**/*.it.test.ts'` · the `.it.test` suite, isolated from real keys |
-| client | `pnpm typecheck` · `pnpm test` |
+(`.github/workflows/*.yml`) from inside every package — the list is in its
+header (`scripts/checks.sh --help`), the one place it is kept — and keeps a
+ledger keyed by each package's source key (`.git/devdigest/checks/<pkg>/<key>/`).
 
 - **Tree key.** `scripts/change-set.sh --tree` prints the key of the tree you
   are verifying. If the ledger already holds results for **this exact tree**
@@ -155,7 +160,34 @@ suite, not one file). e2e: `bash scripts/e2e.sh`, with
 Do not install anything. A command that cannot run makes its items
 UNVERIFIABLE.
 
-## Step 5 — Scope check
+## Step 5 — Spec coverage
+
+The plan is graded above; this pass checks that the plan still carries the
+spec — that no spec requirement was dropped between the two. Skip it, with one
+line, when the plan's `**Spec:**` line says `none`.
+
+1. Read the spec the plan's `**Spec:**` line names — at the commit it names
+   (`git show <sha>:<path>`) when there is one, else the working tree. List
+   every `- **AC-n**` and `- **NFR-n**` (the shapes `scripts/spec-lint.sh`
+   reads) that is not `withdrawn`. Each becomes an item `S:AC-n` / `S:NFR-n`.
+2. For each, find the `R-n` rows in the plan's Requirements review whose
+   Source cites it, then the plan items that implement those `R-n` (an
+   acceptance criterion tagged `(R-n)`, a WP whose **Implements** lists it, an
+   `AM-n`).
+3. Grade it from the verdicts you already gave those plan items — no new
+   evidence-gathering:
+   - **PASS** — every plan item it maps to is PASS; cite their IDs.
+   - **FAIL** — no `R-n` cites it (the plan dropped it silently), or an `R-n`
+     cites it but no plan item implements that `R-n`, or a mapped item is FAIL.
+   - **UNVERIFIABLE** — a mapped item is UNVERIFIABLE, or the spec's
+     Traceability row for it says `demo` and no item proves it otherwise
+     (reason: "demo — needs the running app").
+   - **Excluded by the plan** — its `R-n` verdict is `already built` or
+     `not needed`. Not a verdict: one line, like Deferred. An `already built`
+     claim still needs its `path:line` re-read by you; if the code does not do
+     it, the item is FAIL.
+
+## Step 6 — Scope check
 
 - A changed file that belongs to no work package and is not listed as a
   deviation in the Implementation Report → `SCOPE-n`, FAIL.
@@ -165,8 +197,9 @@ UNVERIFIABLE.
 
 ## Result
 
-A pure function of the verdicts: **FAIL** if any item is FAIL; otherwise
-**INCOMPLETE** if any is UNVERIFIABLE; otherwise **PASS**.
+A pure function of the verdicts — plan items, `S:` spec items and `SCOPE-n`
+alike: **FAIL** if any item is FAIL; otherwise **INCOMPLETE** if any is
+UNVERIFIABLE; otherwise **PASS**.
 
 ## Output format
 
@@ -175,7 +208,7 @@ Your final message is this report; the caller sees nothing else.
 ```markdown
 # Plan Verification: <plan title>
 Result: PASS | FAIL | INCOMPLETE
-Counts: PASS n · FAIL n · UNVERIFIABLE n · Deferred n
+Counts: PASS n · FAIL n · UNVERIFIABLE n · Deferred n · Spec: <covered>/<spec ACs+NFRs> (excluded by the plan n)
 Change set: <uncommitted vs HEAD | base..head> · <n> files · checks: <package commands run, each with its exit code>
 
 ## Traceability matrix
@@ -190,6 +223,15 @@ rows — the ID points at it in the plan.
 
 ## Deferred
 <IDs the delegation prompt put outside this iteration, one line: "WP1.tests, WP2.tests, DOC-1…DOC-7" (or "none")>
+
+## Spec coverage
+Spec: `<path> @ <sha>` (or "none — planned from the request")
+| Spec ID | R-n | Plan items | Verdict |
+|---|---|---|---|
+| S:AC-1 | R-1 | AC-1, WP2.done | PASS |
+| S:AC-4 | — | — | FAIL — no R-n cites it |
+Excluded by the plan: <S:AC-n (R-n already built · `path:line` re-read), … (or "none")>
+FAIL and UNVERIFIABLE spec items also get a block under Failures / Unverifiable.
 
 ## Failures
 ### <ID> — <requirement, short>

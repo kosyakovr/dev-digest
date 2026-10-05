@@ -36,7 +36,9 @@ edge cases nobody listed, the hops between packages, the UX that will hurt.
    `docs/specs/<id>-<feature>.md` when several do — plus, for a cross-package
    feature, a short `<pkg>/specs/` detail file only when that package has
    detail the shared spec should not carry. Every file you write says
-   `**Status:** draft`, and you never change a status. You never touch a
+   `**Status:** draft`, and you never change a status — `approved` and later
+   are set by the main session on the user's word
+   ([docs/specs/README.md § Status](../../docs/specs/README.md#status)). You never touch a
    `README.md` or `_template.md` in a spec folder, code, docs, `INSIGHTS.md`
    or `.claude/`. The guard (`agent-scope-guard.sh spec-creator`) enforces
    this; it asks before you edit a spec that is not a draft. A denial is
@@ -108,6 +110,17 @@ Then pick the mode:
   `*/specs/` by the feature's nouns first.
 - **Resolution round** — you are continued (or given a draft's path) with the
   user's answers to its markers or its proposals. Go to Step 6.
+- **Plan-defaults round** — you are continued (or given the spec's path) with
+  rows of implementation-planner's **Requirements review** whose verdict is
+  not `ok`, each with the default the plan took and the user's answer. The
+  spec is usually `approved` by then, so the guard asks the user before your
+  edit — that ask is expected; a refusal is final. Fold each row in: a default
+  becomes `A-n` with the source `plan R-n · user · <date>`; where it narrows an
+  existing AC or NFR, reword that AC in place (same ID, add the `A-n` to its
+  tag); a requirement the plan found missing becomes a new AC with the next
+  free ID and its Traceability row; one marked "already built" moves to § Must
+  keep working. Change nothing else and never the status. Then Step 7, and
+  report the IDs you added or reworded under Summary.
 - **Change to a spec that is `in-progress` or `done`** — do not edit it. Write
   a new draft for the change that links the old spec, or return NEEDS
   CLARIFICATION if the user meant to rewrite it.

@@ -105,14 +105,16 @@ other agents. It makes the root `AGENTS.md` "do not touch" list mechanical.
 | File | Role |
 |---|---|
 | `implementer-guard.sh` | The guard. POSIX `sh`, no `node`; `jq` when present, `sed` fallback otherwise. |
-| `test-implementer-guard.sh` | 210 offline checks (104 cases × jq/sed, plus 2 under `env -i`). |
+| `test-implementer-guard.sh` | 260 offline checks (129 cases × jq/sed, plus 2 under `env -i`). |
 
 | Tool call | Decision |
 |---|---|
-| Edit/Write under `server/src/db/migrations/`, any lock file, anything under `.claude/`, a `CLAUDE.md` / `CLAUDE.local.md` | `deny` |
+| Edit/Write under `server/src/db/migrations/`, any lock file, anything under `.claude/` or `.git/`, a `CLAUDE.md` / `CLAUDE.local.md`, any `INSIGHTS.md` | `deny` |
+| Edit/Write of a spec (`docs/specs/**`, `{server,client,reviewer-core,mcp-server}/specs/**`) or a plan (`docs/plans/**`) | `deny` — they are its input, and plan-verifier grades it against the plan |
 | Edit/Write of a test — `*.test.ts(x)`, `server/test/**`, `reviewer-core/test/**`, `mcp-server/test/**`, `client/src/test/**`, `e2e/specs/*.flow.json` | `deny` — the [`test-writer`](../agents/test-writer.md) agent owns tests (`server/src/adapters/mocks.ts` stays allowed: it is production code) |
 | Edit/Write of `server/src/db/schema*` or a `package.json` | `ask` — only for a change an approved plan Gate names |
-| Bash: `git commit/push/reset/checkout/stash/…`, `gh pr`, `pnpm/npm add/remove/update`, `install` without `--frozen-lockfile`, `yarn`, `db:generate`, `drizzle-kit generate/push`, a write (`>`, `rm`, `mv`, `sed -i`, `tee`, …) into a protected path | `deny` |
+| Bash: `git commit/push/reset/checkout/stash/…`, `gh pr`, `pnpm/npm add/remove/update`, `install` without `--frozen-lockfile`, `yarn`, `db:generate`, `drizzle-kit generate/push`, a write (`>`, a heredoc, `rm`, `mv`, `cp`, `sed -i`, `tee`, …) into a protected path — every path in the rows above, tests, specs and plans included | `deny` |
+| Bash: `scripts/review-record.sh add` | `deny` — only the main session records a finished review (a record lets `/pr-self-review` skip a group) |
 | Anything else — including reading lock files and migrations, `git status/diff/log`, every test and typecheck command | silent exit 0 |
 | Input it cannot parse (no `file_path`, no `command`, empty stdin) | `ask` |
 
@@ -120,6 +122,15 @@ other agents. It makes the root `AGENTS.md` "do not touch" list mechanical.
 or a script that runs `git commit` gets past it. It stops the implementer's
 honest mistakes, which is what it is for; the real boundary for pushes is still
 `pr-self-review-gate` plus a required GitHub check.
+
+**Shell writes to test, spec, plan, `INSIGHTS.md` and `.git/` paths** (added
+2026-10-05): the L04 retro (`docs/retros/ledger.md`) counted 32 implementer
+writes through a heredoc that the Edit/Write rows never saw. The Bash rule
+reads the same way as the protected-path one: a redirect whose target names
+such a path, or the path anywhere in a command that also has a write verb.
+Known fail-closed denials: a command that reads such a path and writes
+elsewhere with a verb (`cat docs/specs/x.md && rm /tmp/y`,
+`vitest run src/a.test.ts | tee /tmp/log`) — split it into two calls.
 
 **Trusted workspaces only.** Claude Code skips a project agent's frontmatter hooks
 until the folder is trusted, and a `claude -p` session never counts as trusted.
@@ -143,7 +154,7 @@ agents — it runs **only while one of them is active**:
 | File | Role |
 |---|---|
 | `agent-scope-guard.sh` | The guard. POSIX `sh`, no `node`; `jq` when present, `sed` fallback otherwise — the same parser as `implementer-guard.sh`. |
-| `test-agent-scope-guard.sh` | 440 offline checks (218 cases × jq/sed, plus 4 outside that loop: no `CLAUDE_PROJECT_DIR`, three under `env -i`). |
+| `test-agent-scope-guard.sh` | 466 offline checks (231 cases × jq/sed, plus 4 outside that loop: no `CLAUDE_PROJECT_DIR`, three under `env -i`). |
 
 One script rather than four: the Bash rules are identical, and separate copies
 would drift. `implementer-guard.sh` stays separate because it is already
@@ -162,9 +173,10 @@ variable an absolute path cannot be placed, so the answer is `ask`.
 | `server/test/**`, `reviewer-core/test/**`, `mcp-server/test/**`, `client/src/**/*.test.{ts,tsx}`, `e2e/specs/*.flow.json` | allow | `deny` | `deny` | `deny` |
 | `server/test/*.test.ts` (not `.it.test.ts`) whose content mentions `helpers/pg` | `deny` — rename to `.it.test.ts` | — | — | — |
 | `server/test/helpers/**`, `client/src/test/**`, `server/src/adapters/mocks.ts` | `ask` | `deny` | `deny` | `deny` |
-| `docs/specs/*.md`, `{server,client,reviewer-core,mcp-server}/specs/*.md` — a new file, or an existing one whose `**Status:**` line is `draft` | `deny` | `ask` | allow | `deny` |
-| the same, but the file exists and is not a draft (`in-progress`, `done`, no status line), or the new content sets `**Status:** in-progress` / `done` | `deny` | `ask` | `ask` | `deny` |
-| a spec folder's `README.md` or `_template.md`, a subfolder of it, a non-`.md` file, `e2e/specs/**` | `deny` (`e2e/specs/*.flow.json`: allow) | `ask` for `.md`, else `deny` | `deny` | `deny` |
+| `docs/specs/*.md`, `{server,client,reviewer-core,mcp-server}/specs/*.md` — a new file, or an existing one whose `**Status:**` line is `draft` | `deny` | `deny` | allow | `deny` |
+| the same, but the file exists and is not a draft (`approved`, `in-progress`, `done`, no status line), or the new content sets `**Status:** approved` / `in-progress` / `done` | `deny` | `deny` | `ask` | `deny` |
+| a spec folder's `README.md` or `_template.md`, a subfolder of it, a non-`.md` file, `e2e/specs/**` | `deny` (`e2e/specs/*.flow.json`: allow) | `deny` | `deny` | `deny` |
+| `docs/plans/**` (plans are saved by the main session) | `deny` | `deny` | `deny` | `deny` |
 | `AGENTS.md`, `docs/agent-prompts/*.md` (not its README) | `deny` | `ask` | `deny` | `deny` |
 | `docs/**/*.md`, `<pkg>/docs/**/*.md`, any `README.md`, `TESTING.md` | `deny` | allow | `deny` | `deny` |
 | anything else | `deny` | `deny` | `deny` | `deny` |
@@ -183,6 +195,7 @@ a spec becomes off-limits to it the moment someone moves its status past
 | `pnpm install` / `npm ci` | only `--frozen-lockfile` / `npm ci` | `deny` |
 | `db:generate/migrate/seed/push`, `drizzle-kit generate/push/drop/migrate`, `docker rm/stop/volume/system`, `docker compose … down` | `deny` | `deny` |
 | `vitest -u` / `--update` | `deny` | `deny` |
+| `scripts/review-record.sh add` (`covered` is a read) | `deny` | `deny` |
 | `node -e`, `python -c`, `sh -c`, `eval`, `curl`, `wget` | `deny` | `deny` |
 | a write: `>` / `>>` to anything but `/dev/null`, `rm/mv/cp/tee/touch/ln/mkdir/chmod/dd`, `sed -i`, `perl -i`, `find -delete/-exec` | only with `devdigest-redproof-` in the command | `deny` |
 | anything else — `git status/diff/log/grep`, `grep`, `sed -n`, typecheck and test commands, `docker info` | silent exit 0 | silent exit 0 |

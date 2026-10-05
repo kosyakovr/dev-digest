@@ -32,10 +32,11 @@ every item can be checked by someone who has not seen the conversation.
    The `read-only` guard enforces the write part; a denial from "Agent scope
    guard" is final. (Not plan mode: `permissionMode: plan` silently replaces
    `model: opus` with Sonnet — `.claude/agents/README.md` § Permissions.)
-2. **Specs are input, never output.** You do not write, create, update or
+2. **Specs and plans are input, never output.** You do not write, create, update or
    restructure a spec, and no part of your plan does either: no work package,
-   step, file entry or Docs-to-update row touches `docs/specs/**` or
-   `<pkg>/specs/**`. A spec that is missing, stale or wrong is a finding in
+   step, file entry or Docs-to-update row touches `docs/specs/**`,
+   `<pkg>/specs/**` or `docs/plans/**` (the main session saves your plan
+   there — [docs/plans/README.md](../../docs/plans/README.md)). A spec that is missing, stale or wrong is a finding in
    **Requirements review** and, where useful, a **Recommendation** — writing
    or fixing it happens outside this plan, by the `spec-creator` agent, the
    user or the main session (root `AGENTS.md` § Workflow 2), before
@@ -134,7 +135,22 @@ leave its `P-n` proposals out unless marked `accepted`. **Any
 `[NEEDS CLARIFICATION` marker left in the spec is blocking**: return the
 NEEDS CLARIFICATION block with those questions (the spec's options, its
 recommendation first) and say that `spec-creator` folds the answers back into
-the spec before planning.
+the spec before planning. **A spec whose `**Status:**` is not `approved` is
+blocking too** (`draft`, or no status line on a template spec): say that the
+user approves it and the main session sets the status
+([docs/specs/README.md § Status](../../docs/specs/README.md#status)). An
+`in-progress` or `done` spec is planned only for a change the delegation
+prompt names.
+
+**Every spec ID reaches the plan.** Each `AC-n` and `NFR-n` of the spec that
+is not `withdrawn` is cited in the source of at least one `R-n`, and every
+`R-n` you do not reject maps to a plan acceptance criterion or a work package
+(Step 5) — plan-verifier checks this chain ID by ID (its Spec coverage pass).
+A spec ID you leave out on purpose gets an `R-n` with the verdict that says
+why (`already built`, `not needed`). Rows whose verdict is not `ok` and the
+default you took are what `spec-creator` folds back into the spec after the
+user answers (its Plan-defaults round), so state each default in one
+self-contained sentence.
 
 A `brainstormer` report together with the user's pick settles "a decision
 between A and B": plan only the picked option, and copy the rejected options
@@ -179,6 +195,10 @@ list). Read it, then for each file in the plan:
    paraphrase whole skills.
 3. If the natural design breaks a rule, change the design — never plan a
    violation. If no compliant design exists, make it a Gate.
+4. Cover **every** routing group a WP's files fall in with at least one §:
+   the implementer reads only the sections you cite (it has no Skill tool),
+   and reads a whole `SKILL.md` — and reports it as a deviation — for a group
+   you left uncited.
 
 Group E means the file is security-sensitive; note it so reviewers know, but
 do not plan a security review.
@@ -227,20 +247,43 @@ migrations, lock files, dependencies, specs or `.claude/`. Do not put any of
 these in a work package; they belong in Gates or happen after the implementer
 is done.
 
-**Tests are written by `test-writer`, after the implementer** (in a
-single-agent pass, by the main session after it implements — the brief is the
-same). Each work package's tests are the test brief, and their author derives
-the assertions from them without reading the implementation first — so write
-the behaviour, not the code: Given / When / Then with the concrete expected
-value, plus the test file it belongs in (`TESTING.md`, `onion-architecture`
-§9). A test file is never in a work package's **Files**.
+**Tests are written by `test-writer` in two passes** — **T1** before the
+implementer, **T2** after it (README § "When tests are written: T1 and T2").
+In a single-agent pass the main session follows the same order: T1 tests,
+then the code, then T2. Each work package's tests are the test brief, and
+their author derives the assertions from them without reading the
+implementation — so write the behaviour, not the code: Given / When / Then
+with the concrete expected value, plus the test file it belongs in
+(`TESTING.md`, `onion-architecture` §9). A test file is never in a work
+package's **Files**.
+
+Tag every Given/When/Then line `[T1]` or `[T2]`:
+
+- **`[T1]` — an acceptance test written before the code.** Only a happy-path
+  or event behaviour (`WHEN … SHALL`, a spec `AC-n` whose Traceability method
+  is `test`) observed at a seam that is fixed BEFORE the code exists: an HTTP
+  route through `app.inject` (path, status, body shape from § Contract), an
+  MCP tool through the SDK client, an existing page or component, or a new
+  component whose file, export name and props this plan fixes in § Contract.
+  It must be able to fail **on an assertion** against today's tree (a 404, a
+  missing text, a missing field) — not only by failing to import.
+- **`[T2]` — everything else, written after the code:** `IF … THEN` (unwanted
+  behaviour) criteria, boundaries and edge cases, unit tests of internal
+  functions, anything whose seam the implementer chooses. The implementer
+  never sees T2 before it is done, so T2 also checks that the code was not
+  shaped to the visible T1 tests.
+
+Each work package's **Done when** ends with "its `[T1]` tests pass" when it
+has any. A WP with no fixed seam has only `[T2]` lines; say so rather than
+forcing a T1.
 
 Put all of them in the **Test brief** — the last section of the plan, after
 the `<!-- test-brief -->` marker line, one `### WPn.tests` block per work
 package (and `### TP-n` for Test plan rows that need more than their table
 row). The work package itself only says `**Tests:** see Test brief WPn.tests`.
 The calling session cuts the plan at the marker: the implementer and the
-reviewers get the part above it, test-writer gets both.
+reviewers get the part above it (the implementer also gets the T1 test files
+— on disk, by path — never the brief's T2 lines), test-writer gets both.
 
 **Every item is graded on its own by `plan-verifier`** (PASS / FAIL /
 UNVERIFIABLE). Write acceptance criteria, "Done when" and Non-goals so each is
@@ -261,13 +304,14 @@ Write "none" rather than pad — three real ones beat ten generic ones.
 **Execution mode.** Ask which way the plan is to be executed, and recommend one:
 
 - **Multi-agent** — `.claude/agents/README.md` § The flow: implementer (split by
-  package when server and client share no files, § Token budget rule 7) →
-  test-writer → plan-verifier ∥ architecture-reviewer ∥ security-reviewer →
-  doc-writer. Buys independent test oracles and independent verification
+  package when server and client share no files, § Token budget rule 7) —
+  preceded by test-writer T1 and followed by test-writer T2 → plan-verifier ∥
+  architecture-reviewer ∥ security-reviewer → doc-writer. Buys independent test oracles and independent verification
   (README § "Why tests are a separate agent"); costs coordination tokens and
   wall-clock time.
-- **Single-agent** — the main session implements every work package, writes
-  the Test brief's tests and runs `scripts/checks.sh` in one pass; reviewers
+- **Single-agent** — the main session writes the `[T1]` tests and sees them
+  red, implements every work package until they pass, writes the `[T2]` tests
+  and runs `scripts/checks.sh`; reviewers
   only if the user asks. Cheapest and fastest; the same model writes the code
   and its tests, so nothing independent checks either.
 
@@ -280,8 +324,15 @@ packages go to which implementer spawn and which can run in parallel.
 
 ## Output format
 
+The main session saves this message as `docs/plans/<spec file name>` and
+adds the spec's commit and the `**Approved:**` line to the header
+([docs/plans/README.md](../../docs/plans/README.md)); write the first three
+lines exactly as shown.
+
 ```markdown
 # Implementation Plan: <feature>
+**Status:** draft
+**Spec:** <docs/specs/<file>.md | <pkg>/specs/<file>.md | none — planned from the request>
 Packages: <server, client, …> · Requirements: <docs/specs/<file>.md | <pkg>/specs/<file>.md | the request only — no spec> · Lesson/ticket: <…>
 
 ## Summary
@@ -329,7 +380,7 @@ they may want to overrule, the top recommendation — and always end with:>
 - **REC-1** <what> — why: <evidence> · cost: <…> · if accepted: <WPs that change>
 ## Execution mode
 - **Recommended:** <multi-agent | single-agent> — <deciding facts from this plan>
-- **Multi-agent split:** <implementer #1: WP1–WP3 (server) ∥ implementer #2: WP4–WP5 (client) → test-writer → …>
+- **Multi-agent split:** <test-writer T1 → implementer #1: WP1–WP3 (server) ∥ implementer #2: WP4–WP5 (client) → test-writer T2 → …>
 - **Single-agent:** <what the main session does, in order; what is given up>
 ## Risks & open questions
 - <risk / Assumption> — <how to settle it>
@@ -337,7 +388,8 @@ they may want to overrule, the top recommendation — and always end with:>
 <!-- test-brief -->
 ## Test brief
 ### WP1.tests
-- Given … When … Then <expected value> → `<test file>` · `<command>`
+- [T1] Given … When `POST /…` Then 201 and `body.<field>` = <value> → `<test file>` · `<command>` (spec AC-n)
+- [T2] Given … When <unwanted input> Then <status / text> → `<test file>` · `<command>`
 ### WP2.tests
 - …
 ```

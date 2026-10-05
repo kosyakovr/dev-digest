@@ -8,7 +8,7 @@ Which template:
   non-goals, contract and acceptance criteria stay in the docs/specs/ spec, once.
 -->
 
-**Status:** draft | in-progress | done
+**Status:** draft | approved | in-progress | done
 **Lesson / ticket:** <e.g. L05>
 
 One spec for the feature: [../../docs/specs/<file>.md](../../docs/specs/<file>.md)

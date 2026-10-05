@@ -107,6 +107,14 @@ export function shellRemovals(cmd, root) {
   return out;
 }
 
+// A real `git push` / `gh pr create`: the command word, not text that mentions it —
+// a quoted grep pattern or a heredoc body is data (2026-10-05: a grep for the
+// gate's own wording was counted as a push).
+export function isPushOrPr(cmd) {
+  const plain = dropQuoted(stripHeredocs(cmd).bare);
+  return /(^|[;&|\n(]\s*|\s)git(\s+-[Cc]\s+\S+)*\s+push\b|(^|[;&|\n(]\s*|\s)gh\s+pr\s+create\b/.test(plain);
+}
+
 // A whole-suite run (`pnpm test`, `pnpm typecheck`, `tsc --noEmit`) outside
 // scripts/checks.sh. A single file (`vitest run test/x.test.ts`) is not one.
 export function isFullSuiteRun(cmd) {

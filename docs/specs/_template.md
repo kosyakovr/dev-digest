@@ -1,6 +1,6 @@
 # <Feature name>
 
-**Status:** draft | in-progress | done
+**Status:** draft | approved | in-progress | done
 **Lesson / ticket:** <e.g. L05>
 **Packages:** <server, client, reviewer-core, mcp-server, e2e> — one package → this file lives in `<pkg>/specs/`; several → `docs/specs/`
 

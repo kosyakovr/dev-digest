@@ -22,7 +22,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { bashReads as bashReadsIn, shellWrites, shellRemovals, isFullSuiteRun } from './shell.mjs';
+import { bashReads as bashReadsIn, shellWrites, shellRemovals, isFullSuiteRun, isPushOrPr } from './shell.mjs';
 
 // ---------- args ----------
 const argv = process.argv.slice(2);
@@ -464,7 +464,8 @@ const editedFiles = new Set(edits.map((e) => e.file));
 const codeEdited = [...editedFiles].filter(isCode);
 const allHandbacks = agents.flatMap((a) => a.handbacks).join('\n');
 const skillCalls = mainM.tools.filter((x) => x.name === 'Skill').map((x) => x.input.skill);
-const mainBash = mainM.tools.filter((x) => x.name === 'Bash').map((x) => String(x.input.command));
+// Only commands that ran: a denied call (a gate or guard refusal) pushed nothing.
+const mainBash = mainM.tools.filter((x) => x.name === 'Bash' && !mainM.results.get(x.id)?.err).map((x) => String(x.input.command));
 
 // 4a. INSIGHTS.md
 const insightsTouched = [...editedFiles].some((f) => /(^|\/)INSIGHTS\.md$/.test(f));
@@ -536,7 +537,7 @@ for (const x of mainM.tools) {
   if (raw.length >= 4) { const by = {}; for (const l of raw) by[l] = (by[l] || 0) + 1;
     add('skipped', 'info', `${raw.length} raw test/typecheck runs outside scripts/checks.sh (${viaLedger} through it)`, Object.entries(by).map(([k, v]) => `${k}×${v}`).join(', '), '.claude/agents/README.md § Token budget rule 11'); }
 }
-if (mainBash.some((c) => /git\s+push|gh\s+pr\s+create/.test(c)) && !skillCalls.some((s) => /pr-self-review/.test(s)))
+if (mainBash.some(isPushOrPr) && !skillCalls.some((s) => /pr-self-review/.test(s)))
   add('skipped', 'warn', 'pushed / opened a PR without /pr-self-review in this run', 'no pr-self-review Skill call in the window', 'AGENTS.md § Workflow 5');
 {
   const agentCost = agents.reduce((s, a) => s + (a.cost || 0), 0);

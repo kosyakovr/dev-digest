@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { stripHeredocs, shellWrites, shellRemovals, bashReads, isFullSuiteRun } from './shell.mjs';
+import { stripHeredocs, shellWrites, shellRemovals, bashReads, isFullSuiteRun, isPushOrPr } from './shell.mjs';
 
 const SCRIPT = path.join(path.dirname(new URL(import.meta.url).pathname), 'retro.mjs');
 const T0 = Date.parse('2026-10-01T10:00:00Z');
@@ -172,6 +172,14 @@ test('shell.mjs: heredoc bodies are data; writes and suite runs are recognised',
   assert.equal(isFullSuiteRun("python3 - <<'EOF'\n# pnpm test\nEOF"), false);
   assert.equal(isFullSuiteRun('scripts/checks.sh --force --pkg server'), false);
   assert.equal(isFullSuiteRun('echo "pnpm test"'), false);
+  // a push is the command word, never text that mentions one (2026-10-05)
+  assert.equal(isPushOrPr('git push -u origin feature'), true);
+  assert.equal(isPushOrPr('git -C /repo push'), true);
+  assert.equal(isPushOrPr('git commit -m x && git push'), true);
+  assert.equal(isPushOrPr('gh pr create --fill'), true);
+  assert.equal(isPushOrPr(`grep -n 'echo "git push"' docs/pr-self-review.md`), false);
+  assert.equal(isPushOrPr("cat > a.md <<'EOF'\nthen git push\nEOF"), false);
+  assert.equal(isPushOrPr('git log --oneline -3'), false);
 });
 
 test('metrics: partial usage lines are estimated, cost and parallelism are computed', () => {

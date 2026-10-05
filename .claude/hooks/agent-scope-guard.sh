@@ -5,7 +5,7 @@
 # runs ONLY while one of them is active. One argument selects the profile:
 #
 #   test-writer  — may write test files only (+ its red-proof worktree in $TMPDIR)
-#   doc-writer   — may write markdown docs only
+#   doc-writer   — may write markdown docs only (never specs or plans)
 #   spec-creator — may write draft specs only (docs/specs/, <pkg>/specs/)
 #   read-only    — may write nothing, and Bash may not write either
 #
@@ -162,14 +162,14 @@ case "$TOOL" in
         */*) decide deny "a spec lives directly in its specs/ folder, not in a subfolder." ;;
         README.md|_template.md) decide deny "the specs README and template are conventions the user owns - propose a change in the report." ;;
       esac
-      # Drafts only: no status change in the new content, no edit of a spec
-      # that is already in progress or done.
-      if matches "$INPUT" '\*\*Status:\*\*[[:space:]]*(in-progress|done)'; then
+      # Drafts only: no status change in the new content (approved is set by the
+      # main session on the user's word), no edit of a spec past draft without asking.
+      if matches "$INPUT" '\*\*Status:\*\*[[:space:]]*(approved|in-progress|done)'; then
         decide ask "spec-creator writes drafts only - approve a status change only if the user asked for it."
       fi
       case "$FILE" in /*) ABS=$FILE ;; *) ABS="${CLAUDE_PROJECT_DIR:-.}/$FILE" ;; esac
       if [ -f "$ABS" ] && ! grep -E -q '^\*\*Status:\*\*[[:space:]]*draft[[:space:]]*$' "$ABS"; then
-        decide ask "$REL is not a draft (in-progress, done or no status line) - approve only if the user asked to change this spec."
+        decide ask "$REL is not a draft (approved, in-progress, done or no status line) - approve only if the user asked to change this spec."
       fi
       exit 0
     fi
@@ -178,11 +178,13 @@ case "$TOOL" in
     case "$REL" in
       AGENTS.md|*/AGENTS.md)
         decide ask "AGENTS.md is loaded into every session - approve only a change the user asked for." ;;
-      *specs/*.md|docs/agent-prompts/*.md)
+      docs/specs/*|*/specs/*|docs/plans/*)
+        decide deny "specs and plans are not docs - spec-creator writes specs, the main session saves plans. Report what they now get wrong under Discrepancies." ;;
+      docs/agent-prompts/*.md)
         case "$REL" in
           docs/agent-prompts/README.md) exit 0 ;;
         esac
-        decide ask "specs are intent written before code, and docs/agent-prompts mirror the seeded prompts - approve only if the user asked for this edit." ;;
+        decide ask "docs/agent-prompts mirror the seeded prompts - approve only if the user asked for this edit." ;;
       docs/*.md|server/docs/*.md|client/docs/*.md|reviewer-core/docs/*.md|e2e/docs/*.md|README.md|*/README.md|TESTING.md)
         exit 0 ;;
     esac
@@ -233,6 +235,9 @@ case "$TOOL" in
     if matches "$BARE" "db:(generate|migrate|seed|push)|drizzle-kit[[:space:]]+(generate|push|drop|migrate)" \
        || quoted_db_run "$CMD" '[[:space:]{!](pnpm|npm|yarn|bun)[[:space:]]+([^[:space:]]+[[:space:]]+)*\$?db:(generate|migrate|seed|push)' '[[:space:]/{!]drizzle-kit(@[^[:space:]]*)?(/[^[:space:]]*)?[[:space:]]+(generate|push|drop|migrate|up|check|pull|introspect|studio)' '[[:space:]=]\$?db:(generate|migrate|seed|push)'; then
       decide deny "db:* / drizzle-kit write migrations or the database, both off-limits (root AGENTS.md)."
+    fi
+    if matches "$BARE" "review-record\.sh[[:space:]]+add([[:space:]]|$)"; then
+      decide deny "only the main session records a finished review - a subagent recording one would let /pr-self-review skip its group."
     fi
     if matches "$CMD" "${B}docker[[:space:]]+(rm|rmi|kill|stop|volume|system|network[[:space:]]+rm)|${B}docker[[:space:]]+compose[^;&|]*[[:space:]]down"; then
       decide deny "agents do not stop or delete containers and volumes."

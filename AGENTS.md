@@ -36,6 +36,9 @@ require it, stop and ask the user first.
 - The pre-PR gate (what blocks a push, how to waive) → [docs/pr-self-review.md](docs/pr-self-review.md)
 - Subagents (researcher → spec-creator → implementation-planner → implementer → test-writer → plan-verifier / architecture-reviewer → doc-writer; the agent guards) → [.claude/agents/README.md](.claude/agents/README.md)
 - Cross-package feature specs → [docs/specs/](docs/specs/README.md)
+- The vendored `@devdigest/shared` contracts (twins, unserved schemas, null cost) → [docs/shared-contracts.md](docs/shared-contracts.md)
+- Implementation Plans (one per spec, same file name; status and who approves) → [docs/plans/](docs/plans/README.md)
+- Before designing a lesson feature (the author's reverted solution in `git log --all`), and what each lesson built → [docs/lesson-log.md](docs/lesson-log.md)
 - Per-package: `<pkg>/README.md`, `<pkg>/docs/`, `<pkg>/specs/`, `<pkg>/INSIGHTS.md`
 
 ## Workflow
@@ -44,7 +47,8 @@ require it, stop and ask the user first.
 2. New feature → write/find its spec first: in `<pkg>/specs/` if it touches one
    package, in `docs/specs/` if it touches several (`spec-creator` drafts it
    from [docs/specs/_template.md](docs/specs/_template.md); save design links
-   to files for it first).
+   to files for it first). A spec and its plan (`docs/plans/`) become
+   `approved` only on the user's direct word — the main session sets it.
 3. Learned something non-obvious → capture it with the `engineering-insights`
    skill, which routes it to the right `INSIGHTS.md`. Do not skip this at the end
    of a task that involved debugging, a failing test or a correction — but write
