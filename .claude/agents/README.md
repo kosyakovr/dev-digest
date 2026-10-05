@@ -115,6 +115,8 @@ spec (approved, no open markers) + request (+ the pick)
          ─► user approves the plan ─► header: Spec @ <sha>, **Status: approved**, **Approved:** gates · mode · REC ─► commit
               single-agent  ─► main session: [T1] tests (seen red) ─► code until they pass ─► [T2] tests ─► scripts/checks.sh ─► commit ─► …
               multi-agent   ─► "go" for the implementer, continue below (a new chat can start here from the plan file)
+                              └ /sdd-run <spec> [--design …] [-- "…"] runs everything below up to the commit
+                                (.claude/skills/sdd-run/SKILL.md; resumes from the Run log)
          ─► plan + spec Status: in-progress
          ─► test-writer T1 (whole plan) ─► [T1] acceptance tests, red now on an assertion + Handoff to implementer
          ─► implementer (plan above the marker + the T1 files) ─► T1 green ─► Implementation Report + uncommitted code
@@ -364,7 +366,9 @@ repetition, not a check.
    On 2026-10-01 one such read put ~40k tokens into the main context, which
    rode along for ~100 turns ≈ 4M cache reads.
 9. **Reports to file.** Save an agent's full report from its `output_file` with
-   a script (the `SubagentHandback` message, rule 1), and read only the verdict,
+   a script — `scripts/save-report.sh <agent-id | transcript> <dest.md>` takes
+   the last `SubagentHandback` message (or a last plain-text turn) and prints
+   only the heading and verdict lines (rule 1) — and read only the verdict,
    the counts and the non-PASS rows into the main session. Open the full report
    only when the user asks.
 10. **Re-review on the delta.** After each review round record

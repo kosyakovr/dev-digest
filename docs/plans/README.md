@@ -73,6 +73,8 @@ the reviewers get, so an amendment below it would never reach them:
 - <YYYY-MM-DD> plan-verifier — PASS
 ```
 
+`/sdd-run` ([.claude/skills/sdd-run/SKILL.md](../../.claude/skills/sdd-run/SKILL.md))
+writes these lines itself and reads the last one to resume a run in a new chat.
 The **Run log** is how the fix-round limit (at most **two** fix rounds, then the
 user decides — `.claude/agents/README.md` § The flow) survives a new chat.
 Only the main session writes this folder; the guards deny it to every subagent.

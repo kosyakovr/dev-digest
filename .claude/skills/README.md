@@ -20,6 +20,7 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 | [mermaid-diagram](mermaid-diagram/SKILL.md) | Shared | Mermaid diagrams in markdown (flowcharts, sequence, ERD, …) |
 | [engineering-insights](engineering-insights/SKILL.md) | Repo | Reads and appends per-package `INSIGHTS.md` — the cross-session learnings loop |
 | [workflow-retro](workflow-retro/SKILL.md) | Repo | Retrospective of a finished multi-agent run from its transcripts: per-agent tokens, cache, time, cost, parallelism; re-reads, re-asks, scope, skipped steps → ≤5 action items and a row in `docs/retros/ledger.md` |
+| [sdd-run](sdd-run/SKILL.md) | Repo | `/sdd-run <spec>` — runs an approved spec + plan through T1 → implementer → T2 → three reviewers → triage → ≤2 fix rounds → docs → insights → commit on the user's word; user-invoked only |
 | [pr-self-review](pr-self-review/SKILL.md) | Gate | Routes the branch diff at the skills above and blocks `git push` on a CRITICAL finding — see [docs/pr-self-review.md](../../docs/pr-self-review.md) |
 
 ## What Are Skills?

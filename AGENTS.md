@@ -38,6 +38,7 @@ require it, stop and ask the user first.
 - Cross-package feature specs → [docs/specs/](docs/specs/README.md)
 - The vendored `@devdigest/shared` contracts (twins, unserved schemas, null cost) → [docs/shared-contracts.md](docs/shared-contracts.md)
 - Implementation Plans (one per spec, same file name; status and who approves) → [docs/plans/](docs/plans/README.md)
+- Running an approved spec + plan through the agents (T1 → implementer → T2 → reviewers → fix rounds → docs) → `/sdd-run` ([.claude/skills/sdd-run/SKILL.md](.claude/skills/sdd-run/SKILL.md))
 - Before designing a lesson feature (the author's reverted solution in `git log --all`), and what each lesson built → [docs/lesson-log.md](docs/lesson-log.md)
 - Per-package: `<pkg>/README.md`, `<pkg>/docs/`, `<pkg>/specs/`, `<pkg>/INSIGHTS.md`
 
