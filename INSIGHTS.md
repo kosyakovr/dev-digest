@@ -51,6 +51,16 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 
 ## Tool & Library Notes
 
+- 2026-10-06 — `Artifact read` on a Claude Design UI prototype saves a bundler
+  page, not readable screens: its JSX is gzip+base64 inside
+  `<script type="__bundler/manifest">` (one ~1.8 MB line, too long for one
+  Read), so a grep for labels in it finds nothing → before handing it to
+  spec-creator, JSON-parse the manifest, base64-decode and gunzip each entry
+  whose `compressed` is true, and name each module by its leading
+  `/* screen_x.jsx — … */` comment; a doc-style artifact (field manual) is
+  plain HTML — strip tags instead. (ref: .claude/agents/README.md:61, L05
+  project-context spec)
+
 - 2026-09-20 → 2026-10-05 — `grep` at the Bash TOOL prompt is **ugrep** (a zsh
   function from `~/.claude/shell-snapshots/`, not exported), and that shell is
   **zsh**: a BRE backreference dies with a non-zero exit that looks like a

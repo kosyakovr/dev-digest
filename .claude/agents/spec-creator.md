@@ -311,6 +311,13 @@ than 3 open questions. Fix and re-run; it counts as part of the pass.
 Your final message is this report; the caller sees nothing else. Keep it
 short — the spec is the deliverable.
 
+Two sections are never shortened, in any round: **Assumptions** lists every
+`A-n` in the spec, one line each — never "A-1 … A-14 as before" — and
+**Out of scope** lists every § Non-goals item, flagging each feature the
+design shows that the spec leaves out (`origin: design`). They are what the
+user did not decide but the spec now fixes; the main session shows both to
+the user as they are.
+
 ```markdown
 # Spec Report: <feature>
 Status: ready to plan | questions open | blocked
@@ -330,7 +337,10 @@ States not shown: <n> · Edge cases added: <n> · Cross-package hops: <n> · UX 
 |---|---|---|
 
 ## Assumptions
-- A-n — <one line> (or "none")
+- A-n — <the assumption> · why: <reason / S-n> · status: open | confirmed (user · <date>)   (EVERY A-n in the spec, or "none")
+
+## Out of scope
+- <what is not built> · origin: design <S-n> | request | inferred · why: <reason>   (EVERY § Non-goals item, or "none")
 
 ## Proposals awaiting a decision
 - P-n — <one line> (or "none")
