@@ -77,6 +77,12 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## Tool & Library Notes
 
+- 2026-10-02 — TanStack `query.isStaleByTime(x)` treats `x` AS the staleTime, so
+  `expect(query.isStaleByTime(4 * 60_000)).toBe(false)` passes even when the hook
+  sets no `staleTime` (a red-proof mutation survived) → assert the option itself:
+  `(query.options as { staleTime?: number }).staleTime`.
+  (ref: client/src/lib/hooks/blast.test.tsx)
+
 - 2026-09-23 — `@testing-library/user-event` is NOT a dependency here (absent
   from `package.json` and `pnpm-lock.yaml`), and importing it fails the whole
   test FILE with `Failed to resolve import` — and it cannot be added, because
@@ -122,6 +128,9 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## Session Notes
 
+- 2026-10-02 — L04 Blast radius: Overview two-column grid with `BlastCard`
+  (counters, Tree/Graph own SVG, degraded + re-index, Prior PRs accordion) and
+  `lib/hooks/blast.ts` (spec: client/specs/L04-blast-radius.md).
 - 2026-09-23 — L02 conventions: `/repos/:repoId/conventions` triage board
   (scan summary, status filters, evidence deep-links, multi-select → create
   skill), and `SkillTypeSelect` promoted to `src/components/skill-type-select/`

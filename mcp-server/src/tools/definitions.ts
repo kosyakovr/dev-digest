@@ -107,10 +107,10 @@ export const getConventionsTool = {
 
 export const getBlastRadiusTool = {
   name: 'get_blast_radius',
-  title: 'Blast radius (not implemented)',
+  title: 'Get PR blast radius',
   description:
-    "Not implemented yet: will show code affected by a pull request's changes. Always returns an error for now; use get_findings instead.",
-  inputSchema: { pr },
+    "Show what a pull request's changes can break: changed symbols, their callers (file:line), affected HTTP endpoints and crons, from the DevDigest index. Read-only; call before reviewing a risky PR.",
+  inputSchema: { pr, response_format: responseFormat },
   annotations: READ_ONLY,
 } as const;
 

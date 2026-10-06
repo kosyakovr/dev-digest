@@ -6,9 +6,9 @@
  * from constants and validated values only. Output is capped at 24 000 chars.
  */
 import { DevDigestError } from '../core/errors.ts';
-import type { Agent, Convention, Finding } from '../core/schemas.ts';
+import type { Agent, BlastCaller, Convention, Finding } from '../core/schemas.ts';
 import { collapseToOneLine, truncate } from '../core/text.ts';
-import type { ConventionsView, ReviewView, Severity } from '../core/views.ts';
+import type { BlastView, ConventionsView, ReviewView, Severity } from '../core/views.ts';
 
 export type ResponseFormat = 'concise' | 'detailed';
 
@@ -182,14 +182,73 @@ export function renderConventions(view: ConventionsView, format: ResponseFormat)
   return out.join('\n');
 }
 
+// ---- get_blast_radius ------------------------------------------------------
+
+/** Callers shown per symbol in the concise format. */
+const BLAST_CONCISE_CALLERS = 5;
+
+function blastCallerLine(c: BlastCaller): string {
+  const via = (c.depth ?? 1) >= 2 && c.through ? ` (via ${quote(c.through, 120)})` : '';
+  return `  <- ${location(c.file, String(c.line))} ${quote(c.name, 120)}${via}`;
+}
+
+export function renderBlast(view: BlastView, format: ResponseFormat): string {
+  const { blast } = view;
+  const label = token(view.prLabel, 120);
+  const endpoints = new Set(blast.downstream.flatMap((d) => d.endpoints_affected));
+  const crons = new Set(blast.downstream.flatMap((d) => d.crons_affected));
+  const callers = blast.downstream.reduce((n, d) => n + d.callers.length, 0);
+  const symbols = blast.changed_symbols.length;
+  const head = [
+    `pr ${label} · ${symbols} symbols · ${callers} callers · ${endpoints.size} endpoints · ${crons.size} crons`,
+    `index ${blast.indexed_sha ? token(blast.indexed_sha.slice(0, 12)) : 'unknown'}`,
+  ];
+  if (blast.degraded) {
+    head.push(
+      `degraded: ${token(blast.reason ?? 'unknown', 40)} — results may be incomplete. Re-index the repo in the DevDigest web app (Resync).`,
+    );
+  }
+  if (blast.downstream.length === 0) {
+    if (!blast.degraded) head.push(`No downstream callers found for ${label} (${symbols} changed symbols).`);
+    return head.join('\n');
+  }
+
+  const detailed = format === 'detailed';
+  const tail = detailed ? [] : ['Use response_format "detailed" for all callers and changed-symbol files.'];
+  const items = blast.downstream.map((d) => {
+    const shown = detailed ? d.callers : d.callers.slice(0, BLAST_CONCISE_CALLERS);
+    const lines = [`${quote(d.symbol, 120)} · ${d.callers.length} callers`, ...shown.map(blastCallerLine)];
+    if (d.callers.length > shown.length) lines.push(`  … ${d.callers.length - shown.length} more`);
+    if (d.endpoints_affected.length > 0) {
+      lines.push(`  endpoints: ${d.endpoints_affected.map((e) => quote(e, 120)).join(', ')}`);
+    }
+    if (d.crons_affected.length > 0) {
+      lines.push(`  crons: ${d.crons_affected.map((k) => quote(k, 120)).join(', ')}`);
+    }
+    return lines;
+  });
+  const changed = detailed
+    ? [
+        blast.changed_symbols.map(
+          (c) => `changed: ${quote(c.name, 120)} ${token(c.kind, 24)} ${quote(c.file, 200)}`,
+        ),
+      ]
+    : [];
+  const fixed = [...head, UNTRUSTED_OPEN, UNTRUSTED_CLOSE, ...tail].join('\n').length;
+  const { lines, shown } = fit(fixed, [...changed, ...items]);
+  const out = [...head, UNTRUSTED_OPEN, ...lines, UNTRUSTED_CLOSE];
+  if (shown < changed.length + items.length) {
+    out.push(`Truncated: showing ${Math.max(0, shown - changed.length)} of ${items.length} symbols.`);
+  }
+  out.push(...tail);
+  return out.join('\n');
+}
+
 // ---- errors ----------------------------------------------------------------
 
 export interface ErrorContext {
   baseUrl: string;
 }
-
-export const BLAST_RADIUS_NOT_IMPLEMENTED =
-  'get_blast_radius is not implemented yet (planned with L04 Blast Radius). Use get_findings for review results.';
 
 const BAD_REF = 'Use owner/repo#123, https://github.com/owner/repo/pull/123, or a DevDigest PR id.';
 

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { RepoIntelService } from '../src/modules/repo-intel/service.js';
 import type { RepoBasics } from '../src/modules/repo-intel/repository.js';
 import type { IndexState } from '../src/modules/repo-intel/types.js';
@@ -51,17 +51,23 @@ describe('RepoIntel facade — degraded contract (flag off)', () => {
     await expect(svc.getCallerSignatures('r1', ['a.ts'])).resolves.toEqual([]);
   });
 
-  it('getBlastRadius → degraded-but-valid shape (never throws)', async () => {
+  it('getBlastRadius → flag_off, empty arrays, never touches codeIndex or the repository', async () => {
+    const symbols = vi.fn();
+    const references = vi.fn();
     const svc = buildDegradedService({ flag: false, basics: null });
+    (svc as unknown as { container: { codeIndex: unknown } }).container.codeIndex = {
+      symbols,
+      references,
+    };
     const blast = await svc.getBlastRadius('r1', ['a.ts']);
-    // Shape (every key present, arrays where arrays go) — consumers assume this.
-    expect(Array.isArray(blast.changedSymbols)).toBe(true);
-    expect(Array.isArray(blast.callers)).toBe(true);
-    expect(Array.isArray(blast.impactedEndpoints)).toBe(true);
+    expect(blast.changedSymbols).toEqual([]);
+    expect(blast.callers).toEqual([]);
+    expect(blast.impactedEndpoints).toEqual([]);
     expect(blast.degraded).toBe(true);
-    // reason is one of the documented DegradedReason values
-    expect(['flag_off', 'no_data', 'index_failed', 'index_partial', 'repo_too_large'])
-      .toContain(blast.reason);
+    expect(blast.reason).toBe('flag_off');
+    expect(blast.source).toBe('none');
+    expect(symbols).not.toHaveBeenCalled();
+    expect(references).not.toHaveBeenCalled();
   });
 
   it('getIndexState → degraded row (never throws) when no row exists', async () => {

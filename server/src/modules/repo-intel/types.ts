@@ -50,8 +50,9 @@ export interface IndexState extends IndexResult {
 }
 
 // ---------------------------------------------------------------------------
-// Blast radius (facade method `getBlastRadius`). Adopted by blast/service.ts in
-// T2; in T1 the facade returns a degraded best-effort over container.codeIndex.
+// Blast radius (facade method `getBlastRadius`). Consumed by the `blast` module,
+// which maps it onto the `BlastRadius` wire contract. Reads the persistent
+// index only.
 // ---------------------------------------------------------------------------
 
 export interface BlastChangedSymbol {
@@ -67,8 +68,12 @@ export interface BlastCallerRow {
   viaSymbol: string;
   /** 1-based line of the reference (representative; for the BlastRadius view). */
   line: number;
-  /** file_rank.rank of the caller file (0 in the degraded/ripgrep path). */
+  /** file_rank.rank of the caller file. */
   rank: number;
+  /** 1 = direct caller of the changed symbol, 2 = caller of a depth-1 caller. */
+  depth: number;
+  /** For depth >= 2: name of the depth-1 caller this one reaches the symbol through. */
+  through: string | null;
 }
 
 export interface BlastResult {
@@ -79,11 +84,15 @@ export interface BlastResult {
   /**
    * Per-caller-file precomputed facts, so consumers (blast) can attribute
    * endpoints/crons to the changed symbol whose callers live in that file.
-   * Present on the persistent (non-degraded) path; absent otherwise.
+   * Present when the persistent index was read.
    */
   factsByFile?: Record<string, { endpoints: string[]; crons: string[] }>;
   degraded?: boolean;
   reason?: DegradedReason;
+  /** `repo_index_state.last_indexed_sha` the rows were read at (when non-empty). */
+  indexedSha?: string;
+  /** `index` when the persistent index was read; `none` when it was not usable. */
+  source: 'index' | 'none';
 }
 
 // ---------------------------------------------------------------------------

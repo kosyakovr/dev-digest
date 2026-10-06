@@ -11,6 +11,7 @@ import type { CallOpts, DevDigestApi } from '../src/core/port.ts';
 import type {
   ActiveRun,
   Agent,
+  BlastRadius,
   Convention,
   Finding,
   Pull,
@@ -148,7 +149,9 @@ export type PortMethod =
   | 'runEvents'
   | 'listRuns'
   | 'listReviews'
-  | 'listConventions';
+  | 'listConventions'
+  | 'syncPull'
+  | 'getBlast';
 
 export interface CallRecord {
   method: PortMethod;
@@ -165,6 +168,7 @@ export class FakeDevDigestApi implements DevDigestApi {
   active: ActiveRun[] = [];
   reviews: Review[] = [];
   conventions: Convention[] = [];
+  blast: BlastRadius = blastRadius();
   /** Successive `listRuns` answers; the last one repeats. */
   runsSequence: RunSummary[][] = [[]];
   startResult: StartReviewResult = {
@@ -238,6 +242,14 @@ export class FakeDevDigestApi implements DevDigestApi {
 
   listConventions(repoId: string, opts: CallOpts): Promise<Convention[]> {
     return this.answer('listConventions', [repoId], opts, () => this.conventions);
+  }
+
+  syncPull(prId: string, opts: CallOpts): Promise<void> {
+    return this.answer('syncPull', [prId], opts, () => undefined);
+  }
+
+  getBlast(prId: string, opts: CallOpts): Promise<BlastRadius> {
+    return this.answer('getBlast', [prId], opts, () => this.blast);
   }
 
   private async answer<T>(method: PortMethod, args: unknown[], opts: CallOpts, value: () => T): Promise<T> {
@@ -328,6 +340,16 @@ export function convention(over: Partial<Convention> = {}): Convention {
     evidence_snippet: 'export const x = 1;',
     confidence: 0.9,
     status: 'accepted',
+    ...over,
+  };
+}
+
+/** An empty, non-degraded blast radius; override what a test needs. */
+export function blastRadius(over: Partial<BlastRadius> = {}): BlastRadius {
+  return {
+    changed_symbols: [],
+    downstream: [],
+    summary: '0 symbol(s) → 0 caller(s) · 0 endpoint(s) · 0 cron(s)',
     ...over,
   };
 }

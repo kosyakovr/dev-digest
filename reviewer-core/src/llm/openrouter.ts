@@ -23,6 +23,8 @@ import { toJsonSchema, parseWithRepair } from './structured.js';
  */
 
 const NOT_SUPPORTED = 'OpenRouterProvider only implements completeStructured';
+/** Validation issues quoted in the final error — enough to tell which field failed. */
+const MAX_ERROR_DETAIL_CHARS = 500;
 
 export interface OpenRouterProviderOptions {
   /** OpenAI-compatible base URL (default: OpenRouter). */
@@ -64,6 +66,8 @@ export class OpenRouterProvider implements LLMProvider {
     let tokensOut = 0;
     let costFromApi: number | null = null;
     let lastRaw = '';
+    let lastError = '';
+    let lastTruncated = false;
 
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
       const res = await this.client.chat.completions.create({
@@ -109,10 +113,29 @@ export class OpenRouterProvider implements LLMProvider {
           attempts: attempt,
         };
       }
+      // Cut off at max_tokens: there is nothing to repair, so the same request
+      // is sent again as a fresh draw. Reasoning models spend the budget on
+      // hidden reasoning first and its length varies per call, so a retry may
+      // fit; feeding the cut-off text back would only grow the prompt.
+      if (choice.finish_reason === 'length') {
+        const reasoning = res.usage?.completion_tokens_details?.reasoning_tokens;
+        lastError =
+          `OpenRouter output for ${req.schemaName} was cut off at max_tokens` +
+          `${req.maxTokens ? ` (${req.maxTokens})` : ''}: ${res.usage?.completion_tokens ?? '?'} completion tokens` +
+          `${reasoning ? `, ${reasoning} of them reasoning` : ''} — raise maxTokens`;
+        lastTruncated = true;
+        continue;
+      }
+      lastError = parsed.error;
+      lastTruncated = false;
       messages.push({ role: 'assistant', content: lastRaw });
       messages.push({ role: 'user', content: parsed.repromptMessage });
     }
-    throw new Error(`OpenRouter structured output failed schema validation for ${req.schemaName}`);
+    const attempts = maxRetries + 1;
+    if (lastTruncated) throw new Error(`${lastError} (${attempts} attempts)`);
+    throw new Error(
+      `OpenRouter structured output failed schema validation for ${req.schemaName} after ${attempts} attempts: ${lastError.slice(0, MAX_ERROR_DETAIL_CHARS)}`,
+    );
   }
 
   /**
