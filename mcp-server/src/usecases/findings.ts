@@ -1,7 +1,8 @@
 /**
  * Ring ②: `get_findings` use case. Selects the stored reviews of a PR — the one
  * of `run_id`, else the newest `kind='review'` of every agent (or of the one
- * asked for) — then filters, sorts and pages their findings as one list.
+ * asked for; a name shared by several agents is `agent_ambiguous`) — then
+ * filters, sorts and pages their findings as one list.
  * Read-only. No HTTP and no status codes here.
  */
 import type { Clock } from '../core/clock.ts';
@@ -82,7 +83,7 @@ export async function getFindings(
   }
 
   const wanted = input.agent?.trim().toLowerCase();
-  const picked = latestPerAgent(reviews).filter(
+  let picked = latestPerAgent(reviews).filter(
     (r) =>
       !wanted || r.agent_name?.toLowerCase() === wanted || r.agent_id?.toLowerCase() === wanted,
   );
@@ -91,6 +92,14 @@ export async function getFindings(
       ...(wanted ? { subject: input.agent?.trim() } : {}),
       candidates: [pr.label],
     });
+  }
+  if (wanted) {
+    // Agent names are not unique: a name shared by several agents is ambiguous.
+    const ids = [...new Set(picked.flatMap((r) => (r.agent_id ? [r.agent_id] : [])))];
+    if (ids.length > 1) {
+      throw new DevDigestError('agent_ambiguous', { subject: input.agent?.trim(), candidates: ids });
+    }
+    picked = picked.slice(0, 1);
   }
   const views = picked.map((review) =>
     buildReviewView({

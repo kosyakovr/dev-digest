@@ -97,6 +97,7 @@ function findingLines(f: Finding, format: ResponseFormat): string[] {
 }
 
 const FINDINGS_DETAILED_HINT = 'Use response_format "detailed" for rationale, suggestion, ids.';
+const NARROW_HINT = 'Call get_findings with agent or run_id for one review.';
 
 function severityCounts(counts: Record<Severity, number>): string {
   return SEVERITIES.map((s) => `${s} ${counts[s]}`).join(' · ');
@@ -166,7 +167,8 @@ export function renderRunOutcome(view: ReviewView, format: ResponseFormat): stri
 /**
  * `get_findings`: a trusted PR header with `total_findings`, then one block per
  * review (its own untrusted block). The page runs across blocks in order; once
- * the cap cuts it, later blocks keep their header but list no findings.
+ * the cap cuts it, later blocks keep their header but list no findings. Block
+ * headers that no longer fit under the cap are counted in one trusted line.
  */
 export function renderFindings(view: FindingsView, format: ResponseFormat): string {
   const n = view.reviews.length;
@@ -185,11 +187,20 @@ export function renderFindings(view: FindingsView, format: ResponseFormat): stri
     head: ['', `review ${i + 1}/${n} · ${runLine(r)}`, ...reviewFacts(r), UNTRUSTED_OPEN, ...reviewInner(r, format)],
     items: r.findings.map((f) => findingLines(f, format)),
   }));
-  let used = [...head, ...blocks.flatMap((b) => [...b.head, UNTRUSTED_CLOSE]), ...tail].join('\n').length;
+  // Block heads are fitted first (the whole-PR picture), findings get the room left.
+  // Leading blocks are kept, so the findings shown stay a prefix of the page.
+  let used = [...head, ...tail].join('\n').length;
+  let kept = 0;
+  for (const b of blocks) {
+    const size = [...b.head, UNTRUSTED_CLOSE].reduce((k, l) => k + l.length + 1, 0);
+    if (used + size > OUTPUT_CAP - TAIL_RESERVE) break;
+    used += size;
+    kept += 1;
+  }
   const out = [...head];
   let shown = 0;
   let cut = false;
-  for (const b of blocks) {
+  for (const b of blocks.slice(0, kept)) {
     out.push(...b.head);
     if (!cut) {
       const page = fit(used, b.items);
@@ -200,10 +211,12 @@ export function renderFindings(view: FindingsView, format: ResponseFormat): stri
     }
     out.push(UNTRUSTED_CLOSE);
   }
+  if (kept < n) out.push(`${n - kept} more review(s) not shown: output cap reached. ${NARROW_HINT}`);
   const onPage = blocks.reduce((k, b) => k + b.items.length, 0);
   if (shown < onPage || view.offset + shown < view.totalFindings) {
+    // With 0 shown, an offset hint would repeat this very call: narrow instead.
     if (shown > 0) out.push(truncatedLine(view.offset + 1, shown, view.totalFindings));
-    else out.push(`Truncated: showing 0 of ${view.totalFindings}. Call again with offset=${view.offset}.`);
+    else out.push(`Truncated: showing 0 of ${view.totalFindings}. ${NARROW_HINT}`);
   }
   out.push(...tail);
   return out.join('\n');

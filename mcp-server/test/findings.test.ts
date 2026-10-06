@@ -4,6 +4,7 @@ import { getFindings } from '../src/usecases/findings.ts';
 import type { FindingsInput } from '../src/usecases/findings.ts';
 import {
   AGENT_GENERAL_ID,
+  AGENT_SECURITY_ID,
   FakeClock,
   finding,
   OTHER_RUN_ID,
@@ -329,6 +330,53 @@ describe('getFindings', () => {
     expect(text).toContain('1 review(s) · total_findings 1');
     expect(text).toContain('gen new');
     expect(text).not.toContain('gen old');
+  });
+
+  it('an agent name shared by two agents fails with agent_ambiguous listing both ids (AC-4c)', async () => {
+    const { clock, api } = setup();
+    api.reviews = [
+      review({ id: 'a', agent_id: AGENT_SECURITY_ID, agent_name: 'Twin', findings: [finding({ title: 'from a' })] }),
+      review({ id: 'b', agent_id: AGENT_GENERAL_ID, agent_name: 'Twin', findings: [finding({ title: 'from b' })] }),
+    ];
+    const err = await getFindings({ api, clock }, { ...BASE, agent: 'Twin' }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ kind: 'agent_ambiguous', candidates: [AGENT_SECURITY_ID, AGENT_GENERAL_ID] });
+    expect(renderError(err, { baseUrl: 'http://x' })).toBe(
+      `2 agents are named "Twin"; pass one id: ${AGENT_SECURITY_ID}, ${AGENT_GENERAL_ID}.`,
+    );
+
+    const byId = await getFindings({ api, clock }, { ...BASE, agent: AGENT_GENERAL_ID });
+    expect(byId.reviews).toHaveLength(1);
+    expect(byId.reviews[0]?.findings.map((f) => f.title)).toEqual(['from b']);
+  });
+
+  it('stays under the cap however many reviews: hidden reviews are counted and no hint repeats the offset (AC-4c)', async () => {
+    const { clock, api } = setup();
+    // Quotes double under JSON escaping, so each detailed block head is ~1 100 chars.
+    api.reviews = Array.from({ length: 60 }, (_, i) =>
+      review({
+        id: `r${i}`,
+        run_id: null,
+        agent_id: `agent-${i}`,
+        agent_name: `Agent ${i}`,
+        summary: '"'.repeat(600),
+        findings: [finding({ id: `f${i}`, title: `t${i}` })],
+      }),
+    );
+    const text = renderFindings(await getFindings({ api, clock }, { ...BASE, limit: 100 }), 'detailed');
+    expect(text.length).toBeLessThanOrEqual(24_000);
+
+    const hidden = /^(\d+) more review\(s\) not shown: output cap reached\. Call get_findings with agent or run_id for one review\.$/m.exec(text);
+    expect(hidden).not.toBeNull();
+    const blocks = text.split('\n').filter((l) => /^review \d+\/60 · /.test(l));
+    expect(blocks.length).toBeGreaterThan(0);
+    expect(blocks.length + Number(hidden?.[1])).toBe(60);
+
+    // Every opened untrusted block is closed.
+    const lines = text.split('\n');
+    expect(lines.filter((l) => l.startsWith('--- untrusted DevDigest data')).length).toBe(blocks.length);
+    expect(lines.filter((l) => l === '--- end untrusted data ---').length).toBe(blocks.length);
+    // No hint sends the caller back with the offset it just used.
+    expect(text).not.toContain('offset=0');
   });
 
   it('renders a finding line as [SEVERITY] "file:start-end" "title"', async () => {
