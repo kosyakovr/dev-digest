@@ -6,11 +6,10 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Badge, Button, Checkbox, Icon } from "@devdigest/ui";
-import type { DocRow } from "../../../helpers";
+import type { DocRow } from "@/lib/context-sections";
 import { s } from "./styles";
 
-export interface DocRowItemProps {
-  row: DocRow;
+export interface DocRowItemView {
   /** Show the "not found in <repo>" marker. */
   showNotFound: boolean;
   repoName: string;
@@ -19,33 +18,37 @@ export interface DocRowItemProps {
   canMoveUp: boolean;
   canMoveDown: boolean;
   dragging: boolean;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDrop: () => void;
-  onToggle: () => void;
-  onPreview: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
 }
 
-export function DocRowItem({
-  row: r,
-  showNotFound,
-  repoName,
-  canDrag,
-  canMoveUp,
-  canMoveDown,
-  dragging,
-  onDragStart,
-  onDragEnd,
-  onDragOver,
-  onDrop,
-  onToggle,
-  onPreview,
-  onMoveUp,
-  onMoveDown,
-}: DocRowItemProps) {
+export interface DocRowItemHandlers {
+  dragStart: () => void;
+  dragEnd: () => void;
+  dragOver: (e: React.DragEvent) => void;
+  drop: () => void;
+  toggle: () => void;
+  preview: () => void;
+  moveUp: () => void;
+  moveDown: () => void;
+}
+
+export interface DocRowItemProps {
+  row: DocRow;
+  view: DocRowItemView;
+  on: DocRowItemHandlers;
+}
+
+export function DocRowItem({ row: r, view, on }: DocRowItemProps) {
+  const { showNotFound, repoName, canDrag, canMoveUp, canMoveDown, dragging } = view;
+  const {
+    dragStart: onDragStart,
+    dragEnd: onDragEnd,
+    dragOver: onDragOver,
+    drop: onDrop,
+    toggle: onToggle,
+    preview: onPreview,
+    moveUp: onMoveUp,
+    moveDown: onMoveDown,
+  } = on;
   const t = useTranslations("context");
   return (
     <div

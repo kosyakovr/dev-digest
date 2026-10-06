@@ -4,8 +4,9 @@
 #
 #   review-record.sh add <reviewer> <verdict> [<snapshot>]
 #       MAIN SESSION ONLY, right after a reviewer's FINAL round and before any
-#       commit. Records: reviewer, verdict, base = HEAD, tree = the reviewed
-#       working tree (change-set.sh --tree), the skills digest, the date.
+#       commit. Records: reviewer, verdict, base = HEAD (with a snapshot: the
+#       snapshot's parent, the base the reviewer diffed against), tree = the
+#       reviewed working tree (change-set.sh --tree), the skills digest, the date.
 #       reviewer: architecture-reviewer | security-reviewer
 #       verdict:  approve | comment   (request_changes is refused: exit 1)
 #       snapshot: optional change-set.sh --snapshot commit id the reviewer
@@ -70,11 +71,13 @@ cmd_add() {
     *) die "verdict must be approve or comment, got: $2" ;;
   esac
   local base tree digest file
-  base=$(git rev-parse HEAD) || die "no HEAD"
   if [ $# -eq 3 ]; then
     git rev-parse --verify -q "$3^{commit}" >/dev/null || die "snapshot is not a commit: $3"
     tree=$(git rev-parse "$3^{tree}") || die "cannot resolve the tree of snapshot $3"
+    # the reviewer diffed snapshot^..snapshot, so the base is the snapshot's parent, not HEAD now
+    base=$(git rev-parse "$3^") || die "snapshot has no parent: $3"
   else
+    base=$(git rev-parse HEAD) || die "no HEAD"
     tree=$("$self_dir/change-set.sh" --tree) || die "change-set.sh --tree failed"
   fi
   digest=$(skills_digest) || exit 2
@@ -150,12 +153,25 @@ self_test() {
     git add -A && git commit -qm fix2
     expect 1 "branch touched a.ts before the review base" -- "$self" covered security-reviewer "$mb" a.ts
     expect 0 "branch starts at the review base"           -- "$self" covered security-reviewer "$(git rev-parse HEAD~1)" a.ts
-    expect 0 "add with a snapshot"     -- "$self" add architecture-reviewer approve HEAD~1
-    if [ "$(tail -n 1 "$(git rev-parse --absolute-git-dir)/devdigest/agent-reviews.tsv" | cut -f4)" = "$(git rev-parse 'HEAD~1^{tree}')" ]; then
+    echo a5 > a.ts                                   # a reviewed change, captured as a snapshot
+    snap=$("$tmp/scripts/change-set.sh" --snapshot) || { echo "FAIL snapshot build"; exit 2; }
+    recs="$(git rev-parse --absolute-git-dir)/devdigest/agent-reviews.tsv"
+    expect 0 "add with a snapshot"     -- "$self" add architecture-reviewer approve "$snap"
+    last=$(tail -n 1 "$recs")
+    if [ "$(printf '%s\n' "$last" | cut -f3)" = "$(git rev-parse "$snap^")" ]; then
       pass=$((pass + 1))
     else
-      fail=$((fail + 1)); echo "FAIL snapshot tree recorded: not the tree of HEAD~1"
+      fail=$((fail + 1)); echo "FAIL snapshot base recorded: not the snapshot's parent"
     fi
+    if [ "$(printf '%s\n' "$last" | cut -f4)" = "$(git rev-parse "$snap^{tree}")" ]; then
+      pass=$((pass + 1))
+    else
+      fail=$((fail + 1)); echo "FAIL snapshot tree recorded: not the tree of the snapshot"
+    fi
+    # HEAD moves after the snapshot: a path the new commit changed was never reviewed
+    echo b > b.ts && git add b.ts && git commit -qm "head moved"
+    expect 0 "add with a snapshot after HEAD moved" -- "$self" add architecture-reviewer approve "$snap"
+    expect 1 "path changed by the moved HEAD not covered" -- "$self" covered architecture-reviewer "$mb" b.ts
     expect 2 "add with a bogus snapshot" -- "$self" add architecture-reviewer approve deadbeefnotacommit
     echo rule2 > .claude/skills/s/SKILL.md
     expect 1 "skills changed"         -- "$self" covered security-reviewer "$(git rev-parse HEAD~1)" a.ts

@@ -79,23 +79,27 @@ export function ContextDocsEditor({ items, inherited = [], note, saving, onSave 
     const canDrag = reorderable && r.attached;
     return {
       row: r,
-      showNotFound: missing && !!list,
-      repoName,
-      canDrag,
-      canMoveUp: canDrag && canMoveUp(draft, r.path),
-      canMoveDown: canDrag && canMoveDown(draft, r.path),
-      dragging: dragPath === r.path,
-      onDragStart: () => canDrag && setDragPath(r.path),
-      onDragEnd: () => setDragPath(null),
-      onDragOver: (e) => reorderable && dragPath && e.preventDefault(),
-      onDrop: () => {
-        if (reorderable && dragPath) setDraft(dropOn(draft, order, dragPath, r.path));
-        setDragPath(null);
+      view: {
+        showNotFound: missing && !!list,
+        repoName,
+        canDrag,
+        canMoveUp: canDrag && canMoveUp(draft, r.path),
+        canMoveDown: canDrag && canMoveDown(draft, r.path),
+        dragging: dragPath === r.path,
       },
-      onToggle: () => setDraft(toggle(draft, r.path)),
-      onPreview: () => setPreviewPath(r.path),
-      onMoveUp: () => setDraft(moveUp(draft, r.path)),
-      onMoveDown: () => setDraft(moveDown(draft, r.path)),
+      on: {
+        dragStart: () => canDrag && setDragPath(r.path),
+        dragEnd: () => setDragPath(null),
+        dragOver: (e) => reorderable && dragPath && e.preventDefault(),
+        drop: () => {
+          if (reorderable && dragPath) setDraft(dropOn(draft, order, dragPath, r.path));
+          setDragPath(null);
+        },
+        toggle: () => setDraft(toggle(draft, r.path)),
+        preview: () => setPreviewPath(r.path),
+        moveUp: () => setDraft(moveUp(draft, r.path)),
+        moveDown: () => setDraft(moveDown(draft, r.path)),
+      },
     };
   };
 
