@@ -81,6 +81,8 @@ and its confidence table, behind this preamble, which you must include verbatim:
 | `mermaid-diagram` | Authoring guidance for diagrams. Nothing in a diff can violate it. |
 | `typescript-expert` | A persona ("You are an advanced TypeScript expert…"), not a rule catalogue: no anti-pattern table, no severity vocabulary, no grounding in this repo. Given a diff it produces preference-shaped opinions, and an opinion must never block a merge. Group F already covers the part of TS review that matters at merge time — a broken contract, a changed response shape, a nullability regression. |
 | `pr-self-review` | This skill. |
+| `sdd-run` | A process skill that orchestrates one spec → plan → implementer → reviewers run; it holds no rule a diff can break. Its pre-commit reviewers (`architecture-reviewer`, `security-reviewer`) feed this gate through `scripts/review-record.sh`, and its own markdown is reviewed by group F like any `.claude/**` file. |
+| `workflow-retro` | A process skill that measures a finished run from its transcripts and recommends changes; it runs after this gate and states no code rule. Its scripts (`.claude/skills/workflow-retro/scripts/*.mjs`) and markdown are reviewed by group F. |
 
 `next-best-practices` carries `user-invocable: false`. That only hides it from the
 slash-command list; a sub-agent can still `Read` its `SKILL.md` by path, which is

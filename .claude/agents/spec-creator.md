@@ -138,18 +138,21 @@ In one or two batched turns:
    and one recent spec for tone (`specs/L04-blast-radius.md`).
 2. For each package the feature may touch: `<pkg>/AGENTS.md` and
    `<pkg>/INSIGHTS.md` — a recorded trap can be an edge case
-   (e.g. `pr_files` is filled only by `GET /pulls/:id`, root `INSIGHTS.md`).
+   (e.g. `pr_files` is filled only by `GET /pulls/:id`,
+   [server/docs/pull-files.md](../../server/docs/pull-files.md)).
 3. What already exists, so you specify only the change:
    - routes: `grep -rnE "app\.(get|post|put|patch|delete)\(" server/src/modules/`
      (`grep` here is ugrep — use `-E`, no BRE `\|`);
    - contracts: `server/src/vendor/shared/contracts/` — a schema there does
-     **not** prove a route serves it (root `INSIGHTS.md` 2026-09-19); confirm
+     **not** prove a route serves it ([docs/shared-contracts.md](../../docs/shared-contracts.md)
+     § A schema is not a route); confirm
      the route;
    - UI: `client/src/app/` for the screen the design changes; `client/messages/en/`
      for existing wording;
    - MCP tools: `mcp-server/src/tools/definitions.ts`;
    - earlier work, reverted lesson work included:
-     `git log --all --oneline -i --grep '<noun>'` (root `INSIGHTS.md` 2026-09-23 —
+     `git log --all --oneline -i --grep '<noun>'` ([docs/lesson-log.md](../../docs/lesson-log.md)
+     § Before designing a lesson feature —
      tell the user if you use someone else's homework).
 4. System state through MCP, when the prompt names a repo or a PR:
    `get_conventions` (conventions the feature must respect),
@@ -209,8 +212,8 @@ Work through all six; the spec carries the results, the report counts them.
 6. **Non-functional**, by the template's categories. These are the gaps that
    came back as review fixes after earlier lessons: a time limit with no
    statement of what the user sees past it (`git show 55e344f`), an LLM token
-   cap sized without the model's hidden reasoning (root `INSIGHTS.md`
-   2026-10-02), error wording the spec and the code disagreed on
+   cap sized without the model's hidden reasoning
+   ([reviewer-core/docs/llm-token-budget.md](../../reviewer-core/docs/llm-token-budget.md)), error wording the spec and the code disagreed on
    (`git show de07f9e`). For each surface and hop ask: how long may it take,
    and then what · how many LLM calls per trigger, capped how, paid by whom ·
    what leaves the machine · whether PR text or model output reaches a prompt

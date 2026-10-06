@@ -39,6 +39,8 @@ export class ContextDocsRepository {
   /** Replace the agent's whole set: delete then insert in ONE transaction. */
   async replaceAgentItems(agentId: string, items: ContextItemRow[]): Promise<void> {
     await this.db.transaction(async (tx) => {
+      // Serialize writers to one owner: lock the parent row first (last write wins).
+      await tx.select({ id: t.agents.id }).from(t.agents).where(eq(t.agents.id, agentId)).for('update');
       await tx.delete(t.agentContextDocs).where(eq(t.agentContextDocs.agentId, agentId));
       if (items.length === 0) return;
       await tx
@@ -50,6 +52,8 @@ export class ContextDocsRepository {
   /** Replace the skill's whole set: delete then insert in ONE transaction. */
   async replaceSkillItems(skillId: string, items: ContextItemRow[]): Promise<void> {
     await this.db.transaction(async (tx) => {
+      // Serialize writers to one owner: lock the parent row first (last write wins).
+      await tx.select({ id: t.skills.id }).from(t.skills).where(eq(t.skills.id, skillId)).for('update');
       await tx.delete(t.skillContextDocs).where(eq(t.skillContextDocs.skillId, skillId));
       if (items.length === 0) return;
       await tx

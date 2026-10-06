@@ -2,12 +2,15 @@
 # review-record.sh — lets /pr-self-review skip a group that architecture-reviewer
 # or security-reviewer already reviewed, on exactly the content being pushed.
 #
-#   review-record.sh add <reviewer> <verdict>
+#   review-record.sh add <reviewer> <verdict> [<snapshot>]
 #       MAIN SESSION ONLY, right after a reviewer's FINAL round and before any
 #       commit. Records: reviewer, verdict, base = HEAD, tree = the reviewed
 #       working tree (change-set.sh --tree), the skills digest, the date.
 #       reviewer: architecture-reviewer | security-reviewer
 #       verdict:  approve | comment   (request_changes is refused: exit 1)
+#       snapshot: optional change-set.sh --snapshot commit id the reviewer
+#                 reported; its tree is recorded instead of the working tree
+#                 as it is now. Not a commit: exit 2.
 #   review-record.sh covered <reviewer> <merge-base> <path>...
 #       Used by /pr-self-review step 3. Exit 0 and one line "covered …" when a
 #       record of <reviewer> shows it reviewed these paths as they are at HEAD:
@@ -59,7 +62,7 @@ check_reviewer() {
 }
 
 cmd_add() {
-  [ $# -eq 2 ] || die "usage: review-record.sh add <reviewer> <approve|comment>"
+  { [ $# -eq 2 ] || [ $# -eq 3 ]; } || die "usage: review-record.sh add <reviewer> <approve|comment> [<snapshot>]"
   check_reviewer "$1"
   case "$2" in
     approve|comment) ;;
@@ -68,7 +71,12 @@ cmd_add() {
   esac
   local base tree digest file
   base=$(git rev-parse HEAD) || die "no HEAD"
-  tree=$("$self_dir/change-set.sh" --tree) || die "change-set.sh --tree failed"
+  if [ $# -eq 3 ]; then
+    git rev-parse --verify -q "$3^{commit}" >/dev/null || die "snapshot is not a commit: $3"
+    tree=$(git rev-parse "$3^{tree}") || die "cannot resolve the tree of snapshot $3"
+  else
+    tree=$("$self_dir/change-set.sh" --tree) || die "change-set.sh --tree failed"
+  fi
   digest=$(skills_digest) || exit 2
   file=$(record_file) || exit 2
   mkdir -p "$(dirname "$file")" || die "cannot create $(dirname "$file")"
@@ -142,8 +150,15 @@ self_test() {
     git add -A && git commit -qm fix2
     expect 1 "branch touched a.ts before the review base" -- "$self" covered security-reviewer "$mb" a.ts
     expect 0 "branch starts at the review base"           -- "$self" covered security-reviewer "$(git rev-parse HEAD~1)" a.ts
+    expect 0 "add with a snapshot"     -- "$self" add architecture-reviewer approve HEAD~1
+    if [ "$(tail -n 1 "$(git rev-parse --absolute-git-dir)/devdigest/agent-reviews.tsv" | cut -f4)" = "$(git rev-parse 'HEAD~1^{tree}')" ]; then
+      pass=$((pass + 1))
+    else
+      fail=$((fail + 1)); echo "FAIL snapshot tree recorded: not the tree of HEAD~1"
+    fi
+    expect 2 "add with a bogus snapshot" -- "$self" add architecture-reviewer approve deadbeefnotacommit
     echo rule2 > .claude/skills/s/SKILL.md
-    expect 1 "skills changed"          -- "$self" covered security-reviewer "$(git rev-parse HEAD~1)" a.ts
+    expect 1 "skills changed"         -- "$self" covered security-reviewer "$(git rev-parse HEAD~1)" a.ts
     printf '%s passed, %s failed\n' "$pass" "$fail"
     [ "$fail" -eq 0 ]
   )
@@ -156,6 +171,6 @@ case "${1:-}" in
   add) shift; cmd_add "$@" ;;
   covered) shift; cmd_covered "$@" ;;
   --self-test) self_test ;;
-  -h|--help|"") sed -n '2,27p' "$0" ;;
+  -h|--help|"") sed -n '2,30p' "$0" ;;
   *) die "unknown command: $1 (add | covered | --self-test)" ;;
 esac

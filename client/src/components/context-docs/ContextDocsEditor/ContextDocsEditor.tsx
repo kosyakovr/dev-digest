@@ -9,7 +9,7 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Badge, Button, Checkbox, ErrorState, Icon, Skeleton } from "@devdigest/ui";
+import { Badge, Button, ErrorState, Icon, Skeleton } from "@devdigest/ui";
 import type { ContextItem } from "@devdigest/shared";
 import { useActiveRepo } from "@/lib/repo-context";
 import { useContextFiles, useContextSources } from "@/lib/hooks/context";
@@ -29,11 +29,12 @@ import {
   type Draft,
   type DocRow,
 } from "../helpers";
+import { DocRowItem, type DocRowItemProps } from "./_components/DocRowItem";
 import { PreviewDrawer } from "./_components/PreviewDrawer";
 import { s } from "./styles";
 
 export interface ContextDocsEditorProps {
-  /** The attached docs as stored; must be a stable reference between renders. */
+  /** The attached docs as stored; the draft resets when their content changes. */
   items: ContextItem[];
   /** Docs inherited through skills (agent tab only). */
   inherited?: { skill_id: string; skill_name: string; items: ContextItem[] }[];
@@ -53,8 +54,15 @@ export function ContextDocsEditor({ items, inherited = [], note, saving, onSave 
   const [dragPath, setDragPath] = React.useState<string | null>(null);
   const [previewPath, setPreviewPath] = React.useState<string | null>(null);
 
-  // A save (or a refetch) replaces `items`; the draft follows it.
-  React.useEffect(() => setDraft(items), [items]);
+  // The draft follows the saved data by CONTENT, not identity: adjust state
+  // during render when the saved items actually change (a save, a refetch that
+  // returns different items). An equal but new array leaves unsaved edits alone.
+  const itemsKey = items.map((i) => `${i.path}:${i.position}`).join("|");
+  const [seenKey, setSeenKey] = React.useState(itemsKey);
+  if (seenKey !== itemsKey) {
+    setSeenKey(itemsKey);
+    setDraft(items);
+  }
 
   if (repoId && isLoading) return <Skeleton height={180} />;
 
@@ -66,68 +74,29 @@ export function ContextDocsEditor({ items, inherited = [], note, saving, onSave 
   const inheritedInfo = inheritedSummary(inherited, list);
   const repoName = activeRepo?.full_name ?? "";
 
-  const renderRow = (r: DocRow, missing: boolean) => {
+  // Props for one row (plain data, not JSX): the row itself is <DocRowItem />.
+  const rowProps = (r: DocRow, missing: boolean): DocRowItemProps => {
     const canDrag = reorderable && r.attached;
-    const up = canDrag && canMoveUp(draft, r.path);
-    const down = canDrag && canMoveDown(draft, r.path);
-    return (
-      <div
-        key={r.path}
-        role="listitem"
-        aria-label={r.path}
-        draggable={canDrag}
-        onDragStart={() => canDrag && setDragPath(r.path)}
-        onDragEnd={() => setDragPath(null)}
-        onDragOver={(e) => reorderable && dragPath && e.preventDefault()}
-        onDrop={() => {
-          if (reorderable && dragPath) setDraft(dropOn(draft, order, dragPath, r.path));
-          setDragPath(null);
-        }}
-        style={s.row(r.attached, dragPath === r.path)}
-      >
-        <span style={s.handle(canDrag)} aria-hidden="true">
-          <Icon.Menu size={14} />
-        </span>
-        <Checkbox
-          checked={r.attached}
-          onChange={() => setDraft(toggle(draft, r.path))}
-          label={<span style={s.hidden}>{t("editor.attach", { path: r.path })}</span>}
-        />
-        <span className="mono" style={s.path}>
-          {r.path}
-        </span>
-        {missing && list && <span style={s.notFound}>{t("editor.notFound", { repo: repoName })}</span>}
-        {r.doc?.source && <Badge mono>{r.doc.source}</Badge>}
-        {r.doc?.tokens != null && <span style={s.tokens}>{t("tokens", { count: r.doc.tokens })}</span>}
-        {r.doc && (
-          <Button kind="ghost" size="sm" icon="Eye" onClick={() => setPreviewPath(r.path)}>
-            {t("editor.preview")}
-          </Button>
-        )}
-        {canDrag && (
-          <span style={s.moveGroup}>
-            <button
-              type="button"
-              onClick={() => setDraft(moveUp(draft, r.path))}
-              disabled={!up}
-              aria-label={t("editor.moveUp", { path: r.path })}
-              style={s.moveBtn(!up)}
-            >
-              <Icon.ArrowUp size={13} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setDraft(moveDown(draft, r.path))}
-              disabled={!down}
-              aria-label={t("editor.moveDown", { path: r.path })}
-              style={s.moveBtn(!down)}
-            >
-              <Icon.ArrowDown size={13} />
-            </button>
-          </span>
-        )}
-      </div>
-    );
+    return {
+      row: r,
+      showNotFound: missing && !!list,
+      repoName,
+      canDrag,
+      canMoveUp: canDrag && canMoveUp(draft, r.path),
+      canMoveDown: canDrag && canMoveDown(draft, r.path),
+      dragging: dragPath === r.path,
+      onDragStart: () => canDrag && setDragPath(r.path),
+      onDragEnd: () => setDragPath(null),
+      onDragOver: (e) => reorderable && dragPath && e.preventDefault(),
+      onDrop: () => {
+        if (reorderable && dragPath) setDraft(dropOn(draft, order, dragPath, r.path));
+        setDragPath(null);
+      },
+      onToggle: () => setDraft(toggle(draft, r.path)),
+      onPreview: () => setPreviewPath(r.path),
+      onMoveUp: () => setDraft(moveUp(draft, r.path)),
+      onMoveDown: () => setDraft(moveDown(draft, r.path)),
+    };
   };
 
   const folders = (sources?.folders ?? []).join(", ");
@@ -164,20 +133,26 @@ export function ContextDocsEditor({ items, inherited = [], note, saving, onSave 
 
       {sections.manual.length > 0 && (
         <div role="list" style={s.list}>
-          {sections.manual.map((r) => renderRow(r, r.doc == null))}
+          {sections.manual.map((r) => (
+            <DocRowItem key={r.path} {...rowProps(r, r.doc == null)} />
+          ))}
         </div>
       )}
       {sections.groups.map((g) => (
         <section key={g.source}>
           <h3 style={s.groupHead}>{g.source}</h3>
           <div role="list" style={s.list}>
-            {g.rows.map((r) => renderRow(r, false))}
+            {g.rows.map((r) => (
+              <DocRowItem key={r.path} {...rowProps(r, false)} />
+            ))}
           </div>
         </section>
       ))}
       {sections.notFound.length > 0 && (
         <div role="list" style={{ ...s.list, marginTop: 14 }}>
-          {sections.notFound.map((r) => renderRow(r, true))}
+          {sections.notFound.map((r) => (
+            <DocRowItem key={r.path} {...rowProps(r, true)} />
+          ))}
         </div>
       )}
 

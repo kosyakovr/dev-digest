@@ -179,7 +179,7 @@ anything, search the feature's nouns in `server/src/db/schema*`,
 A Zod contract does **not** prove a route serves it — confirm the route is
 registered in `server/src/modules/`. Everything found goes into
 "What already exists (do not rebuild)", and a requirement it already
-satisfies is marked "needed — fails" in Requirements review.
+satisfies gets the verdict `already built` (with `path:line`) in Requirements review.
 
 ## Step 3 — Map every file to the skills the implementer will apply
 
@@ -343,7 +343,7 @@ they may want to overrule, the top recommendation — and always end with:>
 ## Requirements review
 | ID | Requirement (short) | Source | Verdict | Note / default taken |
 |---|---|---|---|---|
-| R-1 | … | specs/<file>.md § … | ok \| unclear \| incomplete \| conflict \| untestable \| already built | <question, default or evidence> |
+| R-1 | … | specs/<file>.md § … | ok \| unclear \| incomplete \| conflict \| untestable \| already built \| not needed | <question, default or evidence> |
 <one line if no spec exists: "No spec — planned from the request; writing one is outside this plan.">
 
 ## Goal
