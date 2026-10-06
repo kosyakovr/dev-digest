@@ -29,7 +29,7 @@ const runId = z
   .string()
   .uuid()
   .optional()
-  .describe('run_id from run_agent_on_pr; omit for the latest review');
+  .describe('run_id from run_agent_on_pr; omit for the latest review of every agent');
 const responseFormat = z.enum(['concise', 'detailed']).default('concise');
 const limit = (dflt: number) => z.number().int().min(1).max(100).default(dflt);
 const offset = z.number().int().min(0).default(0);
@@ -77,7 +77,7 @@ export const getFindingsTool = {
   name: 'get_findings',
   title: 'Get review findings',
   description:
-    'Get findings of a finished DevDigest AI review of a pull request: latest, or by run_id or agent. Read-only; safe to poll after run_agent_on_pr.',
+    'Get findings of finished DevDigest AI reviews of a pull request: the latest review of every agent with total_findings, or one by run_id or agent. Read-only; safe to poll.',
   inputSchema: {
     pr,
     run_id: runId,

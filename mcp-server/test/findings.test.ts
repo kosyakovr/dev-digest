@@ -63,7 +63,7 @@ describe('getFindings', () => {
     const { clock, api } = setup();
     api.runsSequence = [[run({ status: 'running' })]];
     const view = await getFindings({ api, clock }, { ...BASE, run_id: RUN_ID });
-    expect(view.status).toBe('running');
+    expect(view.reviews[0]?.status).toBe('running');
     const text = renderFindings(view, 'concise');
     expect(text).toContain('status running');
     expect(text).toContain('Next: get_findings');
@@ -156,15 +156,15 @@ describe('getFindings', () => {
       }),
     ];
     const view = await getFindings({ api, clock }, BASE);
-    expect(view.findings.map((f) => f.title)).toEqual(['c-z9', 'w-a5', 'w-a30', 'w-b1']);
+    expect(view.reviews[0]?.findings.map((f) => f.title)).toEqual(['c-z9', 'w-a5', 'w-a30', 'w-b1']);
   });
 
   it('still returns the newest review when its run_id is null', async () => {
     const { clock, api } = setup();
     api.reviews = [review({ run_id: null, findings: [finding({ title: 'seeded' })] })];
     const view = await getFindings({ api, clock }, BASE);
-    expect(view.status).toBe('done');
-    expect(view.runId).toBeNull();
+    expect(view.reviews[0]?.status).toBe('done');
+    expect(view.reviews[0]?.runId).toBeNull();
     const text = renderFindings(view, 'concise');
     expect(text).toContain('run none');
     expect(text).toContain('"seeded"');
@@ -212,6 +212,123 @@ describe('getFindings', () => {
     api.reviews = [review({ findings: [finding()] })];
     const text = renderFindings(await getFindings({ api, clock }, BASE), 'concise');
     expect(text).toContain('$0.0123');
+  });
+
+  it('shows the newest review of every agent with total_findings (AC-4b)', async () => {
+    const { clock, api } = setup();
+    api.runsSequence = [[run({ run_id: RUN_ID }), run({ run_id: OTHER_RUN_ID, agent_id: AGENT_GENERAL_ID })]];
+    // The API lists reviews newest first.
+    api.reviews = [
+      review({ id: 'sec-new', findings: [finding({ id: 's1', severity: 'CRITICAL', title: 'security new' })] }),
+      review({
+        id: 'gen',
+        run_id: OTHER_RUN_ID,
+        agent_id: AGENT_GENERAL_ID,
+        agent_name: 'General Reviewer',
+        findings: [
+          finding({ id: 'g1', title: 'general one' }),
+          finding({ id: 'g2', severity: 'SUGGESTION', title: 'general two', start_line: 30, end_line: 30 }),
+        ],
+      }),
+      review({ id: 'sec-old', run_id: null, findings: [finding({ id: 's0', title: 'security old' })] }),
+    ];
+    const view = await getFindings({ api, clock }, BASE);
+    expect(view.reviews.map((r) => r.agentName)).toEqual(['Security Reviewer', 'General Reviewer']);
+    expect(view.totalFindings).toBe(3);
+    expect(view.counts).toEqual({ CRITICAL: 1, WARNING: 1, SUGGESTION: 1 });
+
+    const text = renderFindings(view, 'concise');
+    expect(text.split('\n').slice(0, 2)).toEqual([
+      'pr acme/payments-api#482 · 2 review(s) · total_findings 3',
+      'CRITICAL 1 · WARNING 1 · SUGGESTION 1',
+    ]);
+    expect(text).toContain(`review 1/2 · run ${RUN_ID} · status done`);
+    expect(text).toContain(`review 2/2 · run ${OTHER_RUN_ID} · status done`);
+    expect(text).not.toContain('security old');
+    expect(finds(text)).toEqual([
+      '[CRITICAL] "src/a.ts:10-12" "security new"',
+      '[WARNING] "src/a.ts:10-12" "general one"',
+      '[SUGGESTION] "src/a.ts:30-30" "general two"',
+    ]);
+  });
+
+  it('gives each review its own untrusted block, with its agent inside', async () => {
+    const { clock, api } = setup();
+    api.reviews = [
+      review({ id: 'sec', findings: [finding({ title: 'security one' })] }),
+      review({ id: 'gen', agent_id: AGENT_GENERAL_ID, agent_name: 'General Reviewer', findings: [finding({ title: 'general one' })] }),
+    ];
+    const lines = renderFindings(await getFindings({ api, clock }, BASE), 'concise').split('\n');
+    const opens = lines.flatMap((l, i) => (l.startsWith('--- untrusted DevDigest data') ? [i] : []));
+    const closes = lines.flatMap((l, i) => (l === '--- end untrusted data ---' ? [i] : []));
+    expect(opens).toHaveLength(2);
+    expect(closes).toHaveLength(2);
+    const at = (s: string) => lines.findIndex((l) => l.includes(s));
+    expect(at('"Security Reviewer"')).toBeGreaterThan(opens[0]!);
+    expect(at('"security one"')).toBeLessThan(closes[0]!);
+    expect(at('"General Reviewer"')).toBeGreaterThan(opens[1]!);
+    expect(at('"general one"')).toBeLessThan(closes[1]!);
+  });
+
+  it('total_findings counts only non-dismissed findings at or above min_severity, over all reviews', async () => {
+    const { clock, api } = setup();
+    api.reviews = [
+      review({
+        id: 'sec',
+        findings: [
+          finding({ id: '1', severity: 'CRITICAL' }),
+          finding({ id: '2', severity: 'SUGGESTION' }),
+          finding({ id: '3', severity: 'WARNING', dismissed_at: '2026-10-01T00:00:00Z' }),
+        ],
+      }),
+      review({
+        id: 'gen',
+        agent_id: AGENT_GENERAL_ID,
+        agent_name: 'General Reviewer',
+        findings: [finding({ id: '4', severity: 'WARNING' }), finding({ id: '5', severity: 'SUGGESTION' })],
+      }),
+    ];
+    const view = await getFindings({ api, clock }, { ...BASE, min_severity: 'WARNING' });
+    expect(view.totalFindings).toBe(2);
+    expect(view.counts).toEqual({ CRITICAL: 1, WARNING: 1, SUGGESTION: 0 });
+    expect(renderFindings(view, 'concise')).toContain('1 dismissed finding(s) hidden');
+  });
+
+  it('pages across reviews: limit and offset run over the findings of all blocks in order', async () => {
+    const { clock, api } = setup();
+    const two = (p: string) => [
+      finding({ id: `${p}1`, title: `${p}1`, start_line: 1 }),
+      finding({ id: `${p}2`, title: `${p}2`, start_line: 2 }),
+    ];
+    api.reviews = [
+      review({ id: 'sec', findings: two('s') }),
+      review({ id: 'gen', agent_id: AGENT_GENERAL_ID, agent_name: 'General Reviewer', findings: two('g') }),
+    ];
+    const first = renderFindings(await getFindings({ api, clock }, { ...BASE, limit: 3 }), 'concise');
+    expect(finds(first).map((l) => l.split(' ').pop())).toEqual(['"s1"', '"s2"', '"g1"']);
+    expect(first).toContain('Truncated: showing 1-3 of 4. Call again with offset=3.');
+
+    const rest = renderFindings(await getFindings({ api, clock }, { ...BASE, limit: 3, offset: 3 }), 'concise');
+    expect(finds(rest).map((l) => l.split(' ').pop())).toEqual(['"g2"']);
+    // The first agent's block keeps its header and counts though none of its findings is on the page.
+    expect(rest).toContain(`review 1/2 · run ${RUN_ID} · status done`);
+    expect(rest).toContain('"Security Reviewer"');
+    expect(rest).not.toContain('Truncated');
+  });
+
+  it('with an agent filter returns that agent’s newest review only', async () => {
+    const { clock, api } = setup();
+    api.reviews = [
+      review({ id: 'gen-new', agent_id: AGENT_GENERAL_ID, agent_name: 'General Reviewer', findings: [finding({ title: 'gen new' })] }),
+      review({ id: 'sec', findings: [finding({ title: 'security one' })] }),
+      review({ id: 'gen-old', agent_id: AGENT_GENERAL_ID, agent_name: 'General Reviewer', findings: [finding({ title: 'gen old' })] }),
+    ];
+    const view = await getFindings({ api, clock }, { ...BASE, agent: 'General Reviewer' });
+    expect(view.reviews).toHaveLength(1);
+    const text = renderFindings(view, 'concise');
+    expect(text).toContain('1 review(s) · total_findings 1');
+    expect(text).toContain('gen new');
+    expect(text).not.toContain('gen old');
   });
 
   it('renders a finding line as [SEVERITY] "file:start-end" "title"', async () => {

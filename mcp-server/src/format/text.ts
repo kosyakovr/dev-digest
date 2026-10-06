@@ -8,7 +8,7 @@
 import { DevDigestError } from '../core/errors.ts';
 import type { Agent, BlastCaller, Convention, Finding } from '../core/schemas.ts';
 import { collapseToOneLine, truncate } from '../core/text.ts';
-import type { BlastView, ConventionsView, ReviewView, Severity } from '../core/views.ts';
+import type { BlastView, ConventionsView, FindingsView, ReviewView, Severity } from '../core/views.ts';
 
 export type ResponseFormat = 'concise' | 'detailed';
 
@@ -41,7 +41,7 @@ function oneLine(value: string, max: number): string {
 }
 
 /** Lines of `items` that fit under the cap, with the count that fit. */
-function fit(used: number, items: string[][]): { lines: string[]; shown: number } {
+function fit(used: number, items: string[][]): { lines: string[]; shown: number; size: number } {
   const lines: string[] = [];
   let size = used;
   let shown = 0;
@@ -52,7 +52,7 @@ function fit(used: number, items: string[][]): { lines: string[]; shown: number 
     size += add;
     shown += 1;
   }
-  return { lines, shown };
+  return { lines, shown, size };
 }
 
 function truncatedLine(first: number, shown: number, total: number): string {
@@ -96,37 +96,56 @@ function findingLines(f: Finding, format: ResponseFormat): string[] {
   return lines;
 }
 
-function renderReview(view: ReviewView, format: ResponseFormat): string {
+const FINDINGS_DETAILED_HINT = 'Use response_format "detailed" for rationale, suggestion, ids.';
+
+function severityCounts(counts: Record<Severity, number>): string {
+  return SEVERITIES.map((s) => `${s} ${counts[s]}`).join(' · ');
+}
+
+/** `run <uuid|none> · status <…>` (+ attached). */
+function runLine(view: ReviewView): string {
   const runId = view.runId === null ? 'none' : token(view.runId, 64);
-  const head: string[] = [
-    `run ${runId} · status ${view.status}${view.attached ? ' · attached to a run already in progress' : ''}`,
-    `pr ${token(view.prLabel, 120)}`,
-  ];
+  return `run ${runId} · status ${view.status}${view.attached ? ' · attached to a run already in progress' : ''}`;
+}
+
+/** Trusted lines under the run line: facts, counts, dismissed, note. */
+function reviewFacts(view: ReviewView): string[] {
   const facts = [
     `verdict ${view.verdict && /^[A-Za-z_ -]{1,32}$/.test(view.verdict) ? view.verdict : 'none'}`,
     view.score == null ? 'score none' : `score ${view.score}`,
     view.durationMs == null ? 'duration unknown' : `duration ${(view.durationMs / 1000).toFixed(1)}s`,
     view.costUsd == null ? 'cost unknown' : `cost $${view.costUsd.toFixed(4)}`,
   ];
-  head.push(facts.join(' · '));
-  head.push(SEVERITIES.map((s) => `${s} ${view.counts[s]}`).join(' · '));
-  if (view.dismissedHidden > 0) head.push(`${view.dismissedHidden} dismissed finding(s) hidden`);
-  if (view.note) head.push(view.note);
+  const lines = [facts.join(' · '), severityCounts(view.counts)];
+  if (view.dismissedHidden > 0) lines.push(`${view.dismissedHidden} dismissed finding(s) hidden`);
+  if (view.note) lines.push(view.note);
+  return lines;
+}
 
+/** Untrusted lines before the findings: agent, detailed summary and error. */
+function reviewInner(view: ReviewView, format: ResponseFormat): string[] {
   const inner: string[] = [];
   if (view.agentName) inner.push(`agent ${quote(view.agentName, 80)}`);
   if (format === 'detailed') {
     if (view.summary) inner.push(`summary: ${quote(view.summary, 500)}`);
     if (view.error) inner.push(`error: ${quote(view.error, 300)}`);
   }
+  return inner;
+}
+
+function nextHint(view: ReviewView): string | null {
+  if (view.status !== 'running' || view.runId === null) return null;
+  return `Next: get_findings {"pr":${JSON.stringify(token(view.prLabel, 120))},"run_id":${JSON.stringify(token(view.runId, 64))}} in about a minute. The run was not cancelled.`;
+}
+
+function renderReview(view: ReviewView, format: ResponseFormat): string {
+  const head = [runLine(view), `pr ${token(view.prLabel, 120)}`, ...reviewFacts(view)];
+  const inner = reviewInner(view, format);
 
   const tail: string[] = [];
-  if (view.status === 'running' && view.runId !== null) {
-    tail.push(
-      `Next: get_findings {"pr":${JSON.stringify(token(view.prLabel, 120))},"run_id":${JSON.stringify(token(view.runId, 64))}} in about a minute. The run was not cancelled.`,
-    );
-  }
-  if (format === 'concise') tail.push('Use response_format "detailed" for rationale, suggestion, ids.');
+  const next = nextHint(view);
+  if (next) tail.push(next);
+  if (format === 'concise') tail.push(FINDINGS_DETAILED_HINT);
 
   const items = view.findings.map((f) => findingLines(f, format));
   const fixed = [...head, UNTRUSTED_OPEN, ...inner, UNTRUSTED_CLOSE, ...tail].join('\n').length;
@@ -144,8 +163,50 @@ export function renderRunOutcome(view: ReviewView, format: ResponseFormat): stri
   return renderReview(view, format);
 }
 
-export function renderFindings(view: ReviewView, format: ResponseFormat): string {
-  return renderReview(view, format);
+/**
+ * `get_findings`: a trusted PR header with `total_findings`, then one block per
+ * review (its own untrusted block). The page runs across blocks in order; once
+ * the cap cuts it, later blocks keep their header but list no findings.
+ */
+export function renderFindings(view: FindingsView, format: ResponseFormat): string {
+  const n = view.reviews.length;
+  const head = [
+    `pr ${token(view.prLabel, 120)} · ${n} review(s) · total_findings ${view.totalFindings}`,
+    severityCounts(view.counts),
+  ];
+  const tail: string[] = [];
+  for (const r of view.reviews) {
+    const next = nextHint(r);
+    if (next) tail.push(next);
+  }
+  if (format === 'concise') tail.push(FINDINGS_DETAILED_HINT);
+
+  const blocks = view.reviews.map((r, i) => ({
+    head: ['', `review ${i + 1}/${n} · ${runLine(r)}`, ...reviewFacts(r), UNTRUSTED_OPEN, ...reviewInner(r, format)],
+    items: r.findings.map((f) => findingLines(f, format)),
+  }));
+  let used = [...head, ...blocks.flatMap((b) => [...b.head, UNTRUSTED_CLOSE]), ...tail].join('\n').length;
+  const out = [...head];
+  let shown = 0;
+  let cut = false;
+  for (const b of blocks) {
+    out.push(...b.head);
+    if (!cut) {
+      const page = fit(used, b.items);
+      out.push(...page.lines);
+      used = page.size;
+      shown += page.shown;
+      cut = page.shown < b.items.length;
+    }
+    out.push(UNTRUSTED_CLOSE);
+  }
+  const onPage = blocks.reduce((k, b) => k + b.items.length, 0);
+  if (shown < onPage || view.offset + shown < view.totalFindings) {
+    if (shown > 0) out.push(truncatedLine(view.offset + 1, shown, view.totalFindings));
+    else out.push(`Truncated: showing 0 of ${view.totalFindings}. Call again with offset=${view.offset}.`);
+  }
+  out.push(...tail);
+  return out.join('\n');
 }
 
 // ---- get_conventions -------------------------------------------------------

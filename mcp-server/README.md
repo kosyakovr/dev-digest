@@ -16,7 +16,7 @@ conventions. It only talks to the running DevDigest API over HTTP: no database, 
 |---|---|
 | `list_agents` | Lists reviewer agents (name, model, enabled). |
 | `run_agent_on_pr` | Runs one agent on a PR (paid LLM call); blocks up to ~110 s, else returns `status running` + `run_id`. |
-| `get_findings` | Reads findings of a finished review (latest, by `run_id` or by agent). |
+| `get_findings` | Reads findings of finished reviews: the newest review of every agent with `total_findings`, or one review by `run_id` or by agent. |
 | `get_conventions` | Reads a repo's conventions (accepted by default). |
 | `get_blast_radius` | Opens the PR (`GET /pulls/:id`, so its changed files are fresh), then reads its blast radius via `GET /pulls/:id/blast`: changed symbols, callers as `file:line`, affected endpoints and crons; reports a degraded index and its reason. Read-only; `response_format` concise (5 callers per symbol) or detailed. |
 

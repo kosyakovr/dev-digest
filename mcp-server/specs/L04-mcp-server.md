@@ -66,8 +66,8 @@ List DevDigest AI reviewer agents (name, model, enabled). Call first to pick the
 run_agent_on_pr   (153)
 Run one DevDigest AI reviewer agent on a pull request (paid LLM call). Blocks up to ~110s; returns findings, or status running + run_id for get_findings.
 
-get_findings      (143)
-Get findings of a finished DevDigest AI review of a pull request: latest, or by run_id or agent. Read-only; safe to poll after run_agent_on_pr.
+get_findings      (170)
+Get findings of finished DevDigest AI reviews of a pull request: the latest review of every agent with total_findings, or one by run_id or agent. Read-only; safe to poll.
 
 get_conventions   (143)
 Get a repository's coding conventions from DevDigest (accepted by default): rule, category, evidence file:line. Read-only; never starts a scan.
@@ -82,7 +82,7 @@ Field `.describe()`s:
 pr      (63)  Pull request: owner/repo#123, GitHub PR URL, or DevDigest PR id
 agent   (33)  Agent name or id from list_agents
 repo    (43)  Repository: owner/repo or DevDigest repo id
-run_id  (55)  run_id from run_agent_on_pr; omit for the latest review
+run_id  (70)  run_id from run_agent_on_pr; omit for the latest review of every agent
 ```
 
 Tool `title`s: `List reviewer agents` · `Run AI review on a PR` · `Get review findings` · `Get repo conventions` · `Get PR blast radius`.
@@ -97,7 +97,8 @@ All results are a single `text` content item.
 
 Per tool:
 - **`list_agents`** concise: `<name> · <provider>/<model> · enabled|disabled · id <uuid>`; detailed adds `description` (≤300), `strategy`, `ci_fail_on`, `repo_intel`, `version`.
-- **`run_agent_on_pr`** and **`get_findings`** share a renderer. Header: `run <uuid|none> · status <done|failed|cancelled|running>`, `pr <owner/repo#N|uuid>`, agent, verdict, score, duration, cost (`$x.xxxx`, or `cost unknown` when null; never `$0` for null). Counts by severity, then finding lines. Concise: `[SEVERITY] "file:start-end" "title"` (title ≤160). Detailed adds `id`, `category`, `confidence`, `rationale` (≤600), `suggestion` (≤400), review `summary` (≤500), run `error` (≤300). Sort: severity, file, start_line. Dismissed findings are excluded with a line `<k> dismissed finding(s) hidden`. `running` adds `Next: get_findings {"pr":"…","run_id":"<uuid>"} in about a minute. The run was not cancelled.`
+- **`run_agent_on_pr`** renders one review. Header: `run <uuid|none> · status <done|failed|cancelled|running>`, `pr <owner/repo#N|uuid>`, agent, verdict, score, duration, cost (`$x.xxxx`, or `cost unknown` when null; never `$0` for null). Counts by severity, then finding lines. Concise: `[SEVERITY] "file:start-end" "title"` (title ≤160). Detailed adds `id`, `category`, `confidence`, `rationale` (≤600), `suggestion` (≤400), review `summary` (≤500), run `error` (≤300). Sort: severity, file, start_line. Dismissed findings are excluded with a line `<k> dismissed finding(s) hidden`. `running` adds `Next: get_findings {"pr":"…","run_id":"<uuid>"} in about a minute. The run was not cancelled.`
+- **`get_findings`** returns a list of reviews, so one call shows the whole PR. Without `run_id`/`agent`: the newest `kind='review'` review of **every** agent (one per `agent_id`, else agent name), newest first. With `agent`: that agent's newest review only; with `run_id`: that run's review only (a list of one). Trusted header: `pr <label> · <n> review(s) · total_findings <T>`, then the severity counts summed over all reviews. `total_findings` = non-dismissed findings at or above `min_severity`, summed over the reviews. Then one block per review: `review <i>/<n> · run <uuid|none> · status <…>`, the same verdict/score/duration/cost, counts, dismissed and note lines as `run_agent_on_pr`, and its own untrusted block (agent, detailed `summary`/`error`, finding lines in the same format and sort). `limit`/`offset` page across the findings of all reviews in block order; every block header is printed even when none of its findings is on the page, and `Truncated: showing <a>-<b> of <T>` counts against `total_findings`. A `running` run picked by `run_id` adds the `Next: get_findings …` line.
 - **`get_conventions`** concise: `[category] "rule" — "evidence_path:evidence_line"`; detailed adds `id`, `status`, `confidence`, `rationale` (≤400), `evidence_snippet` (≤300). Empty: `No <status> conventions for <repo>. Scan and triage them on the Conventions page of the DevDigest web app.`
 - **`get_blast_radius`** (`GET /pulls/:id`, then `GET /pulls/:id/blast`). The server stores a PR's changed files only when its detail is opened, so the tool opens it first, as the browser does; otherwise a PR never opened in the web app reads as 0 changed symbols. Trusted header: `pr <label> · <S> symbols · <C> callers · <E> endpoints · <K> crons` and `index <sha12|unknown>`; a degraded index adds `degraded: <reason> — results may be incomplete. Re-index the repo in the DevDigest web app (Resync).`; no callers and not degraded: `No downstream callers found for <label> (<S> changed symbols).` Untrusted block, per changed symbol: `"symbol" · <n> callers`, then `  <- "file:line" "caller"` (depth 2 adds ` (via "name")`), `  endpoints: …`, `  crons: …`. Concise shows 5 callers per symbol then `  … <m> more` and ends with `Use response_format "detailed" for all callers and changed-symbol files.`; detailed shows all callers plus `changed: "name" kind "file"` lines.
 
@@ -141,6 +142,7 @@ Every error is `isError: true` with one or two actionable sentences; no stack tr
 - [ ] AC-2: With the API stopped, `tools/list` succeeds; data tools return `isError: true` containing `not reachable at http://localhost:3001` and no stack trace line.
 - [ ] AC-3: `get_blast_radius {pr}` renders the summary header, `"file:line"` caller lines, endpoints and crons from `GET /pulls/:id/blast`; an unknown PR gives the `No PR #<N> in <owner/repo>` text.
 - [ ] AC-4: On the seeded DB, `get_findings {"pr":"acme/payments-api#482"}` returns the seeded findings as `[SEVERITY] "file:start-end" "title"` lines in the untrusted block.
+- [ ] AC-4b: With reviews by two agents on a PR (one of them reviewed twice), `get_findings {pr}` returns two review blocks — each agent's newest review only — and `total_findings` equals the sum of both blocks' non-dismissed findings at or above `min_severity`; `limit`/`offset` page across both blocks.
 - [ ] AC-5: `run_agent_on_pr` makes exactly one `POST /pulls/:id/review` per call (zero when attaching); never cancels/deletes; returns in <111 s.
 - [ ] AC-6: If not finished by `WAIT_DEADLINE`, the text contains `status running`, the run uuid and `Next: get_findings`; a later `get_findings` with that `run_id` returns the findings.
 - [ ] AC-7: Every stdout line parses as JSON-RPC 2.0; closing stdin exits 0 within 2 s.

@@ -33,6 +33,20 @@ export interface ReviewView {
   note: string | null;
 }
 
+/** `get_findings`: one `ReviewView` per agent, paged together. */
+export interface FindingsView {
+  /** `owner/repo#N`, or the PR uuid when the caller gave one. */
+  prLabel: string;
+  /** Newest first; each `findings` holds only its share of the page. */
+  reviews: ReviewView[];
+  /** Σ `reviews[].total`: non-dismissed findings at or above min severity, before paging. */
+  totalFindings: number;
+  /** Severity counts summed over `reviews`. */
+  counts: Record<Severity, number>;
+  /** Index of the first finding on the page, across all reviews. */
+  offset: number;
+}
+
 export interface ConventionsView {
   /** `owner/repo` or the repo uuid. */
   repoLabel: string;
