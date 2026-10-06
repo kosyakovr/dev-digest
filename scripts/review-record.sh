@@ -171,6 +171,13 @@ self_test() {
     # HEAD moves after the snapshot: a path the new commit changed was never reviewed
     echo b > b.ts && git add b.ts && git commit -qm "head moved"
     expect 0 "add with a snapshot after HEAD moved" -- "$self" add architecture-reviewer approve "$snap"
+    last=$(tail -n 1 "$recs")                        # the record just added, with HEAD already past the snapshot
+    if [ "$(printf '%s\n' "$last" | cut -f3)" = "$(git rev-parse "$snap^")" ] \
+      && [ "$(printf '%s\n' "$last" | cut -f3)" != "$(git rev-parse HEAD)" ]; then
+      pass=$((pass + 1))
+    else
+      fail=$((fail + 1)); echo "FAIL snapshot base after HEAD moved: not the snapshot's parent (or equals HEAD)"
+    fi
     expect 1 "path changed by the moved HEAD not covered" -- "$self" covered architecture-reviewer "$mb" b.ts
     expect 2 "add with a bogus snapshot" -- "$self" add architecture-reviewer approve deadbeefnotacommit
     echo rule2 > .claude/skills/s/SKILL.md
