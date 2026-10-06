@@ -260,6 +260,11 @@ export interface GitClient {
     path: string,
     maxBytes: number,
   ): Promise<{ text: string; bytes: number } | null>;
+  /**
+   * Repo-relative paths of every blob in the tree at commit `ref` (a hex SHA),
+   * via the object database. Throws on a non-hex `ref`.
+   */
+  listFiles(repo: RepoRef, ref: string): Promise<string[]>;
   clonePathFor(repo: RepoRef): string;
 }
 

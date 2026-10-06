@@ -86,6 +86,9 @@ flowchart TB
     blast["blast<br/>/pulls/:id/blast · /pulls/:id/history<br/>(history reads GitHub commits?path=)"]
     blast -->|"repoIntel.getBlastRadius"| repoIntel
   end
+  subgraph Context["Project Context (L05)"]
+    context["context<br/>/context/sources · /repos/:id/context(/file)<br/>/agents/:id/context · /skills/:id/context (GET · PUT)"]
+  end
   subgraph Platform["Platform"]
     settings["settings<br/>/settings · /providers"]
     workspace["workspace<br/>/workspace"]
@@ -105,6 +108,7 @@ flowchart TB
 | `GITHUB_TOKEN` | — | optional; PAT with repo scope (`GITHUB_PAT` accepted as a fallback) |
 | `EMBEDDINGS_ENABLED` | `false` | memory/RAG embeddings (OpenAI); off → **zero** OpenAI calls |
 | `REPO_INTEL_ENABLED` | `true` | repo skeleton + callers in the prompt; `false` → ripgrep-only |
+| `PROJECT_CONTEXT_FOLDERS` | `docs,specs` | comma-separated folder names whose `.md` files the Project Context page lists and agents can attach; invalid names (empty, or containing `/ * ? { } ,` or `..`) are ignored with a startup warning. See [docs/project-context.md](docs/project-context.md) |
 | `DEVDIGEST_CLONE_DIR` | `./clones` | imported-repo checkouts (git-ignored) |
 | `LOG_LEVEL` | `info` (`silent` in test) | pino level |
 | `DEVDIGEST_PROMPT_LOG` | `default` | `verbose` adds per-chunk prompt detail (hashes, masked system preview, never content); honoured only when `NODE_ENV` is set explicitly to `development` or `test`; raises the default `LOG_LEVEL` to `debug` |

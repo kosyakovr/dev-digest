@@ -311,8 +311,42 @@ export const SpecFile = z.object({
   content: z.string().nullish(),
   size: z.number().int().nullish(),
   updated_at: z.string().nullish(),
+  /** ceil(chars/4) of the doc text; null when the doc is too large or unreadable. */
+  tokens: z.number().int().nullish(),
+  /** Configured source folder nearest the repo root (e.g. "docs"). */
+  source: z.string().nullish(),
+  /** Number of agents that attach this doc (single-file route only). */
+  used_by: z.number().int().nullish(),
 });
 export type SpecFile = z.infer<typeof SpecFile>;
+
+/** One attached project-context doc; `position` null = attached with no manual order. */
+export const ContextItem = z.object({
+  path: z.string().min(1),
+  position: z.number().int().nonnegative().nullable(),
+});
+export type ContextItem = z.infer<typeof ContextItem>;
+
+/** Body of `PUT /agents/:id/context` and `PUT /skills/:id/context`; response of the skill GET/PUT. */
+export const ContextPaths = z.object({ items: z.array(ContextItem) });
+export type ContextPaths = z.infer<typeof ContextPaths>;
+
+/** An agent's own attachments plus those inherited from its skills. */
+export const AgentContext = z.object({
+  items: z.array(ContextItem),
+  inherited: z.array(
+    z.object({
+      skill_id: z.string(),
+      skill_name: z.string(),
+      items: z.array(ContextItem),
+    }),
+  ),
+});
+export type AgentContext = z.infer<typeof AgentContext>;
+
+/** `GET /context/sources` — the configured source folder names. */
+export const ContextSources = z.object({ folders: z.array(z.string()) });
+export type ContextSources = z.infer<typeof ContextSources>;
 
 export const IndexStatus = z.object({
   status: z.enum(['idle', 'cloning', 'parsing', 'embedding', 'done', 'error']),

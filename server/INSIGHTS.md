@@ -16,6 +16,16 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## What Works
 
+- 2026-10-06 — A write-ORDER race (a run marked `done` before its trace row was
+  written, which caused intermittent `GET /runs/:id/trace` 404s) became
+  deterministic in an `.it.test` with a Postgres trigger. On `agent_runs`, when
+  the status first turns terminal, the trigger records into a probe table
+  whether a `run_traces` row already exists, and the test asserts
+  `trace_existed: true`. It needs no timing, no repository spy, and holds
+  however the fix is built → use a trigger plus probe table for any "A must be
+  written before B" rule. Note: a transaction that writes B first and A second
+  still fails it. (ref: server/test/run-trace-order.it.test.ts)
+
 - 2026-09-22 — A "new" lesson feature here is usually mostly PRE-BUILT, and the
   starter gives no hint of it. L02 skills: the three tables were already in
   `0000_init.sql`, the contracts in `contracts/knowledge.ts`,
@@ -79,6 +89,16 @@ Non-obvious findings a future session needs. **Read this before working here.**
 ## Codebase Patterns
 
 ## Tool & Library Notes
+
+- 2026-10-06 — Postgres `jsonb` rejects a NUL (`\u0000`) with error 22P05,
+  while `text` columns and git blobs accept it. So repo-derived text (a project
+  context doc, a diff) that reaches a jsonb column such as `run_traces.trace`
+  makes the insert throw. Swallowing that error once hid a run's whole trace
+  (L05 SR-1) → let jsonb writes of repo text fail loudly. The same NUL is also
+  the cheapest deterministic way to make such a write fail in an `.it.test`:
+  serve `'a\u0000b'` from `MockGitClient` `filesAtRef`.
+  (ref: server/src/modules/reviews/run-executor.ts success-path saveRunTrace,
+  server/test/context-run.it.test.ts SR-1 case)
 
 - 2026-10-02 — A route-level `config.rateLimit` cannot be asserted under the
   default test config: `@fastify/rate-limit` is registered only when

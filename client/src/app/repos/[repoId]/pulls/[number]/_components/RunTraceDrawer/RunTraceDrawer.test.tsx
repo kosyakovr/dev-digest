@@ -53,8 +53,9 @@ const FINDINGS: FindingRecord[] = [
   },
 ];
 
+let traceNow: RunTrace = TRACE;
 vi.mock("../../../../../../../lib/hooks/trace", () => ({
-  useRunTrace: () => ({ data: TRACE, isLoading: false }),
+  useRunTrace: () => ({ data: traceNow, isLoading: false }),
 }));
 vi.mock("../../../../../../../lib/hooks/reviews", () => ({
   useRunEvents: () => ({ events: [], running: false }),
@@ -62,7 +63,10 @@ vi.mock("../../../../../../../lib/hooks/reviews", () => ({
 
 import RunTraceDrawer from "./RunTraceDrawer";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  traceNow = TRACE;
+});
 
 function renderWithIntl(ui: React.ReactElement) {
   return render(
@@ -108,6 +112,22 @@ describe("A5 Run Trace drawer (smoke)", () => {
     );
     expect(screen.queryByRole("button", { name: /accept/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /dismiss/i })).not.toBeInTheDocument();
+  });
+
+  it("passes the run's agent id down, so a skipped doc links to that agent's Context tab (L05 AC-50)", () => {
+    traceNow = {
+      ...TRACE,
+      project_context: [
+        { path: "specs/gone.md", tokens: 0, status: "skipped", reason: "not_found", via_skill: null, text: null },
+      ],
+    };
+    renderWithIntl(
+      <RunTraceDrawer runId="r1" agentName="Security" prNumber={482} agentId="ag1" onClose={() => {}} />,
+    );
+    expect(screen.getByRole("link", { name: "Remove from agent" })).toHaveAttribute(
+      "href",
+      "/agents/ag1?tab=context",
+    );
   });
 
   it("switches to the live log tab", () => {

@@ -8,9 +8,13 @@
   "indexStatus": "Index status: {status}",
   "loadError": "Couldn’t load specs",
   "kb": "{kb}kb",
+  "filterPlaceholder": "Filter documents…",
+  "tokens": "≈ {count, number} tokens",
+  "usedBy": "Used by {count, plural, one {# agent} other {# agents}}",
+  "selectDoc": "Select a document to preview it.",
   "empty": {
-    "title": "No spec files yet",
-    "body": "Drop your PRDs, tech specs, and acceptance criteria under .devdigest/specs/. Every agent and the PR brief read them as grounding context."
+    "title": "No documents found",
+    "body": "No .md files under {folders}. Add documents there, then resync the repository."
   },
   "mode": {
     "preview": "preview",
@@ -19,6 +23,21 @@
   "editor": {
     "loadError": "Couldn’t load spec",
     "save": "Save",
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "total": "≈ {count, number} tokens",
+    "softCap": "over 4K soft cap",
+    "notFound": "Not found in {repo}",
+    "inherited": "Inherited from skills: {count} documents · ≈ {tokens, number} tokens",
+    "noRepo": "Add a repository to see its documents and token counts.",
+    "reorderLocked": "Clear the filter to reorder.",
+    "attach": "Attach {path}",
+    "moveUp": "Move {path} up",
+    "moveDown": "Move {path} down",
+    "preview": "Preview",
+    "attachAction": "Attach",
+    "attached": "Attached",
+    "savedToast": "Context saved",
+    "saveError": "Couldn’t save context",
+    "skillNote": "Any agent using this skill inherits these documents."
   }
 }

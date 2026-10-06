@@ -37,6 +37,7 @@ import type {
 import { parseUnifiedDiff } from './git/diff-parser.js';
 import type { ReviewIntent } from '@devdigest/reviewer-core';
 import type { PrIntentFacade } from '../modules/intent/types.js';
+import type { ProjectContextFacade } from '../modules/context/types.js';
 
 /**
  * Deterministic MOCK adapters for tests/dev — NO real network. Each mirrors the
@@ -353,6 +354,12 @@ export class MockGitClient implements GitClient {
     const bytes = Buffer.byteLength(text);
     return bytes > maxBytes ? { text: '', bytes } : { text, bytes };
   }
+  async listFiles(_repo: RepoRef, ref: string): Promise<string[]> {
+    const prefix = `${ref}:`;
+    return Object.keys(this.opts.filesAtRef ?? {})
+      .filter((k) => k.startsWith(prefix))
+      .map((k) => k.slice(prefix.length));
+  }
 }
 
 // ---------- Mock CodeIndex ----------
@@ -378,6 +385,24 @@ export class MockPrIntent implements PrIntentFacade {
   ): Promise<ReviewIntent | undefined> {
     this.calls.push(a);
     return this.intent;
+  }
+}
+
+// ---------- Mock project context ----------
+/** Stub for `overrides.projectContext`: returns a fixed result and records calls. */
+export class MockProjectContext implements ProjectContextFacade {
+  readonly calls: Parameters<ProjectContextFacade['resolveForRun']>[0][] = [];
+  constructor(
+    private readonly result: Awaited<ReturnType<ProjectContextFacade['resolveForRun']>> = {
+      docs: [],
+      entries: [],
+    },
+  ) {}
+  async resolveForRun(
+    a: Parameters<ProjectContextFacade['resolveForRun']>[0],
+  ): ReturnType<ProjectContextFacade['resolveForRun']> {
+    this.calls.push(a);
+    return this.result;
   }
 }
 

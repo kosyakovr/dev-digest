@@ -5,6 +5,12 @@ The Zod contracts shared by the server and the client are **vendored twice**:
 together, in the same change (root `AGENTS.md` § Cross-package invariants);
 `/pr-self-review` and `architecture-reviewer` flag a one-sided edit.
 
+The check is `diff -r server/src/vendor/shared client/src/vendor/shared`: it
+prints nothing when the twins are byte-identical, which they are as of L05 (five
+client files had drifted behind the server and were re-synced then; the L05
+contracts `ContextItem`, `ContextPaths`, `AgentContext`, `ContextSources` and
+`ProjectContextEntry` were added to both).
+
 ## A schema is not a route
 
 A schema in `*/src/vendor/shared/contracts/` does **not** mean a server route

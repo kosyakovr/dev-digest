@@ -26,6 +26,10 @@ const EnvSchema = z.object({
   // Note: even when on, sections only populate once the repo is indexed; an
   // unindexed repo degrades gracefully. Per-agent override: agents.repo_intel.
   REPO_INTEL_ENABLED: z.string().optional(),
+  // Project Context (L05): comma-separated folder names whose `.md` files are
+  // listed. Invalid names are ignored (a warning is logged at startup); with no
+  // valid name left the defaults apply.
+  PROJECT_CONTEXT_FOLDERS: z.string().optional(),
   API_PORT: z.coerce.number().int().default(3001),
   WEB_PORT: z.coerce.number().int().default(3000),
   DEVDIGEST_CLONE_DIR: z.string().optional(),
@@ -76,7 +80,28 @@ export type AppConfig = {
    * EXACTLY like the ripgrep-only baseline.
    */
   repoIntelEnabled: boolean;
+  /** Folder names searched for project-context `.md` docs (default `docs`, `specs`). */
+  contextFolders: string[];
+  /** Names from PROJECT_CONTEXT_FOLDERS that were invalid and ignored. */
+  contextFoldersIgnored: string[];
 };
+
+const DEFAULT_CONTEXT_FOLDERS = ['docs', 'specs'];
+
+/** A folder name is valid unless empty or containing `/ * ? { } ,` or `..`. */
+function parseContextFolders(raw: string | undefined): { folders: string[]; ignored: string[] } {
+  if (raw === undefined || raw.trim() === '') return { folders: [...DEFAULT_CONTEXT_FOLDERS], ignored: [] };
+  const folders: string[] = [];
+  const ignored: string[] = [];
+  for (const name of raw.split(',').map((s) => s.trim())) {
+    if (name === '' || /[/*?{},]/.test(name) || name.includes('..')) {
+      ignored.push(name);
+    } else if (!folders.includes(name)) {
+      folders.push(name);
+    }
+  }
+  return { folders: folders.length > 0 ? folders : [...DEFAULT_CONTEXT_FOLDERS], ignored };
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = EnvSchema.parse(env);
@@ -96,7 +121,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         ? `NODE_ENV=${parsed.NODE_ENV}`
         : 'NODE_ENV not set explicitly'
       : undefined;
+  const context = parseContextFolders(parsed.PROJECT_CONTEXT_FOLDERS);
   return {
+    contextFolders: context.folders,
+    contextFoldersIgnored: context.ignored,
     databaseUrl: parsed.DATABASE_URL,
     apiPort: parsed.API_PORT,
     webPort: parsed.WEB_PORT,

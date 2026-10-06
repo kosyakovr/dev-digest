@@ -22,6 +22,14 @@ confidence. Tell the user when you use it: it is someone else's homework.
 
 ## Sessions
 
+- 2026-10-06 — L05 Project Context, run through `/sdd-run` (multi-agent):
+  migration `0015` (`agent_context_docs`, `skill_context_docs`), `modules/context`
+  with a per-HEAD doc cache, attached docs as path-labelled `## Project context`
+  blocks, `specs_read` + `project_context` in the run trace, the Project Context
+  page and Context tabs, the client vendored twins re-synced; the run trace is
+  now saved before the terminal status and a failed save fails the run
+  (spec: [specs/L05-project-context.md](../specs/L05-project-context.md);
+  how it works: [server/docs/project-context.md](../server/docs/project-context.md)).
 - 2026-10-05 — SDD workflow hardening: `docs/plans/`, spec/plan `approved`
   status, guards (implementer: no specs/plans/tests/INSIGHTS by any write),
   plan-verifier Spec coverage, `scripts/review-record.sh` lets `/pr-self-review`

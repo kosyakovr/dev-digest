@@ -77,6 +77,13 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## Tool & Library Notes
 
+- 2026-10-06 — `pnpm exec vitest run <path>` treats the path as a filter
+  pattern, so the `[id]` / `[repoId]` in Next route folders becomes a regex
+  character class, and vitest silently runs fewer files (hit in L05 T1 and T2)
+  → filter by a file-name fragment (`vitest run ContextTab TraceBody`) and
+  check the "Test Files" count in the output.
+  (ref: client/src/app/agents/[id]/…/ContextTab.test.tsx)
+
 - 2026-10-02 — TanStack `query.isStaleByTime(x)` treats `x` AS the staleTime, so
   `expect(query.isStaleByTime(4 * 60_000)).toBe(false)` passes even when the hook
   sets no `staleTime` (a red-proof mutation survived) → assert the option itself:

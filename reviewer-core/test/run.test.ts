@@ -104,6 +104,41 @@ describe('reviewPullRequest (engine)', () => {
     ).rejects.toThrow('cancelled');
   });
 
+  it('L05 NFR-8: attached docs add no LLM call, and reach every map-reduce call', async () => {
+    const two =
+      'diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,2 +1,3 @@\n x\n+  a1\n y\n' +
+      'diff --git a/src/b.ts b/src/b.ts\n--- a/src/b.ts\n+++ b/src/b.ts\n@@ -1,2 +1,3 @@\n x\n+  b1\n y';
+    const clean = { verdict: 'approve', summary: 'ok', score: 100, findings: [] };
+    const diff = await new MockGitClient({ diff: two }).diff();
+    expect(diff.files).toHaveLength(2);
+
+    const run = async (specs?: { source: string; text: string }[]) => {
+      const llm = new MockLLMProvider('openai', { structured: clean });
+      const outcome = await reviewPullRequest({
+        systemPrompt: 's',
+        model: 'gpt-4.1',
+        diff,
+        llm,
+        strategy: 'map-reduce',
+        ...(specs ? { specs } : {}),
+      });
+      expect(outcome.mode).toBe('map-reduce');
+      return llm.calls.filter((c) => c.method === 'completeStructured');
+    };
+
+    const without = await run();
+    const withDocs = await run([{ source: 'specs/a.md', text: 'DOC' }]);
+
+    expect(without.length).toBeGreaterThan(1);
+    expect(withDocs).toHaveLength(without.length);
+    for (const c of withDocs) {
+      const user = (c.req as { messages: { role: string; content: string }[] }).messages.find(
+        (m) => m.role === 'user',
+      )!.content;
+      expect(user).toContain('<untrusted source="specs/a.md">');
+    }
+  });
+
   it('forwards sessionId to every LLM call (OpenRouter session grouping)', async () => {
     const seen: (string | undefined)[] = [];
     const recorder: LLMProvider = {

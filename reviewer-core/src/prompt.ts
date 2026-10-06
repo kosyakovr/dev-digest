@@ -34,6 +34,22 @@ export function wrapUntrusted(label: string, content: string): string {
   return `<untrusted source="${label}">\n${safe}\n</untrusted>`;
 }
 
+/** A project document labelled by its repo-relative path (L05). */
+export interface ProjectDoc {
+  source: string;
+  text: string;
+}
+
+/** Removes every `"`, `<` and `>` so a path can never break out of the `source="…"` attribute. */
+export function sanitizeSourceLabel(label: string): string {
+  return label.replace(/["<>]/g, '');
+}
+
+/** The exact `<untrusted>` block a project doc becomes in the prompt. */
+export function renderProjectContextBlock(doc: ProjectDoc): string {
+  return wrapUntrusted(sanitizeSourceLabel(doc.source), doc.text);
+}
+
 /** Cap the PR description so a huge author body can't blow the token budget. */
 const MAX_PR_DESCRIPTION_CHARS = 4000;
 
@@ -97,8 +113,11 @@ export interface PromptParts {
   skills?: string[];
   /** Relevant memory items (trusted, curated). */
   memory?: string[];
-  /** Project-context spec chunks (untrusted content). */
-  specs?: string[];
+  /**
+   * Project-context docs (untrusted content). A string is labelled `spec-<i>`;
+   * a `ProjectDoc` is labelled by its source path.
+   */
+  specs?: (string | ProjectDoc)[];
   /**
    * Repo skeleton / map (T3): top-ranked symbols by signature, token-budgeted.
    * Untrusted (derived from repo code) — delimiter-wrapped. Rendered before
@@ -155,7 +174,11 @@ export function assemblePrompt(parts: PromptParts): AssembledPrompt {
       : undefined;
   const specsBlock =
     parts.specs && parts.specs.length > 0
-      ? parts.specs.map((s, i) => wrapUntrusted(`spec-${i}`, s)).join('\n\n')
+      ? parts.specs
+          .map((s, i) =>
+            typeof s === 'string' ? wrapUntrusted(`spec-${i}`, s) : renderProjectContextBlock(s),
+          )
+          .join('\n\n')
       : undefined;
 
   const prDescription =

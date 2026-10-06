@@ -7,6 +7,7 @@ import {
   MockCodeIndex,
   MockEmbedder,
 } from '../src/adapters/mocks.js';
+import { SimpleGitClient } from '../src/adapters/git/simple-git.js';
 import { assemblePrompt } from '../src/platform/prompt.js';
 import { groundFindings } from '../src/platform/grounding.js';
 import { estimateCost } from '../src/adapters/llm/pricing.js';
@@ -37,6 +38,26 @@ describe('mock adapters (no network)', () => {
     expect((await ci.symbols({ owner: 'a', name: 'b' }))[0]!.name).toBe('rateLimit');
     const emb = await new MockEmbedder().embed(['a', 'b']);
     expect(emb[0]!).toHaveLength(1536);
+  });
+});
+
+describe('GitClient.listFiles (L05)', () => {
+  const repo = { owner: 'acme', name: 'app' };
+
+  it('MockGitClient lists only the blobs recorded at the asked ref, without the ref prefix', async () => {
+    const git = new MockGitClient({
+      head: 'a1b2c3d4',
+      filesAtRef: { 'a1b2c3d4:docs/a.md': 'a', 'ffff0000:docs/b.md': 'b' },
+    });
+    expect(await git.listFiles(repo, 'a1b2c3d4')).toEqual(['docs/a.md']);
+    expect(await git.listFiles(repo, 'ffff0000')).toEqual(['docs/b.md']);
+    expect(await git.listFiles(repo, 'deadbeef')).toEqual([]);
+  });
+
+  it('SimpleGitClient refuses a non-hex ref (no option or branch name reaches git)', async () => {
+    const git = new SimpleGitClient('/nonexistent-clone-dir');
+    await expect(git.listFiles(repo, 'HEAD')).rejects.toThrow(/invalid ref/i);
+    await expect(git.listFiles(repo, '--output=/tmp/x')).rejects.toThrow(/invalid ref/i);
   });
 });
 

@@ -1,6 +1,6 @@
 # Project Context — attach repo docs to agents and skills
 
-**Status:** approved
+**Status:** in-progress
 **Lesson / ticket:** L05
 **Packages:** server, client, reviewer-core (mcp-server and e2e unchanged)
 

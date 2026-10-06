@@ -1,5 +1,5 @@
 # Implementation Plan: Project Context — attach repo docs to agents and skills
-**Status:** approved
+**Status:** done
 **Spec:** specs/L05-project-context.md @ 33f11b6
 **Approved:** 2026-10-06 by the user — gates: GT-1 ✓, GT-2 ✓, GT-3 ✓, GT-4 ✓ · execution mode: multi-agent · accepted: REC-1, REC-2, REC-3, REC-4
 Packages: server, client, reviewer-core · Requirements: specs/L05-project-context.md · Lesson/ticket: L05
@@ -607,6 +607,33 @@ No new recommendations.
 - **Known server test issues:** `test/reviews.it.test.ts` has a known failure on a clean tree (server/INSIGHTS.md § Open Questions), and testcontainers has a port flake (2026-10-01). Re-run before chasing either.
 - **Mock defaults:** `MockGitClient.currentHead()` defaults to `'a1b2c3d4'`, so fixtures key `filesAtRef` as `a1b2c3d4:<path>`. `sync()` moves the head to `syncedHead`, which is how the cache-miss test moves HEAD.
 - **Unreadable files** cannot be produced through `MockGitClient`. The T2 tests use a small `GitClient` override instead (WP6.tests).
+
+## Amendments
+- **AM-1** 2026-10-06 — Traceability and file list only, no behaviour change. In § Requirements review, R-8's Source also cites spec AC-73 (A-32), R-10's cites AC-70 (A-33), R-23's cites AC-71 (A-37), and R-25's cites AC-72 (A-38). WP10's files also include `client/src/app/repos/[repoId]/pulls/[number]/_components/RunTraceDrawer/styles.ts` (the Specs read row styles). — why: plan-verifier r0 found that no R-n cited the plan-defaults ACs (S:AC-70..73), and found SCOPE-1 (styles.ts outside the WP10 list). — approved by the user 2026-10-06
+- **AM-2** 2026-10-06 — three changes:
+  - (1) § Contract, Server facade: the signature becomes `resolveForRun(a: { workspaceId: string; agentId: string; repo: RepoRef; cloned: boolean })`. `inheritedForAgent(workspaceId, agentId)` is the WP5 step-3 shape.
+  - (2) WP8 and WP9 files: add `client/src/lib/context-sections.ts`, the pure source-grouping functions (`buildSections`, `blockPaths`) shared by the Context tabs and the Project Context page. `components/context-docs/helpers.ts` re-exports them.
+  - (3) WP6: the run executor persists the run trace BEFORE it sets the terminal run status (`done`, and likewise on failure or cancel), so a trace GET made after a run is terminal never 404s.
+  — why: (1) follows from the fix-round-1 fix for PV WP5.steps; (2) follows from the AR-2 fix; (3) plan-verifier r1 found `context-run.it` failing intermittently with a 404 on `GET /runs/:id/trace`. The cause is a race older than this change: `status: 'done'` is written before `saveRunTrace` (`run-executor.ts:342` vs `:388`). The same race affects the Trace drawer, which opens right after a run finishes. — approved by the user 2026-10-06
+
+## Run log
+- 2026-10-06 sdd-run started — directives: none
+- 2026-10-06 GT-1 migration 0015_add_context_docs written by the main session (sql + snapshot + journal), chain applied to a throwaway DB
+- 2026-10-06 test-writer T1 — 22 tests in 10 files, 14 red:assertion + 8 red:compile (new modules named by the Contract)
+- 2026-10-06 implementer — #1 WP0–WP6 done, #2 WP7–WP10 done · T1 10/10 files green · deviations 3 (client Python one-off edit, extra i18n key `selectDoc`, `inheritedForAgent` without workspaceId) · checks: only the known reviews.it intent failure
+- 2026-10-06 test-writer T2 — [T2] lines written across 3 packages (~150 new cases), T1 mutation-proved 22/22 (12 ex-red:compile), suspected defects 1 (empty folder name dropped from contextFoldersIgnored)
+- 2026-10-06 review round 0 — snapshot dc0b0ae · PV FAIL (107 PASS / 13 FAIL: WP4 empty name, WP5 inherited workspace filter, TP-3/TP-4, DOC-1..6, AC-70..73 traceability, SCOPE-1) · AR comment 0/2/1 · SR approve 0/0/0
+- 2026-10-06 triage r0 — the user waived TP-4's `server/test/reviews.it.test.ts:757` "intent ONCE" (a known clean-tree failure, server/INSIGHTS.md:183); the user chose to fix AR-3, overriding WP7's `export *`; AM-1 approved; DOC-1..6 deferred to doc-writer (§10)
+- 2026-10-06 fix round 1 — PV WP4 (empty folder name), PV WP5.steps (inherited workspace filter), AR-1, AR-2, AR-3 · snapshot a5c0847 · AR approve 0/0/0 · SR approve 0/0/0 · PV FAIL (110 PASS / 5 FAIL: C-8 facade signature, WP6.done/tests + TP-4 trace-404 race, SCOPE-2)
+- 2026-10-06 triage r1 — AM-2 approved (facade workspaceId, lib/context-sections.ts, trace saved before terminal status)
+- 2026-10-06 fix round 2 — PV WP6/TP-4 (trace saved before terminal status, regression test run-trace-order.it) · snapshot 26e2903 · AR approve 0/0/0 · SR comment 0/1/0 (SR-1: success-path trace-save failure swallowed silently, NUL byte in a doc triggers it) · PV PASS (116/0, DOC-1..6 deferred)
+- 2026-10-06 limit reached with SR-1 open — the user approved fix round 3 for SR-1
+- 2026-10-06 fix round 3 — SR-1 (success-path trace-save failure now fails the run, fallback trace kept; regression test with a NUL-byte doc) · snapshot 07f5cec · AR approve 0/0/0 · SR approve 0/0/0 · PV PASS
+- 2026-10-06 review records — architecture-reviewer approve, security-reviewer approve
+- 2026-10-06 plan-verifier final — PASS (116/0, spec 81/81, DOC-1..6 deferred to docs)
+- 2026-10-06 docs — doc-writer: server/docs/project-context.md (new), server/docs/README.md, server/README.md, client/README.md, reviewer-core/README.md, docs/shared-contracts.md, docs/lesson-log.md; main session, with the user's approval: server/.env.example, docs/agent-prompts/README.md, AGENTS.md (doc map line)
+- 2026-10-06 insights — INSIGHTS.md (it-suite key leak via dotenv, doc-writer non-md guard, zsh unquoted $F), server/INSIGHTS.md (jsonb NUL 22P05, trigger probe for write order), client/INSIGHTS.md (vitest `[id]` filter)
+- 2026-10-06 committed
 
 <!-- test-brief -->
 ## Test brief

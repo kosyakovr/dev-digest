@@ -2,6 +2,16 @@
    Import from "@/lib/hooks" for the platform hooks (settings/repos/pulls/context)
    or from a domain file directly (e.g. "@/lib/hooks/reviews") — both resolve here. */
 export * from "./core";
+export {
+  useContextSources,
+  useContextFiles,
+  useContextFile,
+  useAgentContext,
+  useSetAgentContext,
+  useSkillContext,
+  useSetSkillContext,
+  useReindexContext,
+} from "./context";
 export * from "./agents";
 export * from "./skills";
 export * from "./agent-skills";

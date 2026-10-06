@@ -1,4 +1,15 @@
-import { pgTable, uuid, text, integer, boolean, jsonb, primaryKey } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  text,
+  integer,
+  boolean,
+  jsonb,
+  primaryKey,
+  check,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
+import { isNotNull, sql } from 'drizzle-orm';
 import { now } from './_shared';
 import { workspaces, users } from './core';
 import { skills } from './skills';
@@ -64,4 +75,30 @@ export const agentSkills = pgTable(
     enabled: boolean('enabled').notNull().default(true),
   },
   (t) => ({ pk: primaryKey({ columns: [t.agentId, t.skillId] }) }),
+);
+
+/**
+ * Project-context docs attached to an agent (L05): repo-relative paths only,
+ * never doc text. `position` null = attached with no manual order. The partial
+ * unique index forbids two docs at one manual position per agent.
+ */
+export const agentContextDocs = pgTable(
+  'agent_context_docs',
+  {
+    agentId: uuid('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    path: text('path').notNull(),
+    position: integer('position'),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.agentId, t.path] }),
+    positionCheck: check(
+      'agent_context_docs_position_check',
+      sql`${t.position} IS NULL OR ${t.position} >= 0`,
+    ),
+    positionUq: uniqueIndex('agent_context_docs_agent_position_uq')
+      .on(t.agentId, t.position)
+      .where(isNotNull(t.position)),
+  }),
 );

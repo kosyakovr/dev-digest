@@ -71,6 +71,18 @@ export const RunStats = z.object({
 });
 export type RunStats = z.infer<typeof RunStats>;
 
+/** One attached project-context doc as a run saw it (included or skipped). */
+export const ProjectContextEntry = z.object({
+  path: z.string(),
+  tokens: z.number().int(),
+  status: z.enum(['included', 'skipped']),
+  reason: z.enum(['not_found', 'too_large', 'unreadable']).optional(),
+  via_skill: z.object({ id: z.string(), name: z.string() }).nullable(),
+  /** The exact wrapped block added to the prompt; null when skipped. */
+  text: z.string().nullable(),
+});
+export type ProjectContextEntry = z.infer<typeof ProjectContextEntry>;
+
 /** The single-document trace stored in `run_traces.trace`. */
 export const RunTrace = z.object({
   config: z.object({
@@ -87,6 +99,8 @@ export const RunTrace = z.object({
   raw_output: z.string(),
   memory_pulled: z.array(MemoryPulled),
   specs_read: z.array(z.string()),
+  /** One entry per attached project-context path; absent on older traces. */
+  project_context: z.array(ProjectContextEntry).optional(),
   log: z.array(RunLogLine),
 });
 export type RunTrace = z.infer<typeof RunTrace>;

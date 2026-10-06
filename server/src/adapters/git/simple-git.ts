@@ -164,6 +164,13 @@ export class SimpleGitClient implements GitClient {
       return null;
     }
   }
+
+  /** Every blob path in the tree at `ref`, from the object database (`git ls-tree`). */
+  async listFiles(repo: RepoRef, ref: string): Promise<string[]> {
+    if (!HEX_REF.test(ref)) throw new Error(`listFiles: invalid ref "${ref}"`);
+    const out = await this.git(repo).raw(['ls-tree', '-r', '--name-only', '-z', ref]);
+    return out.split('\0').filter((p) => p.length > 0);
+  }
 }
 
 function parseBlamePorcelain(raw: string): BlameLine[] {

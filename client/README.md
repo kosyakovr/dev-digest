@@ -27,16 +27,20 @@ flowchart TD
   ONB["/onboarding<br/>add repo"] -->|"POST /repos"| API[("Fastify API")]
   PULLS --> PR["/pulls/:number<br/>review detail<br/>(overview · diff · findings)"]
 
-  AGENTS["/agents"] --> AGENT["/agents/:id<br/>editor (config · skills)"]
-  SKILLS["/skills"] --> SKILL["/skills/:id<br/>editor (config · preview · versions)"]
+  AGENTS["/agents"] --> AGENT["/agents/:id<br/>editor (config · skills · context)"]
+  SKILLS["/skills"] --> SKILL["/skills/:id<br/>editor (config · context · preview · versions)"]
   CONV["/repos/:repoId/conventions<br/>extracted house-rules · triage"] -->|"draft → POST /skills"| SKILL
   SETTINGS["/settings/:section<br/>API keys · models"]
+  CTX["/repos/:repoId/context<br/>Project Context · docs, tokens, preview"]
 
   PULLS -->|"GET /repos/:id/pulls · /repos/:id/index-state"| API
   PR -->|"GET /pulls/:id · /reviews · /smart-diff · /pulls/:id/comments<br/>POST /pulls/:id/review · /findings/:id/(accept|dismiss)<br/>GET,POST /pulls/:id/intent<br/>GET /pulls/:id/blast · /pulls/:id/history"| API
   AGENTS -->|"/agents · /agents/:id · /agents/:id/skills"| API
   SKILLS -->|"/skills · /skills/:id/versions · /skill-types<br/>POST /skills/import/preview"| API
   CONV -->|"GET /repos/:id/conventions · PATCH,DELETE /conventions/:id<br/>POST /repos/:id/conventions/(extract|skill)"| API
+  CTX -->|"GET /context/sources · /repos/:id/context · /repos/:id/context/file?path="| API
+  AGENT -->|"GET,PUT /agents/:id/context"| API
+  SKILL -->|"GET,PUT /skills/:id/context"| API
   SETTINGS -->|"/settings · /providers"| API
 ```
 

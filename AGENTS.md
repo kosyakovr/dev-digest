@@ -37,6 +37,7 @@ require it, stop and ask the user first.
 - Subagents (researcher → spec-creator → implementation-planner → implementer → test-writer → plan-verifier / architecture-reviewer → doc-writer; the agent guards) → [.claude/agents/README.md](.claude/agents/README.md)
 - Cross-package feature specs → [specs/](specs/README.md)
 - The vendored `@devdigest/shared` contracts (twins, unserved schemas, null cost) → [docs/shared-contracts.md](docs/shared-contracts.md)
+- How Project Context works (attached docs → prompt → trace) → [server/docs/project-context.md](server/docs/project-context.md)
 - Implementation Plans (one per spec, same file name; status and who approves) → [docs/plans/](docs/plans/README.md)
 - Running an approved spec + plan through the agents (T1 → implementer → T2 → reviewers → fix rounds → docs) → `/sdd-run` ([.claude/skills/sdd-run/SKILL.md](.claude/skills/sdd-run/SKILL.md))
 - Before designing a lesson feature (the author's reverted solution in `git log --all`), and what each lesson built → [docs/lesson-log.md](docs/lesson-log.md)

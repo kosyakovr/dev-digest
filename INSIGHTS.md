@@ -29,6 +29,26 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 
 ## What Doesn't Work
 
+- 2026-10-06 — The "isolated" `.it.test` suite is NOT isolated from real keys:
+  `scripts/checks.sh:122` (and the `.claude/agents/README.md` § Running the
+  integration suite without real keys recipe) run `env -u GITHUB_TOKEN -u
+  OPENAI_API_KEY …`, but `server/src/platform/config.ts:1` does
+  `import 'dotenv/config'`, which re-fills every UNSET var from `server/.env`.
+  Here that file holds all four keys, so the L05 run's `server-it.log` showed
+  authenticated Octokit calls (`x-ratelimit-limit: 5000`, token-expiration
+  header) → a fake HOME and `env -u` are not enough; also point dotenv away
+  from `server/.env` (e.g. `DOTENV_CONFIG_PATH=/dev/null`) or set the keys to
+  empty strings, which dotenv does not override, and prove it by grepping a
+  fresh `server-it.log` for `x-ratelimit-limit`. (ref: server/src/platform/config.ts:1,
+  scripts/checks.sh:122)
+
+- 2026-10-06 — doc-writer's scope guard denies every non-markdown file, even
+  one the plan lists under § Docs to update (L05: `server/.env.example`), and
+  the item only surfaces as "blocked" at the docs stage → implementation-planner
+  should give a non-`.md` doc item (`.env.example`, config samples) to an
+  implementer WP, not to § Docs to update. (ref: .claude/hooks/agent-scope-guard.sh,
+  docs/plans/L05-project-context.md § Docs to update)
+
 - 2026-09-24 — Any Bash command whose TEXT contains a push command — a heredoc
   writing markdown that quotes one, `python3 - <<EOF`, even a `grep` for the
   string — is DENIED by the pr-self-review gate, which regex-tests the whole
@@ -72,6 +92,11 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
   `"${t}:a.ts"`, confirm an edit with `git diff`, and prove a script's patterns
   by running the script under `bash` and `/bin/bash` 3.2.
   (ref: .claude/skills/onion-architecture/SKILL.md §13, scripts/test-spec-lint.sh)
+- 2026-10-06 — The same zsh does NOT word-split an unquoted `$F`: L05's
+  test-writer passed several test files through `vitest run $F`, and vitest got
+  one bogus argument and printed nothing, which looks like "all green" → pass
+  explicit arguments or a zsh array (`${=F}` or `"${files[@]}"`), and treat a
+  vitest run that reports 0 files as a failure. (ref: .git/devdigest/runs/L05-project-context/t2.md)
 
 - 2026-10-01 — `git grep -E` here does NOT understand `\s`: the secret pattern
   `(secret|key|token|password)\s*[:=]\s*['"][^'"]{8,}` matched 0 files with exit
