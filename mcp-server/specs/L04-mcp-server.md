@@ -8,7 +8,7 @@ From a Claude Code session in this repo, a developer can:
 - list DevDigest agents;
 - start one agent's review on a PR and get the verdict and findings in one tool call, or a `run_id` if it takes longer than the budget;
 - read stored findings and accepted conventions;
-- see the blast radius of a PR (changed symbols, callers `file:line`, affected HTTP endpoints and crons) from `get_blast_radius`, which calls `GET /pulls/:id/blast` (spec: [docs/specs/L04-blast-radius.md](../../docs/specs/L04-blast-radius.md)).
+- see the blast radius of a PR (changed symbols, callers `file:line`, affected HTTP endpoints and crons) from `get_blast_radius`, which calls `GET /pulls/:id/blast` (spec: [specs/L04-blast-radius.md](../../specs/L04-blast-radius.md)).
 
 The package is a stdio MCP server named `devdigest` that talks only to the running DevDigest API over HTTP.
 
@@ -146,7 +146,7 @@ Every error is `isError: true` with one or two actionable sentences; no stack tr
 - [ ] AC-7: Every stdout line parses as JSON-RPC 2.0; closing stdin exits 0 within 2 s.
 - [ ] AC-8: An invalid `DEVDIGEST_API_URL` → exit 1, stderr naming the variable, empty stdout.
 - [ ] AC-9 (manual): `/mcp` lists `devdigest` connected with 5 tools.
-- [ ] AC-10: Nothing changes under `server/`, `client/`, `reviewer-core/`, `e2e/`, `*/src/vendor/shared/` — except the L04 Blast radius feature, spec [docs/specs/L04-blast-radius.md](../../docs/specs/L04-blast-radius.md).
+- [ ] AC-10: Nothing changes under `server/`, `client/`, `reviewer-core/`, `e2e/`, `*/src/vendor/shared/` — except the L04 Blast radius feature, spec [specs/L04-blast-radius.md](../../specs/L04-blast-radius.md).
 
 ## Test plan
 `cd mcp-server && pnpm typecheck && pnpm test` (vitest, a `FakeDevDigestApi implements DevDigestApi`, fake clock, in-memory MCP transport, no network). Boundary greps cover AC-1b. Manual: MCP inspector `tools/list`, then `/mcp` in Claude Code. See [../../TESTING.md](../../TESTING.md).

@@ -4,7 +4,7 @@
 **Lesson / ticket:** L03
 
 One spec for the feature:
-[../../docs/specs/L03-intent-layer.md](../../docs/specs/L03-intent-layer.md).
+[../../specs/L03-intent-layer.md](../../specs/L03-intent-layer.md).
 This file records only the pure-engine part.
 
 ## Contract

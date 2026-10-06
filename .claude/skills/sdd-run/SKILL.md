@@ -76,7 +76,7 @@ outside the repo tree, never committed (reports stay out of the repo,
 ### 0.1 Parse the arguments
 
 `$ARGUMENTS` = `<spec path> [--design <file|link>]... [-- <extra prompt>]`.
-No spec path → list `docs/specs/*.md` and `*/specs/*.md` with
+No spec path → list `specs/*.md` and `*/specs/*.md` with
 `**Status:** approved` and ask which one. The plan is
 `docs/plans/<spec file name>`; missing → stop: "run implementation-planner
 first".

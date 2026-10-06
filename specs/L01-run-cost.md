@@ -204,7 +204,7 @@ already exists there.
 
 ## Test plan
 
-Per [TESTING.md](../../TESTING.md) — behaviour at the seams, not coverage.
+Per [TESTING.md](../TESTING.md) — behaviour at the seams, not coverage.
 
 **server-unit**
 - `server/test/contracts.test.ts:157` — restore `cost_usd` in the `RunTrace`

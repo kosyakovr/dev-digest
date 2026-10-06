@@ -102,7 +102,7 @@ case "$TOOL" in
         decide deny "INSIGHTS.md is written by the engineering-insights skill in the main session - report Insight candidates instead." ;;
       */docs/plans/*|docs/plans/*)
         decide deny "the plan is what plan-verifier grades you against - it changes only through the main session. Report a needed change under Deviations from plan." ;;
-      */docs/specs/*|docs/specs/*|*/server/specs/*|server/specs/*|*/client/specs/*|client/specs/*|*/reviewer-core/specs/*|reviewer-core/specs/*|*/mcp-server/specs/*|mcp-server/specs/*)
+      */specs/*.md|specs/*.md|*/server/specs/*|server/specs/*|*/client/specs/*|client/specs/*|*/reviewer-core/specs/*|reviewer-core/specs/*|*/mcp-server/specs/*|mcp-server/specs/*)
         decide deny "specs are input - spec-creator writes them and the user approves them. A spec the code cannot follow is a deviation to report, not to fix." ;;
       *.test.ts|*.test.tsx|*/server/test/*|server/test/*|*/reviewer-core/test/*|reviewer-core/test/*|*/mcp-server/test/*|mcp-server/test/*|*/client/src/test/*|client/src/test/*|*/e2e/specs/*.flow.json|e2e/specs/*.flow.json)
         decide deny "tests are written by the test-writer agent, not the implementer. List what needs a test (and any existing test your change is meant to break) under Handoff to test-writer." ;;

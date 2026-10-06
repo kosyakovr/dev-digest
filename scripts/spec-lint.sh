@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# spec-lint.sh — deterministic checks on a spec written from docs/specs/_template.md.
+# spec-lint.sh — deterministic checks on a spec written from specs/_template.md.
 #
 #   scripts/spec-lint.sh <spec.md>...
 #
@@ -18,7 +18,7 @@
 # Exit: 0 clean, 1 problems found, 2 usage error or unreadable file.
 # Test: scripts/test-spec-lint.sh
 #
-# Expected on this repo (2026-10-03): `scripts/spec-lint.sh docs/specs/*.md` prints
+# Expected on this repo (2026-10-03): `scripts/spec-lint.sh specs/*.md` prints
 # only "skipped" notes (README, _template and the seven L01–L04 specs) and exits 0.
 
 set -u

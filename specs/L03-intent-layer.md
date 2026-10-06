@@ -4,8 +4,8 @@
 **Lesson / ticket:** L03
 
 One spec for the whole feature. The client-only and reviewer-core-only parts are
-in [../../client/specs/L03-intent-layer.md](../../client/specs/L03-intent-layer.md)
-and [../../reviewer-core/specs/L03-intent-layer.md](../../reviewer-core/specs/L03-intent-layer.md).
+in [../../client/specs/L03-intent-layer.md](../client/specs/L03-intent-layer.md)
+and [../../reviewer-core/specs/L03-intent-layer.md](../reviewer-core/specs/L03-intent-layer.md).
 
 ## Goal
 Each review agent knows what the PR is meant to change and what it deliberately

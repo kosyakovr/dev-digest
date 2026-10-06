@@ -9,7 +9,7 @@ item by item. Committed, so a new chat can pick the run up from the file alone.
 
 ## Files
 
-- `<lesson>-<feature>.md` — the **same name as its spec** (`docs/specs/L05-x.md`
+- `<lesson>-<feature>.md` — the **same name as its spec** (`specs/L05-x.md`
   or `<pkg>/specs/L05-x.md` → `docs/plans/L05-x.md`), whether the spec is
   cross-package or not. One folder, so every plan is found in one place.
 - The planner's output verbatim, with the header below. Saved from the agent's
@@ -22,7 +22,7 @@ item by item. Committed, so a new chat can pick the run up from the file alone.
 ```markdown
 # Implementation Plan: <feature>
 **Status:** draft | approved | in-progress | done
-**Spec:** docs/specs/<file>.md @ <short sha of the commit holding the spec as planned>
+**Spec:** specs/<file>.md @ <short sha of the commit holding the spec as planned>
 **Approved:** <YYYY-MM-DD> by the user — gates: GT-1 ✓, GT-2 ✗ · execution mode: multi-agent · accepted: REC-1, REC-3
 Packages: … · Requirements: … · Lesson/ticket: …
 ```

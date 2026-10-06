@@ -28,6 +28,6 @@ route registered in `server/src/modules/` actually returns it
 Run cost is stored per run in `agent_runs.cost_usd` — read the stored value,
 never re-derive it. `reviewer-core` treats `null` as sticky "unknown", while a
 plain SQL `SUM(cost_usd)` skips NULL rows and silently understates the total.
-The aggregation rule is in `docs/specs/L01-run-cost.md` § Null semantics.
+The aggregation rule is in `specs/L01-run-cost.md` § Null semantics.
 
 Moved here from the root `INSIGHTS.md` (entries of 2026-09-19 and 2026-09-22) on 2026-10-05.

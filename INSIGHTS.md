@@ -23,7 +23,7 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 > - `git stash` on an untracked file in a red-proof → [TESTING.md](TESTING.md) § Conventions
 > - hook end-to-end testing, hooks failing open → [.claude/hooks/README.md](.claude/hooks/README.md);
 >   the `.it.test` `FAKE_HOME` trap, a fresh headless session → [.claude/agents/README.md](.claude/agents/README.md);
->   skill authoring → [.claude/skills/README.md](.claude/skills/README.md); old `server/specs/` paths → [docs/specs/README.md](docs/specs/README.md)
+>   skill authoring → [.claude/skills/README.md](.claude/skills/README.md); old `server/specs/` paths → [specs/README.md](specs/README.md)
 
 ## What Works
 

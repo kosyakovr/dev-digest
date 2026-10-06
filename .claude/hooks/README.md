@@ -110,7 +110,7 @@ other agents. It makes the root `AGENTS.md` "do not touch" list mechanical.
 | Tool call | Decision |
 |---|---|
 | Edit/Write under `server/src/db/migrations/`, any lock file, anything under `.claude/` or `.git/`, a `CLAUDE.md` / `CLAUDE.local.md`, any `INSIGHTS.md` | `deny` |
-| Edit/Write of a spec (`docs/specs/**`, `{server,client,reviewer-core,mcp-server}/specs/**`) or a plan (`docs/plans/**`) | `deny` — they are its input, and plan-verifier grades it against the plan |
+| Edit/Write of a spec (`specs/**`, `{server,client,reviewer-core,mcp-server}/specs/**`) or a plan (`docs/plans/**`) | `deny` — they are its input, and plan-verifier grades it against the plan |
 | Edit/Write of a test — `*.test.ts(x)`, `server/test/**`, `reviewer-core/test/**`, `mcp-server/test/**`, `client/src/test/**`, `e2e/specs/*.flow.json` | `deny` — the [`test-writer`](../agents/test-writer.md) agent owns tests (`server/src/adapters/mocks.ts` stays allowed: it is production code) |
 | Edit/Write of `server/src/db/schema*` or a `package.json` | `ask` — only for a change an approved plan Gate names |
 | Bash: `git commit/push/reset/checkout/stash/…`, `gh pr`, `pnpm/npm add/remove/update`, `install` without `--frozen-lockfile`, `yarn`, `db:generate`, `drizzle-kit generate/push`, a write (`>`, a heredoc, `rm`, `mv`, `cp`, `sed -i`, `tee`, …) into a protected path — every path in the rows above, tests, specs and plans included | `deny` |
@@ -129,7 +129,7 @@ writes through a heredoc that the Edit/Write rows never saw. The Bash rule
 reads the same way as the protected-path one: a redirect whose target names
 such a path, or the path anywhere in a command that also has a write verb.
 Known fail-closed denials: a command that reads such a path and writes
-elsewhere with a verb (`cat docs/specs/x.md && rm /tmp/y`,
+elsewhere with a verb (`cat specs/x.md && rm /tmp/y`,
 `vitest run src/a.test.ts | tee /tmp/log`) — split it into two calls.
 
 **Trusted workspaces only.** Claude Code skips a project agent's frontmatter hooks
@@ -173,7 +173,7 @@ variable an absolute path cannot be placed, so the answer is `ask`.
 | `server/test/**`, `reviewer-core/test/**`, `mcp-server/test/**`, `client/src/**/*.test.{ts,tsx}`, `e2e/specs/*.flow.json` | allow | `deny` | `deny` | `deny` |
 | `server/test/*.test.ts` (not `.it.test.ts`) whose content mentions `helpers/pg` | `deny` — rename to `.it.test.ts` | — | — | — |
 | `server/test/helpers/**`, `client/src/test/**`, `server/src/adapters/mocks.ts` | `ask` | `deny` | `deny` | `deny` |
-| `docs/specs/*.md`, `{server,client,reviewer-core,mcp-server}/specs/*.md` — a new file, or an existing one whose `**Status:**` line is `draft` | `deny` | `deny` | allow | `deny` |
+| `specs/*.md`, `{server,client,reviewer-core,mcp-server}/specs/*.md` — a new file, or an existing one whose `**Status:**` line is `draft` | `deny` | `deny` | allow | `deny` |
 | the same, but the file exists and is not a draft (`approved`, `in-progress`, `done`, no status line), or the new content sets `**Status:** approved` / `in-progress` / `done` | `deny` | `deny` | `ask` | `deny` |
 | a spec folder's `README.md` or `_template.md`, a subfolder of it, a non-`.md` file, `e2e/specs/**` | `deny` (`e2e/specs/*.flow.json`: allow) | `deny` | `deny` | `deny` |
 | `docs/plans/**` (plans are saved by the main session) | `deny` | `deny` | `deny` | `deny` |

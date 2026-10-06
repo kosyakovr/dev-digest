@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Lesson / ticket:** L04
 
-One spec for the cross-package feature. Client part: [../../client/specs/L04-blast-radius.md](../../client/specs/L04-blast-radius.md). MCP part: [../../mcp-server/specs/L04-mcp-server.md](../../mcp-server/specs/L04-mcp-server.md).
+One spec for the cross-package feature. Client part: [../../client/specs/L04-blast-radius.md](../client/specs/L04-blast-radius.md). MCP part: [../../mcp-server/specs/L04-mcp-server.md](../mcp-server/specs/L04-mcp-server.md).
 
 ## Goal
 1. The PR Overview shows a "Blast radius" card: 4 counters (symbols / callers / endpoints / crons), a Tree/Graph switch, per-symbol callers `file:line` (direct and indirect, links pinned to `indexed_sha`), then HTTP endpoints and crons; below it an accordion "Prior PRs touching these files".
@@ -85,4 +85,4 @@ GitHubClient.listCommitsForPath(repo: RepoRef, path: string,
 ## Test plan
 - Unit (`cd server && pnpm exec vitest run --exclude '**/*.it.test.ts'`): contracts, facade with a stub repo (`repo-intel-blast.test.ts`), mapper and text helpers (`blast-helpers.test.ts`), `MockGitHubClient`.
 - Integration (`scripts/checks.sh`, Docker): `blast.it.test.ts`, `pr-history.it.test.ts` via `app.inject`, Postgres and `MockGitHubClient`, including the one-line log.
-- Client and MCP: see their specs. See [../../TESTING.md](../../TESTING.md).
+- Client and MCP: see their specs. See [../../TESTING.md](../TESTING.md).

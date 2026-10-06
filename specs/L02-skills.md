@@ -115,7 +115,7 @@ DELETE /agents/:id/skills/:skillId            unlink one  (new route; repo metho
 
 ## Test plan
 
-Per [../../TESTING.md](../../TESTING.md). Anything importing `test/helpers/pg.ts`
+Per [../../TESTING.md](../TESTING.md). Anything importing `test/helpers/pg.ts`
 must be named `*.it.test.ts` — CI splits on the filename.
 
 - `test/skills-helpers.test.ts` (unit, no Docker) — markdown import parsing
@@ -128,4 +128,4 @@ must be named `*.it.test.ts` — CI splits on the filename.
   `PromptAssembly.skills`; disabled link and disabled skill excluded; no links
   leaves the prompt unchanged.
 
-Client coverage lives in [../../client/specs/L02-skills.md](../../client/specs/L02-skills.md).
+Client coverage lives in [../../client/specs/L02-skills.md](../client/specs/L02-skills.md).

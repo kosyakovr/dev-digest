@@ -23,6 +23,6 @@ points at the schema, the cause is the cap.
   together with `usage.completion_tokens_details.reasoning_tokens`, and says to
   raise `maxTokens`.
 - A spec's LLM `NFR-n` states the cap "including reasoning"
-  (`docs/specs/_template.md` § Non-functional).
+  (`specs/_template.md` § Non-functional).
 
 Moved here from the root `INSIGHTS.md` (entry of 2026-10-02) on 2026-10-05.

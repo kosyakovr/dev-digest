@@ -61,7 +61,7 @@ function fixture() {
     fs.writeFileSync(path.join(tdir, sid, 'subagents', `agent-${id}.meta.json`), JSON.stringify({ agentType: type, toolUseId }));
   };
   sub('aspec0000001', 'spec-creator', 'sp0', [
-    asst(0.3, [use('s1', 'Write', { file_path: P('docs/specs/L05-x.md') })], 'claude-opus-5-5'), res(0.3, 's1', 'ok'),            // non-hit: its own spec, and not "docs updated"
+    asst(0.3, [use('s1', 'Write', { file_path: P('specs/L05-x.md') })], 'claude-opus-5-5'), res(0.3, 's1', 'ok'),            // non-hit: its own spec, and not "docs updated"
     asst(0.4, [use('s2', 'Edit', { file_path: P('client/src/app/page.tsx') })], 'claude-opus-5-5'), res(0.4, 's2', 'ok'),        // planted: outside the spec folders
     handback(0.8, 's3', '# Spec Report: X\nStatus: ready to plan'),
   ]);
@@ -117,7 +117,7 @@ test('planted problems are found, planted non-problems are not', () => {
   has(/\[crit\] scope: plan-verifier#averi wrote outside its scope \(read-only\)/);
   has(/\[crit\] scope: spec-creator#\w+ wrote outside its scope \(spec-creator\)/);
   assert.match(json.findings.find((f) => /spec-creator#\w+ wrote outside/.test(f.title)).evidence, /client\/src\/app\/page\.tsx \(spec-creator wrote outside the spec folders\)/);
-  assert.doesNotMatch(json.findings.find((f) => /spec-creator#\w+ wrote outside/.test(f.title)).evidence, /docs\/specs/);
+  assert.doesNotMatch(json.findings.find((f) => /spec-creator#\w+ wrote outside/.test(f.title)).evidence, /specs\/L05-x\.md/);
   has(/\[warn\] scope: test-writer#\w+: 1 denied call/);
   has(/\[crit\] skipped: vendored contract changed on one side only: server\/src\/vendor\/shared\/contracts\/x\.ts/);
   has(/\[info\] scope: implementer#\w+ edited 4 file\(s\) the plan does not name/); // vendor x.ts, a.test.ts + the two shell writes

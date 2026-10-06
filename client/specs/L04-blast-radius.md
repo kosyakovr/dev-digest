@@ -4,7 +4,7 @@
 **Lesson / ticket:** L04
 
 One spec for the feature:
-[../../docs/specs/L04-blast-radius.md](../../docs/specs/L04-blast-radius.md)
+[../../specs/L04-blast-radius.md](../../specs/L04-blast-radius.md)
 (goal, non-goals, contract, routes, acceptance criteria AC-1..AC-19). This file records only
 what is client-specific.
 

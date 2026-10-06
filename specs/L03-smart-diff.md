@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Lesson / ticket:** L03
 
-Client side: [../../client/specs/L03-smart-diff.md](../../client/specs/L03-smart-diff.md).
+Client side: [../../client/specs/L03-smart-diff.md](../client/specs/L03-smart-diff.md).
 
 ## Goal
 On the "Files changed" tab the PR's files are grouped by role in a fixed order
@@ -14,7 +14,7 @@ default), and the findings of the latest review are shown inside the diff.
 - No split-PR banner: `split_suggestion.too_big` is always `false`,
   `proposed_splits` always `[]`. (The Smart order / Original order toggle was
   added later, client-only — see
-  [../../client/specs/L03-smart-diff.md](../../client/specs/L03-smart-diff.md).)
+  [../../client/specs/L03-smart-diff.md](../client/specs/L03-smart-diff.md).)
 - `pseudocode_summary` is never populated (key absent).
 - No LLM call; `assemblePrompt` and `run-executor.ts` are unchanged. The L08
   filter is not implemented — only its seam (`classifyFile`) exists.

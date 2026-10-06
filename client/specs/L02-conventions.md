@@ -4,7 +4,7 @@
 **Lesson / ticket:** L02
 
 The feature spans `server/` and `client/`, so it keeps **one** spec:
-[../../docs/specs/L02-conventions.md](../../docs/specs/L02-conventions.md) —
+[../../specs/L02-conventions.md](../../specs/L02-conventions.md) —
 goal, non-goals, decisions, routes, contracts and acceptance criteria all live
 there.
 

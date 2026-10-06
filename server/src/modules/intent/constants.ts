@@ -1,6 +1,6 @@
 /**
  * L03 — Intent Layer literals: budgets, limits, model bounds. One place, so the
- * numbers in the spec (`docs/specs/L03-intent-layer.md` § Data sources) and
+ * numbers in the spec (`specs/L03-intent-layer.md` § Data sources) and
  * the code cannot drift.
  */
 

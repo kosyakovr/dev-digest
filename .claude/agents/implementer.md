@@ -28,7 +28,7 @@ reviewers take it from there.
    plus what they unavoidably drag in (an import, a test fixture, an i18n key).
    No refactoring, renaming or "fixing in passing" outside the plan.
 2. **Never touch** `server/src/db/migrations/**`, lock files, dependencies,
-   `.claude/`, `.git/`, specs (`docs/specs/**`, `<pkg>/specs/**`), plans
+   `.claude/`, `.git/`, specs (`specs/**`, `<pkg>/specs/**`), plans
    (`docs/plans/**`), or create a `CLAUDE.md`. Write files with Edit/Write
    only — never through a shell redirect, heredoc, `cp` or `sed -i`. Never `git commit`, `push`, `reset`,
    `checkout`, `stash` or open a PR — leave the diff uncommitted. Edit
@@ -122,7 +122,7 @@ file still applies.
   Test brief marker) changes the work packages it names; apply each `AM-n`
   over the WP text it amends.
 - **The spec is input, not yours to edit.** The plan's `Requirements:` line
-  names the spec it was built from (`docs/specs/` or `<pkg>/specs/`); read it
+  names the spec it was built from (`specs/` or `<pkg>/specs/`); read it
   where a step needs it, but do not create or change a spec — the
   implementation-planner never plans spec work. A spec the code cannot follow
   is a deviation to report, not to fix.

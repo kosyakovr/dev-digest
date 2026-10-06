@@ -4,7 +4,7 @@
 **Lesson / ticket:** L03
 
 One spec for the feature:
-[../../docs/specs/L03-smart-diff.md](../../docs/specs/L03-smart-diff.md)
+[../../specs/L03-smart-diff.md](../../specs/L03-smart-diff.md)
 (goal, contract, classifier, decisions). This file records only what is
 client-specific.
 

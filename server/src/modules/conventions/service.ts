@@ -47,7 +47,7 @@ import { ConventionsRepository, type InsertConvention } from './repository.js';
  *            snippet must be substantial and must really occur there. A wrong
  *            line number is corrected; an invented snippet is dropped.
  *
- * See docs/specs/L02-conventions.md.
+ * See specs/L02-conventions.md.
  */
 export class ConventionsService {
   private repo: ConventionsRepository;

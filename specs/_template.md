@@ -2,7 +2,7 @@
 
 **Status:** draft | approved | in-progress | done
 **Lesson / ticket:** <e.g. L05>
-**Packages:** <server, client, reviewer-core, mcp-server, e2e> — one package → this file lives in `<pkg>/specs/`; several → `docs/specs/`
+**Packages:** <server, client, reviewer-core, mcp-server, e2e> — one package → this file lives in `<pkg>/specs/`; several → `specs/`
 
 <!--
 Rules for whoever fills this in (the spec-creator agent or a person):
@@ -97,7 +97,7 @@ Not requirements until the user accepts them.
 ## Traceability and verification
 One row per AC and NFR — none missing, none extra. **Method:** test · demo (shown by hand in the
 running app) · inspection (read the code or contract) · analysis (measured or computed).
-**Suite** from [TESTING.md](../../TESTING.md) § Suite map: client · server-unit · server-integration ·
+**Suite** from [TESTING.md](../TESTING.md) § Suite map: client · server-unit · server-integration ·
 reviewer-core · mcp-server · e2e web. The **hint** names the observable signal that proves the
 criterion, not a test case — the cases are the Implementation Plan's Test brief.
 A small change (~60 lines) may drop the Story and Source columns; the AC's tag carries them.

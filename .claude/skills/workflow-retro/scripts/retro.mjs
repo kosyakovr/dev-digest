@@ -114,7 +114,7 @@ const PKGS = ['server', 'client', 'reviewer-core', 'e2e', 'mcp-server'];
 const pkgOf = (r) => PKGS.find((p) => r.startsWith(p + '/'));
 const isTest = (r) => /\.test\.tsx?$|(^|\/)(server|reviewer-core|mcp-server)\/test\/|client\/src\/test\/|e2e\/specs\/.*\.flow\.json$/.test(r);
 const isDoc = (r) => /\.md$/.test(r) && !/INSIGHTS\.md$/.test(r);
-const isSpec = (r) => /^(docs|server|client|reviewer-core|mcp-server)\/specs\/[^/]+\.md$/.test(r);
+const isSpec = (r) => /^((server|client|reviewer-core|mcp-server)\/)?specs\/[^/]+\.md$/.test(r);
 const isCode = (r) => !!pkgOf(r) && /\/src\//.test(r) && !isTest(r) && !/\.md$/.test(r);
 
 // ---------- the run window ----------
@@ -491,8 +491,8 @@ for (const th of threads) {
 }
 // 4d. spec and docs
 for (const p of new Set(codeEdited.map(pkgOf))) {
-  const specSeen = [...reads.keys(), ...editedFiles].some((f) => f.startsWith(`${p}/specs/`) || /^docs\/specs\//.test(f));
-  if (!specSeen) add('skipped', 'info', `${p}/ code changed but no spec was read or written`, `no ${p}/specs/*.md or docs/specs/*.md touched in the run`, 'AGENTS.md § Workflow 2 / implementation-planner.md');
+  const specSeen = [...reads.keys(), ...editedFiles].some((f) => f.startsWith(`${p}/specs/`) || /^specs\//.test(f));
+  if (!specSeen) add('skipped', 'info', `${p}/ code changed but no spec was read or written`, `no ${p}/specs/*.md or specs/*.md touched in the run`, 'AGENTS.md § Workflow 2 / implementation-planner.md');
 }
 if (codeEdited.length && ![...editedFiles].some((f) => isDoc(f) && !isSpec(f)) && !agents.some((a) => a.type === 'doc-writer'))
   add('skipped', 'warn', 'code changed but no docs were updated and doc-writer never ran', `${codeEdited.length} source file(s) edited`, 'AGENTS.md § Workflow 4 / .claude/agents/README.md § The flow');

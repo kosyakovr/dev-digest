@@ -6,7 +6,7 @@
 #
 #   test-writer  — may write test files only (+ its red-proof worktree in $TMPDIR)
 #   doc-writer   — may write markdown docs only (never specs or plans)
-#   spec-creator — may write draft specs only (docs/specs/, <pkg>/specs/)
+#   spec-creator — may write draft specs only (specs/, <pkg>/specs/)
 #   read-only    — may write nothing, and Bash may not write either
 #
 # Every profile shares the deny core of implementer-guard.sh (migrations, lock
@@ -155,10 +155,11 @@ case "$TOOL" in
 
     if [ "$PROFILE" = spec-creator ]; then
       case "$REL" in
-        docs/specs/*.md|server/specs/*.md|client/specs/*.md|reviewer-core/specs/*.md|mcp-server/specs/*.md) ;;
-        *) decide deny "spec-creator writes specs only - docs/specs/<file>.md (several packages) or <pkg>/specs/<file>.md (one package)." ;;
+        specs/*.md|server/specs/*.md|client/specs/*.md|reviewer-core/specs/*.md|mcp-server/specs/*.md) ;;
+        *) decide deny "spec-creator writes specs only - specs/<file>.md (several packages) or <pkg>/specs/<file>.md (one package)." ;;
       esac
-      case "${REL#*/specs/}" in
+      SPEC=${REL#*/specs/}; SPEC=${SPEC#specs/}
+      case "$SPEC" in
         */*) decide deny "a spec lives directly in its specs/ folder, not in a subfolder." ;;
         README.md|_template.md) decide deny "the specs README and template are conventions the user owns - propose a change in the report." ;;
       esac
@@ -178,7 +179,7 @@ case "$TOOL" in
     case "$REL" in
       AGENTS.md|*/AGENTS.md)
         decide ask "AGENTS.md is loaded into every session - approve only a change the user asked for." ;;
-      docs/specs/*|*/specs/*|docs/plans/*)
+      specs/*|*/specs/*|docs/plans/*)
         decide deny "specs and plans are not docs - spec-creator writes specs, the main session saves plans. Report what they now get wrong under Discrepancies." ;;
       docs/agent-prompts/*.md)
         case "$REL" in
