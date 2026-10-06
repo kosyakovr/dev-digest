@@ -71,6 +71,15 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 
 ## Tool & Library Notes
 
+- 2026-10-06 — Since L05's SR-1 test (a project-context doc containing `\u0000`),
+  `server-it.log` holds NUL bytes. So `scripts/checks.sh:90`'s summary `grep`
+  treats it as binary and prints "Binary file (standard input) matches"
+  instead of the `Tests … passed` line. Agents then reported "cannot find the
+  failing test". The FAIL/PASS result itself is still right → read the log
+  with `grep -a` (e.g. `grep -a -E '^ FAIL |^ +Tests '`); the lasting fix is
+  `grep -a` in checks.sh's summary line. (ref: scripts/checks.sh:90,
+  server/test/context-run.it.test.ts SR-1 case)
+
 - 2026-10-06 — `Artifact read` on a Claude Design UI prototype saves a bundler
   page, not readable screens: its JSX is gzip+base64 inside
   `<script type="__bundler/manifest">` (one ~1.8 MB line, too long for one

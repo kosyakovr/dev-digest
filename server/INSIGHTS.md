@@ -16,6 +16,16 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## What Works
 
+- 2026-10-06 — A delete-then-insert concurrency race (two overlapping
+  `PUT /agents/:id/context` → 23505 → 500) became deterministic in an
+  `.it.test` with no timing. Install an AFTER INSERT statement trigger that
+  calls `pg_advisory_xact_lock(K)` while a second connection holds
+  `pg_advisory_lock(K)`, so request A parks mid-transaction. Poll
+  `pg_stat_activity` for `wait_event = 'advisory'`, fire request B, poll for a
+  second `wait_event_type = 'Lock'` backend, then unlock → it reproduces 3/3,
+  goes green with any serialising fix (`FOR NO KEY UPDATE` on the parent row),
+  and red again when the lock is removed. (ref: server/test/context-concurrency.it.test.ts)
+
 - 2026-10-06 — A write-ORDER race (a run marked `done` before its trace row was
   written, which caused intermittent `GET /runs/:id/trace` 404s) became
   deterministic in an `.it.test` with a Postgres trigger. On `agent_runs`, when
