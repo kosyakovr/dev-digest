@@ -85,6 +85,8 @@ flowchart TB
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]
     blast["blast<br/>/pulls/:id/blast · /pulls/:id/history<br/>(history reads GitHub commits?path=)"]
     blast -->|"repoIntel.getBlastRadius"| repoIntel
+    onboarding["onboarding (L05)<br/>/repos/:id/tour · /tour/generate"]
+    onboarding -->|"repoIntel.getOnboardingFacts"| repoIntel
   end
   subgraph Context["Project Context (L05)"]
     context["context<br/>/context/sources · /repos/:id/context(/file)<br/>/agents/:id/context · /skills/:id/context (GET · PUT)"]

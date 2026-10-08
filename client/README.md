@@ -32,6 +32,7 @@ flowchart TD
   CONV["/repos/:repoId/conventions<br/>extracted house-rules · triage"] -->|"draft → POST /skills"| SKILL
   SETTINGS["/settings/:section<br/>API keys · models"]
   CTX["/repos/:repoId/context<br/>Project Context · docs, tokens, preview"]
+  TOUR["/repos/:repoId/tour<br/>Onboarding Tour"]
 
   PULLS -->|"GET /repos/:id/pulls · /repos/:id/index-state"| API
   PR -->|"GET /pulls/:id · /reviews · /smart-diff · /pulls/:id/comments<br/>POST /pulls/:id/review · /findings/:id/(accept|dismiss)<br/>GET,POST /pulls/:id/intent<br/>GET /pulls/:id/blast · /pulls/:id/history"| API
@@ -39,6 +40,7 @@ flowchart TD
   SKILLS -->|"/skills · /skills/:id/versions · /skill-types<br/>POST /skills/import/preview"| API
   CONV -->|"GET /repos/:id/conventions · PATCH,DELETE /conventions/:id<br/>POST /repos/:id/conventions/(extract|skill)"| API
   CTX -->|"GET /context/sources · /repos/:id/context · /repos/:id/context/file?path="| API
+  TOUR -->|"GET /repos/:id/tour · POST /repos/:id/tour/generate"| API
   AGENT -->|"GET,PUT /agents/:id/context"| API
   SKILL -->|"GET,PUT /skills/:id/context"| API
   SETTINGS -->|"/settings · /providers"| API

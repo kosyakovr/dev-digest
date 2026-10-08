@@ -34,7 +34,7 @@ import { AppShell } from "./AppShell";
 afterEach(cleanup);
 
 describe("AppShell sidebar", () => {
-  it("links Project Context to the active repo's context page, right after Pull Requests", () => {
+  function renderShell() {
     render(
       <NextIntlClientProvider locale="en" messages={{ shell: shellMessages }}>
         <AppShell>
@@ -42,12 +42,27 @@ describe("AppShell sidebar", () => {
         </AppShell>
       </NextIntlClientProvider>,
     );
+  }
+
+  it("links Project Context to the active repo's context page", () => {
+    renderShell();
 
     const context = screen.getByRole("link", { name: /Project Context/ });
     expect(context).toHaveAttribute("href", "/repos/r1/context");
+  });
+
+  // L05 onboarding tour AC-1: WORKSPACE reads Pull Requests, Onboarding Tour,
+  // Project Context, in that order (supersedes "Project Context right after Pull Requests").
+  it("lists Onboarding Tour between Pull Requests and Project Context, linking to the active repo's tour page (AC-1)", () => {
+    renderShell();
 
     const pulls = screen.getByRole("link", { name: /Pull Requests/ });
+    const tour = screen.getByRole("link", { name: /Onboarding Tour/ });
+    const context = screen.getByRole("link", { name: /Project Context/ });
+    expect(tour).toHaveAttribute("href", "/repos/r1/tour");
+
     const links = screen.getAllByRole("link");
-    expect(links.indexOf(context)).toBe(links.indexOf(pulls) + 1);
+    expect(links.indexOf(tour)).toBe(links.indexOf(pulls) + 1);
+    expect(links.indexOf(context)).toBe(links.indexOf(tour) + 1);
   });
 });

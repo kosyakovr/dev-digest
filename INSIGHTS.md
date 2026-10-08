@@ -29,6 +29,14 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 
 ## What Doesn't Work
 
+- 2026-10-09 — The L05 tour plan's done-when "`git diff --stat -- server/src/db`
+  prints nothing" was wider than spec AC-47 and AGENTS.md (migrations + schema
+  only), so the architecture fix that moved `RepoRow` into `server/src/db/rows.ts`
+  (onion-architecture §3) failed plan-verifier and cost amendment AM-1 →
+  implementation-planner should scope the no-migration check to
+  `server/src/db/migrations` and `server/src/db/schema*`, never all of
+  `server/src/db`. (ref: docs/plans/L05-onboarding-tour.md § Amendments AM-1)
+
 - 2026-10-06 — The "isolated" `.it.test` suite is NOT isolated from real keys:
   `scripts/checks.sh:122` (and the `.claude/agents/README.md` § Running the
   integration suite without real keys recipe) run `env -u GITHUB_TOKEN -u
@@ -41,6 +49,13 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
   empty strings, which dotenv does not override, and prove it by grepping a
   fresh `server-it.log` for `x-ratelimit-limit`. (ref: server/src/platform/config.ts:1,
   scripts/checks.sh:122)
+- 2026-10-09 — `scripts/e2e.sh` has the same leak: it exports only DB/ports
+  (`scripts/e2e.sh:40-43`), so dotenv fills `GITHUB_TOKEN` from `server/.env`;
+  plan-verifier's L05 e2e run logged `x-ratelimit-limit: 5000`,
+  `x-ratelimit-used: 26` (real token, no LLM call) → tell verifiers not to run
+  `scripts/e2e.sh` unless the change touches an e2e flow, or run it with
+  `DOTENV_CONFIG_PATH=/dev/null`, and grep its output for `x-ratelimit-limit`.
+  (ref: scripts/e2e.sh:35-43, .git/devdigest/runs/L05-onboarding-tour/r0-pv.md)
 
 - 2026-10-06 — doc-writer's scope guard denies every non-markdown file, even
   one the plan lists under § Docs to update (L05: `server/.env.example`), and

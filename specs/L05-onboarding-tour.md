@@ -1,6 +1,6 @@
 # Onboarding Tour — a five-section guide to an unfamiliar repository
 
-**Status:** approved
+**Status:** in-progress
 **Lesson / ticket:** L05
 **Packages:** server, client (reviewer-core, mcp-server and e2e unchanged)
 

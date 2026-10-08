@@ -36,6 +36,7 @@ import type {
   FileRankRow,
   IndexResult,
   IndexState,
+  OnboardingIndexFacts,
   RefRow,
   RepoIntel,
   RepoMapResult,
@@ -704,7 +705,85 @@ export class RepoIntelService implements RepoIntel {
     }
     return paths;
   }
+
+  /**
+   * Everything the onboarding tour skeleton reads from the index, in one call.
+   * Degrades like `getBlastRadius`: flag off → `none`/`flag_off`; no state row →
+   * `none`/`no_data`; failed/degraded → stored status + reason with empty lists;
+   * `partial` → usable + `index_partial`; `full` → usable. Never throws.
+   * The rank tie-break (path ASC) is done here in JS, so `getRankedPaths` keeps
+   * the order other features rely on.
+   */
+  async getOnboardingFacts(repoId: string): Promise<OnboardingIndexFacts> {
+    const unusable = (
+      status: OnboardingIndexFacts['status'],
+      reason: DegradedReason,
+      indexedSha = '',
+      filesIndexed = 0,
+    ): OnboardingIndexFacts => ({
+      status,
+      reason,
+      usable: false,
+      indexedSha,
+      filesIndexed,
+      files: [],
+      readingPath: [],
+      criticalPaths: [],
+      edges: [],
+      endpointsByFile: {},
+    });
+
+    if (!this.container.config.repoIntelEnabled) return unusable('none', 'flag_off');
+    try {
+      const state = await this.repo.tryGetIndexState(repoId);
+      if (!state) return unusable('none', 'no_data');
+      if (state.status !== 'full' && state.status !== 'partial') {
+        return unusable(
+          state.status,
+          state.degradedReason ?? 'index_failed',
+          state.lastIndexedSha,
+          state.filesIndexed,
+        );
+      }
+
+      const ranked = await this.repo.getRankedPaths(repoId, 100_000);
+      const files = [...ranked].sort((a, b) => b.rank - a.rank || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+      const readingPath = files
+        .filter((f) => !isJunkPath(f.path))
+        .slice(0, READING_PATH_LENGTH)
+        .map((f) => f.path);
+      const [criticalPaths, edgeRows, factRows] = await Promise.all([
+        this.getCriticalPaths(repoId),
+        this.repo.getEdges(repoId),
+        this.repo.getFileFacts(
+          repoId,
+          files.map((f) => f.path),
+        ),
+      ]);
+      const endpointsByFile: Record<string, string[]> = {};
+      for (const row of factRows) {
+        if (row.endpoints.length > 0) endpointsByFile[row.filePath] = row.endpoints;
+      }
+      return {
+        status: state.status,
+        ...(state.status === 'partial' ? { reason: 'index_partial' as const } : {}),
+        usable: true,
+        indexedSha: state.lastIndexedSha,
+        filesIndexed: state.filesIndexed,
+        files,
+        readingPath,
+        criticalPaths,
+        edges: edgeRows.map((e) => ({ from: e.fromFile, to: e.toFile })),
+        endpointsByFile,
+      };
+    } catch {
+      return unusable('none', 'no_data');
+    }
+  }
 }
+
+/** How many files the onboarding reading path lists. */
+const READING_PATH_LENGTH = 10;
 
 /** How many top-ranked files seed `getCriticalPaths` dependency chains. */
 const CRITICAL_PATH_ROOTS = 5;

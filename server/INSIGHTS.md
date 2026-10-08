@@ -16,6 +16,13 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## What Works
 
+- 2026-10-09 — Testing an in-process "one at a time" guard (409) with a gated
+  stub LLM: if the guard is missing, the second request waits on the same
+  gate and the `.it` file hangs for the full 120 s deadline → race the second
+  request against a short timeout and `release()` the gate in `finally`
+  before asserting, so a missing guard fails in ~3 s. (ref:
+  server/test/onboarding.it.test.ts AC-20 case)
+
 - 2026-10-06 — A delete-then-insert concurrency race (two overlapping
   `PUT /agents/:id/context` → 23505 → 500) became deterministic in an
   `.it.test` with no timing. Install an AFTER INSERT statement trigger that
@@ -54,6 +61,13 @@ Non-obvious findings a future session needs. **Read this before working here.**
   src/adapters/mocks.ts:49)
 
 ## What Doesn't Work
+
+- 2026-10-09 — Making a vendored contract field REQUIRED broke
+  `server/test/contracts.test.ts` › "Conformance / Onboarding / …", whose
+  fixture pinned the old shape; neither the plan nor the route tests saw it →
+  before making a `@devdigest/shared` field required, grep `server/test` and
+  `client/src` tests for the schema name and list each hit as an intended
+  break for test-writer. (ref: server/test/contracts.test.ts, L05 tour R-21)
 
 - 2026-10-02 — Blast radius is honestly EMPTY on an Angular/DI frontend, and it
   looks like a bug: on `kosyakovr/ai-agentic-sandbox-1` the repo-intel index

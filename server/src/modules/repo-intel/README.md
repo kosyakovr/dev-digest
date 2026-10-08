@@ -41,6 +41,7 @@ touch the pipeline internals:
 - `getBlastRadius(repoId, files)` → changed symbols, callers and endpoints (consumed by the `blast` module, L04; see [`getBlastRadius`](#getblastradius)).
 - `getUnresolvedReferences(repoId, …)` → phantom-symbol detection (used by L06).
 - `getConventionSamples(repoId)` → top-ranked files for convention extraction (L02).
+- `getOnboardingFacts(repoId)` → every index fact the onboarding tour skeleton reads, in one call (L05; see [`getOnboardingFacts`](#getonboardingfacts)).
 
 `getRepoMap` / `getFileRank` / `getCallerSignatures` are wired into
 `modules/reviews/run-executor.ts`, which adds the repo map and a
@@ -79,6 +80,42 @@ caller they reach the symbol through). `MAX_CALLERS_PER_SYMBOL`
 and per `viaSymbol` at each later hop (`service.ts:318,352`). Callers are sorted
 by depth, rank desc, file, line; `factsByFile` carries the endpoints and crons
 of every caller file.
+
+## `getOnboardingFacts`
+
+Consumed by the `onboarding` module (`modules/onboarding/service.ts:94`), which
+builds the model-free tour skeleton from it. Read-only, index-only, and it never
+throws (the whole body is in a `try`, `service.ts:737-780`). Its type is
+`OnboardingIndexFacts` (`types.ts:191-210`).
+
+**What it returns.**
+
+| Field | Content |
+|---|---|
+| `status` | the index status, or `none` (flag off, or no `repo_index_state` row) |
+| `reason` | a `DegradedReason`; absent only for `full` |
+| `usable` | `true` for `full` and `partial`; when `false` every list below is empty |
+| `indexedSha`, `filesIndexed` | from `repo_index_state` (`''` / `0` when `none`) |
+| `files` | every `file_rank` row, rank desc then path asc |
+| `readingPath` | the first 10 of `files` that pass `isJunkPath` (tests, configs, ...) |
+| `criticalPaths` | `getCriticalPaths(repoId)` |
+| `edges` | `{ from, to }`, importer to imported |
+| `endpointsByFile` | `file_facts.endpoints`, only files with at least one |
+
+**Degradation** (`service.ts:736-780`):
+
+| Index state | Result |
+|---|---|
+| `REPO_INTEL_ENABLED` off | `none`, `flag_off`, not usable |
+| no `repo_index_state` row, or an internal error | `none`, `no_data`, not usable |
+| status `failed` / `degraded` | the stored status, the stored `degradedReason` else `index_failed`, not usable; `indexedSha` and `filesIndexed` are kept |
+| `partial` | usable, `index_partial` |
+| `full` | usable, no `reason` |
+
+**Tie-break in JS.** `getRankedPaths` has no tie-break, and other features rely
+on its order, so the method reads all rows (`getRankedPaths(repoId, 100_000)`,
+`service.ts:749`) and sorts them itself: rank desc, then path asc
+(`service.ts:750`). Equal ranks therefore give a stable reading path.
 
 ## Routes
 

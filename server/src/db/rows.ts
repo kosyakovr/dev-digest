@@ -17,3 +17,4 @@ export type NewPrIntentRow = typeof t.prIntent.$inferInsert;
 export type PrCommitRow = typeof t.prCommits.$inferSelect;
 export type PullRow = typeof t.pullRequests.$inferSelect;
 export type AgentRunRow = typeof t.agentRuns.$inferSelect;
+export type RepoRow = typeof t.repos.$inferSelect;

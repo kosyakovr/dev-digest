@@ -77,6 +77,16 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## Tool & Library Notes
 
+- 2026-10-09 — Under `vi.useFakeTimers()` RTL's `waitFor` / `findBy*` hang
+  here → pass `vi.useFakeTimers({ shouldAdvanceTime: true })` and drive
+  intervals and timeouts with `act(async () => { vi.advanceTimersByTime(n) })`.
+  (ref: client/src/app/repos/[repoId]/tour/page.test.tsx)
+
+- 2026-10-09 — A test that needs the real global toast (`MutationCache.onError`
+  in `client/src/lib/providers.tsx:45-47`) cannot share a file that
+  `vi.mock`s `@/lib/toast`; the mock is file-wide → put it in its own file
+  rendering the real `Providers`. (ref: client/src/app/repos/[repoId]/tour/page.toast.test.tsx)
+
 - 2026-10-06 — `pnpm exec vitest run <path>` treats the path as a filter
   pattern, so the `[id]` / `[repoId]` in Next route folders becomes a regex
   character class, and vitest silently runs fewer files (hit in L05 T1 and T2)

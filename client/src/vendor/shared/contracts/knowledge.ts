@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BlastDegradedReason } from './brief.js';
 
 /**
  * Conformance, Onboarding, Eval, Memory, Conventions, Skills,
@@ -26,25 +27,73 @@ export const Conformance = z.object({
 export type Conformance = z.infer<typeof Conformance>;
 
 // ---- Onboarding ----
+export const OnboardingSectionKind = z.enum([
+  'architecture_overview',
+  'critical_paths',
+  'how_to_run',
+  'guided_reading',
+  'first_tasks',
+]);
+export type OnboardingSectionKind = z.infer<typeof OnboardingSectionKind>;
+
 export const OnboardingLink = z.object({
   label: z.string(),
   path: z.string(),
+  note: z.string().nullish(),
 });
 export type OnboardingLink = z.infer<typeof OnboardingLink>;
 
+// A copyable run command. Only manifests/lockfiles/compose files produce these;
+// the model may attach a `note` but never adds or reorders steps.
+export const OnboardingStep = z.object({
+  command: z.string(),
+  note: z.string().nullish(),
+});
+export type OnboardingStep = z.infer<typeof OnboardingStep>;
+
+export const OnboardingTask = z.object({
+  title: z.string(),
+  scope: z.string(),
+  difficulty: z.enum(['low', 'medium']),
+});
+export type OnboardingTask = z.infer<typeof OnboardingTask>;
+
+// `kind` stays a plain string: a stored tour must still parse if a kind is added.
 export const OnboardingSection = z.object({
   kind: z.string(),
   title: z.string(),
   body: z.string(), // markdown
   diagram: z.string().nullish(), // mermaid
   links: z.array(OnboardingLink),
+  steps: z.array(OnboardingStep).optional(),
+  tasks: z.array(OnboardingTask).optional(),
 });
 export type OnboardingSection = z.infer<typeof OnboardingSection>;
 
 export const Onboarding = z.object({
   sections: z.array(OnboardingSection),
+  source: z.enum(['llm', 'skeleton']),
+  skeleton_reason: z
+    .enum(['index_unavailable', 'llm_unavailable', 'llm_failed', 'llm_timeout'])
+    .optional(),
+  index_status: z.enum(['full', 'partial', 'degraded', 'failed', 'none']),
+  index_reason: BlastDegradedReason.optional(),
+  indexed_sha: z.string(),
+  files_indexed: z.number().int(),
+  generated_at: z.string(),
+  model: z.string().nullish(),
+  cost_usd: z.number().nullish(),
 });
 export type Onboarding = z.infer<typeof Onboarding>;
+
+// What GET /repos/:id/tour and POST /repos/:id/tour/generate answer.
+export const OnboardingTourState = z.object({
+  tour: Onboarding.nullable(),
+  generating: z.boolean(),
+  stale: z.boolean(),
+  current_indexed_sha: z.string().nullable(),
+});
+export type OnboardingTourState = z.infer<typeof OnboardingTourState>;
 
 // ---- Eval ----
 export const EvalPerTrace = z.object({

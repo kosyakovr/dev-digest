@@ -17,6 +17,7 @@ export * from "./skills";
 export * from "./agent-skills";
 export * from "./conventions";
 export * from "./intent";
+export { useOnboardingTour, useGenerateOnboardingTour } from "./onboarding";
 export * from "./reviews";
 export * from "./trace";
 export * from "./repo-intel";

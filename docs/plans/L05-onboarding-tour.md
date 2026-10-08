@@ -1,5 +1,5 @@
 # Implementation Plan: Onboarding Tour — a five-section guide to an unfamiliar repository
-**Status:** approved
+**Status:** done
 **Spec:** specs/L05-onboarding-tour.md @ 20e188e
 **Approved:** 2026-10-08 by the user — gates: none · execution mode: multi-agent · accepted: none
 Packages: server, client · Requirements: specs/L05-onboarding-tour.md · Lesson/ticket: L05
@@ -557,6 +557,22 @@ There is no gate, so nothing is skipped conditionally. The docs (below) come aft
 - **Assumption: jsdom never renders a valid mermaid diagram.** Under jsdom, `MermaidDiagram` may render nothing even for a valid diagram, so client tests must not assert that an SVG is present for a valid one. Only AC-31 (invalid → no SVG) is asserted.
 - **An existing client test conflicts with AC-1.** `client/src/components/app-shell/AppShell.test.tsx:37-52` asserts that Project Context directly follows Pull Requests. WP6 makes it fail by design, so test-writer T1 must update it, because the implementer cannot edit tests.
 - **The guard is lost on a server restart.** The in-process 409 guard is gone after a restart (A-15). A restart mid-call stores nothing.
+
+## Amendments
+- **AM-1** 2026-10-09 — AC-28 (line 507), WP4 Constraints "Do not touch `server/src/db/**`" (line 331) and WP4 Done-when (line 364) are narrowed to: `git diff --stat -- server/src/db/migrations server/src/db/schema server/src/db/schema.ts` prints nothing, and no file under `server/src/db/migrations/` or `server/src/db/schema*` changes. `server/src/db/rows.ts` may gain the shared `RepoRow` type (`export type RepoRow = typeof t.repos.$inferSelect;`), re-exported from `server/src/modules/repos/repository.ts` — why: fix round 1's AR-1 fix (onion-architecture §3/§4: a row type shared across modules lives in `src/db/rows.ts`) conflicted with the plan's whole-folder check, which is broader than spec AC-47 and root AGENTS.md (migrations and schema only) — approved by the user 2026-10-09
+
+## Run log
+- 2026-10-08 sdd-run started — directives: none
+- 2026-10-08 test-writer T1 — 31 tests in 4 files, server+shell red:assertion, 23 page cases red:compile (new page; harness proven by 9 mutations on a reference page, T2 re-proves)
+- 2026-10-08 implementer — server WP1–WP4 done · client WP5–WP7 done · T1 5/5 server + 27/27 client green · deviations 0 (3 extra exports) · intended break: server/test/contracts.test.ts Onboarding fixture (R-21)
+- 2026-10-08 test-writer T2 — ~105 new tests in 10 files, T1 mutation-proved 32/32 (~144 mutations), suspected defects 1 (NFR-10 log field names)
+- 2026-10-08 review round 0 — snapshot b8d6d3c · PV FAIL (83 PASS / 7 FAIL: NFR-10 ×4 rows, DOC-1..3 pending docs stage / 1 UNVERIFIABLE TP-6) · AR comment W2 S2 · SR approve 0
+- 2026-10-08 fix round 1 — NFR-10, AR-1, AR-2, AR-3, AR-4 · snapshot bd043c4 · AR approve · SR approve · PV FAIL (85 PASS / 2 FAIL: AC-28 + WP4.done — AR-1 fix touched server/src/db/rows.ts / DOC-1..3 deferred / TP-6 UNVERIFIABLE)
+- 2026-10-09 AM-1 approved — AC-28 / WP4 db check narrowed to migrations + schema (rows.ts RepoRow allowed)
+- 2026-10-09 plan-verifier final — PASS 88 / FAIL 0 (INCOMPLETE only on TP-6 / NFR-2, accepted as deferred by the user 2026-10-09) · DOC-1..3 to doc-writer
+- 2026-10-09 docs — server/README.md, client/README.md, server/src/modules/repo-intel/README.md
+- 2026-10-09 insights — INSIGHTS.md (2), client/INSIGHTS.md (2), server/INSIGHTS.md (2)
+- 2026-10-09 committed
 
 <!-- test-brief -->
 ## Test brief
