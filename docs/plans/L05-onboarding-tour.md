@@ -560,6 +560,7 @@ There is no gate, so nothing is skipped conditionally. The docs (below) come aft
 
 ## Amendments
 - **AM-1** 2026-10-09 — AC-28 (line 507), WP4 Constraints "Do not touch `server/src/db/**`" (line 331) and WP4 Done-when (line 364) are narrowed to: `git diff --stat -- server/src/db/migrations server/src/db/schema server/src/db/schema.ts` prints nothing, and no file under `server/src/db/migrations/` or `server/src/db/schema*` changes. `server/src/db/rows.ts` may gain the shared `RepoRow` type (`export type RepoRow = typeof t.repos.$inferSelect;`), re-exported from `server/src/modules/repos/repository.ts` — why: fix round 1's AR-1 fix (onion-architecture §3/§4: a row type shared across modules lives in `src/db/rows.ts`) conflicted with the plan's whole-folder check, which is broader than spec AC-47 and root AGENTS.md (migrations and schema only) — approved by the user 2026-10-09
+- **AM-2** 2026-10-09 — WP7 Done-when (line 466): the grep becomes `grep -rnE '(^|[^A-Za-z_.])fetch\(|dangerouslySetInnerHTML' "client/src/app/repos/[repoId]/tour" --exclude='*.test.ts' --exclude='*.test.tsx'` prints nothing (exit 1); planted check: the same pattern on `client/src/lib/api.ts` prints its line 24 `fetch(` call — why: the literal `fetch(` also matches `query.refetch()`, which WP7 step 3 requires for Retry, so the check failed on correct code (root INSIGHTS § Recurring Errors); plan-verifier had already graded WP7.done with this boundary-anchored form (pr-self-review r5 F-2) — approved by the user 2026-10-09 ("fix all")
 
 ## Run log
 - 2026-10-08 sdd-run started — directives: none
@@ -573,6 +574,7 @@ There is no gate, so nothing is skipped conditionally. The docs (below) come aft
 - 2026-10-09 docs — server/README.md, client/README.md, server/src/modules/repo-intel/README.md
 - 2026-10-09 insights — INSIGHTS.md (2), client/INSIGHTS.md (2), server/INSIGHTS.md (2)
 - 2026-10-09 committed
+- 2026-10-09 post-commit fixes — client build (type-only shared imports), server missing-clone 422; AM-2 approved; pr-self-review r5/r6 warnings fixed (AB-1, CD-1 ×2, F-1, F-2, A-1)
 
 <!-- test-brief -->
 ## Test brief

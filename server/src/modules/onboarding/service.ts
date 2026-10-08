@@ -43,7 +43,11 @@ export class OnboardingTourService {
   private repo: OnboardingRepository;
   private running = new Set<string>();
 
-  constructor(private container: Container) {
+  /** `deadlineMs` exists for tests; the route uses the 120 s default (NFR-1). */
+  constructor(
+    private container: Container,
+    private opts: { deadlineMs?: number } = {},
+  ) {
     this.repo = new OnboardingRepository(container.db);
   }
 
@@ -181,7 +185,7 @@ export class OnboardingTourService {
       readme: clone.readme,
       ...promptFactsOf(facts, clone, skeleton),
     });
-    return callTourModel(llm, { model: choice.model, messages });
+    return callTourModel(llm, { model: choice.model, messages }, this.opts.deadlineMs);
   }
 
   /** Manifests and README at the clone's HEAD (git objects). Any failure → nothing. */

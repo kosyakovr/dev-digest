@@ -1,10 +1,22 @@
 "use client";
 
 import React from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { safeUrl } from "../../helpers";
 import { s } from "./styles";
+
+// Module-level, so every render passes the same component type: an inline `a`
+// would remount every link (and drop focus) on each re-render.
+const REMARK_PLUGINS = [remarkGfm];
+const DISALLOWED = ["img"];
+const COMPONENTS: Components = {
+  a: ({ children, href }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" style={s.link}>
+      {children}
+    </a>
+  ),
+};
 
 /**
  * Model text is untrusted (NFR-7): no raw HTML, no images (a remote image is a
@@ -16,18 +28,12 @@ export function TourMarkdown({ children }: { children?: string | null }) {
   return (
     <div style={s.root}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={REMARK_PLUGINS}
         skipHtml
-        disallowedElements={["img"]}
+        disallowedElements={DISALLOWED}
         unwrapDisallowed
         urlTransform={safeUrl}
-        components={{
-          a: ({ children: c, href }) => (
-            <a href={href} target="_blank" rel="noopener noreferrer" style={s.link}>
-              {c}
-            </a>
-          ),
-        }}
+        components={COMPONENTS}
       >
         {children}
       </ReactMarkdown>

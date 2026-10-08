@@ -234,6 +234,19 @@ describe('mergeModelAnswer — the model adds prose, never files or steps (AC-10
     expect(tasks.map((t) => t.scope)).not.toContain('nowhere/x.ts');
   });
 
+  it('drops a blank or absolute task scope even when a root-level file is indexed (A-12)', () => {
+    // A root file (parent '') used to ground any scope whose parent is '' too: '', '/x', '  '.
+    const withRootFile = new Set([...indexed, 'package.json']);
+    const task = (scope: string) => ({ title: `Task for "${scope}"`, scope, difficulty: 'low' as const });
+    const merged = mergeModelAnswer(
+      skeleton,
+      answer({ tasks: [task(''), task('   '), task('/x'), task('NEW.md')] }),
+      withRootFile,
+    );
+    // 'NEW.md' is a path whose parent (the root) holds an indexed file — still valid per A-12.
+    expect(sectionOf(merged.sections, 'first_tasks').tasks!.map((t) => t.scope)).toEqual(['NEW.md']);
+  });
+
   it('drops every task whose scope is ungrounded, leaving an empty list', () => {
     const merged = mergeModelAnswer(
       skeleton,

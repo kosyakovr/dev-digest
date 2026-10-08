@@ -74,6 +74,12 @@ Non-obvious findings a future session needs. **Read this before working here.**
   changing `DEVDIGEST_CLONE_DIR`, move each clone under the new dir and update
   `repos.clone_path`; compare the two with
   `select full_name, clone_path from repos` when git and index disagree.
+- 2026-10-09 (correction to the entry above) — the path join is
+  `clonePathFor` at `simple-git.ts:41-43`, not `:40`; the guard in `git()`
+  (`:45-55`) now requires `<dir>/.git`, because a clone directory cut off
+  mid-write made git climb to a parent repository (with `./clones` that is
+  this checkout). (ref: server/src/adapters/git/simple-git.ts:41-55,
+  server/src/modules/repo-intel/pipeline/incremental.ts:154,218, 5ab26fa)
 
 - 2026-10-09 — Making a vendored contract field REQUIRED broke
   `server/test/contracts.test.ts` › "Conformance / Onboarding / …", whose

@@ -6,6 +6,7 @@ import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
 import * as t from '../src/db/schema.js';
+import { OnboardingTourService } from '../src/modules/onboarding/service.js';
 import {
   MockEmbedder,
   MockGitClient,
@@ -477,6 +478,32 @@ d('onboarding tour routes (Testcontainers pg)', () => {
       expect((await getTour(app, repoId)).json().tour).toEqual(doc);
       await app.close();
     }
+  });
+
+  it('AC-18/AC-17: a model that never answers is stored as skeleton llm_timeout (200), and over a model-written tour is a 502 with the row unchanged', async () => {
+    // The route's service waits 120 s; a service built with a short deadline drives the same path.
+    const hangingLlm = answeringLlm();
+    hangingLlm.completeStructured = (() => new Promise(() => {})) as typeof hangingLlm.completeStructured;
+    const app = await appWith(hangingLlm);
+    const service = new OnboardingTourService(app.container, { deadlineMs: 50 });
+
+    const fresh = await setupRepo();
+    const state = await service.generate(workspaceId, fresh);
+    expect(state.tour).toMatchObject({ source: 'skeleton', skeleton_reason: 'llm_timeout' });
+    const [stored] = await rowsOf(fresh);
+    expect(stored!.json).toMatchObject({ source: 'skeleton', skeleton_reason: 'llm_timeout' });
+
+    const overLlm = await setupRepo();
+    const doc = seededTour();
+    await seedTour(overLlm, doc);
+    await expect(service.generate(workspaceId, overLlm)).rejects.toMatchObject({
+      statusCode: 502,
+      message: KEPT_MESSAGE,
+    });
+    const [kept] = await rowsOf(overLlm);
+    expect(kept!.json).toEqual(doc);
+    expect(kept!.generatedAt.getTime()).toBe(SEEDED_AT.getTime());
+    await app.close();
   });
 
   it('R-44: a successful Regenerate replaces the single row for the repo', async () => {

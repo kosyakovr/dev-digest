@@ -180,6 +180,8 @@ function applyNotes(links: OnboardingLink[], notes: TourAnswer['reading_notes'])
 }
 
 function validScope(scope: string, indexedPaths: Set<string>): boolean {
+  // A blank or absolute scope has parent '' and would be "grounded" by any root-level file.
+  if (!scope.trim() || scope.startsWith('/')) return false;
   if (indexedPaths.has(scope)) return true;
   const slash = scope.lastIndexOf('/');
   const parent = slash === -1 ? '' : scope.slice(0, slash);

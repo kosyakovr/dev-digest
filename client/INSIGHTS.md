@@ -38,6 +38,15 @@ Non-obvious findings a future session needs. **Read this before working here.**
   check literals against the union (`"x" satisfies Kind`, `switch (v as Kind)`,
   `as const satisfies readonly Kind[]`); after touching shared imports run
   `pnpm build`. (ref: client/src/app/repos/[repoId]/tour/constants.ts:3-20)
+- 2026-10-09 (correction to the entry above) — `as const satisfies readonly
+  Kind[]` is one-way: it rejects a renamed or unknown member but NOT a member
+  the contract later adds, which then silently gets the fallback wording → for
+  a list that must cover the union, key an object by it
+  (`{ a: true, … } as const satisfies Record<Kind, true>` + `Object.keys`): a
+  missing key is TS1360, an extra one TS2353. "Every other client file" means
+  every other NON-test file (two tests import values; Next does not bundle
+  them). (ref: client/src/app/repos/[repoId]/tour/constants.ts:5,23-29,
+  tour/helpers.ts:31, tour/_components/TourSection/TourSection.tsx:30)
 
 - 2026-10-02 — A TanStack Query result can be `{ data: <stale>, isError: true }`
   at once (a failed REFETCH keeps the last good data), so mocking only

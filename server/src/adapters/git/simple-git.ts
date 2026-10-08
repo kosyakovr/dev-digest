@@ -45,8 +45,12 @@ export class SimpleGitClient implements GitClient {
   private git(repo: RepoRef): SimpleGit {
     const dir = this.clonePathFor(repo);
     // simpleGit() throws a raw "directory does not exist" (→ 500) when the repo was
-    // cloned under another DEVDIGEST_CLONE_DIR or the clone was deleted.
-    if (!existsSync(dir)) throw new ValidationError('This repository has not been cloned yet.');
+    // cloned under another DEVDIGEST_CLONE_DIR or the clone was deleted; a directory
+    // without .git (a clone cut off mid-write, see clone()) would make git climb to a
+    // parent repository instead.
+    if (!existsSync(join(dir, '.git'))) {
+      throw new ValidationError('This repository has not been cloned yet.');
+    }
     return simpleGit(dir);
   }
 

@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Review } from '@devdigest/shared';
 import {
   MockLLMProvider,
@@ -66,6 +69,21 @@ describe('GitClient.listFiles (L05)', () => {
     const missing = { code: 'validation_error', statusCode: 422, message: 'This repository has not been cloned yet.' };
     await expect(git.currentHead(repo)).rejects.toMatchObject(missing);
     await expect(git.listFiles(repo, 'a1b2c3d4')).rejects.toMatchObject(missing);
+  });
+
+  it('SimpleGitClient also answers 422 for a clone directory without .git (a clone cut off mid-write)', async () => {
+    // Without the .git check, git would climb to a parent repository (./clones sits inside this checkout).
+    const root = await mkdtemp(join(tmpdir(), 'devdigest-git-'));
+    try {
+      await mkdir(join(root, repo.owner, repo.name), { recursive: true });
+      const git = new SimpleGitClient(root);
+      await expect(git.currentHead(repo)).rejects.toMatchObject({
+        statusCode: 422,
+        message: 'This repository has not been cloned yet.',
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
 
