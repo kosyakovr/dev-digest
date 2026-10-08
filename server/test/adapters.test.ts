@@ -59,6 +59,14 @@ describe('GitClient.listFiles (L05)', () => {
     await expect(git.listFiles(repo, 'HEAD')).rejects.toThrow(/invalid ref/i);
     await expect(git.listFiles(repo, '--output=/tmp/x')).rejects.toThrow(/invalid ref/i);
   });
+
+  it('SimpleGitClient answers 422 "not cloned yet" when the clone directory is missing, not a raw simple-git error', async () => {
+    // A repo cloned under another DEVDIGEST_CLONE_DIR has a clone_path but no directory here.
+    const git = new SimpleGitClient('/nonexistent-clone-dir');
+    const missing = { code: 'validation_error', statusCode: 422, message: 'This repository has not been cloned yet.' };
+    await expect(git.currentHead(repo)).rejects.toMatchObject(missing);
+    await expect(git.listFiles(repo, 'a1b2c3d4')).rejects.toMatchObject(missing);
+  });
 });
 
 describe('MockGitHubClient — prior-PR history seams', () => {

@@ -62,6 +62,19 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## What Doesn't Work
 
+- 2026-10-09 — Where a clone lives has TWO sources of truth: `SimpleGitClient`
+  rebuilds the path from the CURRENT `DEVDIGEST_CLONE_DIR` + owner/name
+  (`adapters/git/simple-git.ts:40`) and ignores `repos.clone_path`, while
+  repo-intel's indexer reads `repo.clonePath` directly
+  (`repo-intel/pipeline/incremental.ts:154,218`). Here `server/.env` sets
+  `./clones`, but `kosyakovr/ai-agentic-sandbox-1` was cloned under the default
+  `~/.devdigest/workspace`, so `/repos/:id/context` 500'd with "Cannot use
+  simple-git on a directory that does not exist" (now a 422 "not cloned yet"),
+  and `kosyakovr/dev-digest` has a copy in BOTH dirs that can drift → after
+  changing `DEVDIGEST_CLONE_DIR`, move each clone under the new dir and update
+  `repos.clone_path`; compare the two with
+  `select full_name, clone_path from repos` when git and index disagree.
+
 - 2026-10-09 — Making a vendored contract field REQUIRED broke
   `server/test/contracts.test.ts` › "Conformance / Onboarding / …", whose
   fixture pinned the old shape; neither the plan nor the route tests saw it →
