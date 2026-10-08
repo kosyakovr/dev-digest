@@ -1,6 +1,6 @@
 /** Pure helpers for the Onboarding Tour page. */
 
-import { OnboardingSectionKind, type OnboardingSection } from "@devdigest/shared";
+import type { OnboardingSection, OnboardingSectionKind } from "@devdigest/shared";
 import { SHORT_SHA_LENGTH, UNAVAILABLE_REASONS, type UnavailableReason } from "./constants";
 
 /** A SHA in short form (A-32). */
@@ -27,13 +27,14 @@ export function unavailableReason(reason: string | null | undefined): Unavailabl
 
 /** R-35: whether a section has nothing to show. First tasks never counts as empty. */
 export function isSectionEmpty(section: OnboardingSection): boolean {
-  switch (section.kind) {
-    case OnboardingSectionKind.enum.architecture_overview:
+  // Narrowed to the contract's union, so a case label it does not contain is a compile error.
+  switch (section.kind as OnboardingSectionKind) {
+    case "architecture_overview":
       return !section.body.trim() && !section.diagram?.trim();
-    case OnboardingSectionKind.enum.critical_paths:
-    case OnboardingSectionKind.enum.guided_reading:
+    case "critical_paths":
+    case "guided_reading":
       return section.links.length === 0;
-    case OnboardingSectionKind.enum.how_to_run:
+    case "how_to_run":
       return (section.steps?.length ?? 0) === 0;
     default:
       return false;

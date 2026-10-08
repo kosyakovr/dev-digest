@@ -28,6 +28,17 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## What Doesn't Work
 
+- 2026-10-09 — A VALUE import from `@devdigest/shared` (e.g.
+  `OnboardingSectionKind.enum.first_tasks`, `BlastDegradedReason.exclude(…)`)
+  breaks `next build` / `next dev` with `Can't resolve './contracts/findings.js'`:
+  the vendored barrel uses `.js` specifiers, which Next's webpack does not map
+  to `.ts`, while `tsc` and vitest do — so typecheck and every unit test stayed
+  green and `scripts/checks.sh` (no `next build`) passed. Every other client
+  file imports only types, which are erased → import with `import type` and
+  check literals against the union (`"x" satisfies Kind`, `switch (v as Kind)`,
+  `as const satisfies readonly Kind[]`); after touching shared imports run
+  `pnpm build`. (ref: client/src/app/repos/[repoId]/tour/constants.ts:3-20)
+
 - 2026-10-02 — A TanStack Query result can be `{ data: <stale>, isError: true }`
   at once (a failed REFETCH keeps the last good data), so mocking only
   `{ isError: true, data: undefined }` lets a fallback written as `!data` pass

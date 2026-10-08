@@ -3,7 +3,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon } from "@devdigest/ui";
-import { OnboardingSectionKind, type Onboarding, type OnboardingSection } from "@devdigest/shared";
+import type { Onboarding, OnboardingSection, OnboardingSectionKind } from "@devdigest/shared";
 import { MermaidDiagram } from "@/components/mermaid-diagram";
 import { isSectionEmpty, sectionBodyId, sectionId } from "../../helpers";
 import { TourMarkdown } from "../TourMarkdown";
@@ -27,7 +27,7 @@ export function TourSection({
 }) {
   const t = useTranslations("onboarding");
   const empty = isSectionEmpty(section);
-  const isTasks = section.kind === OnboardingSectionKind.enum.first_tasks;
+  const isTasks = section.kind === ("first_tasks" satisfies OnboardingSectionKind);
   const skeletonTasks = isTasks && tour.source === "skeleton";
 
   return (
