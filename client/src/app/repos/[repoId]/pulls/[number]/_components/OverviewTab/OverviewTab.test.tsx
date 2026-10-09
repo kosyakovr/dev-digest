@@ -318,8 +318,9 @@ describe("OverviewTab · Risk areas and Review focus", () => {
     const first = screen.getByRole("button", { name: "Open src/a.ts:12 in Files changed" });
     const second = screen.getByRole("button", { name: "Open gone.ts:3 in Files changed" });
     expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // the row text is ONE string, and it belongs to the named button
-    expect(screen.getByText("src/a.ts:12 — R").closest("button")).toBe(first);
+    // the location (link-coloured) and the reason both belong to the named button
+    expect(within(first).getByText("src/a.ts:12")).toHaveStyle({ color: "var(--accent-text)" });
+    expect(within(first).getByText("— R")).toBeInTheDocument();
   });
 
   it("AC-34 / AC-37: a focus row opens its file at its line; a risk file opens the file with no line", async () => {
@@ -677,7 +678,7 @@ describe("OverviewTab · model text is plain text (T2)", () => {
     const { container } = renderTab();
     expect(await screen.findByText(hostile)).toBeInTheDocument();
     expect(screen.getByText("<b>bold</b>")).toBeInTheDocument();
-    expect(screen.getByText("src/a.ts:12 — <script>x</script>")).toBeInTheDocument();
+    expect(screen.getByText("— <script>x</script>")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Why this is a risk" }));
     expect(screen.getByText("<a href=x>x</a>")).toBeInTheDocument();
     expect(container.querySelector("img")).toBeNull();

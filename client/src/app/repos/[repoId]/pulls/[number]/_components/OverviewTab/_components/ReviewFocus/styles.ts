@@ -15,6 +15,7 @@ export const s = {
     color: "var(--text-secondary)",
     wordBreak: "break-word",
   } satisfies CSSProperties,
+  location: { color: "var(--accent-text)" } satisfies CSSProperties,
   muted: { fontSize: 13, color: "var(--text-muted)" } satisfies CSSProperties,
   notice: { fontSize: 13, color: "var(--warn)", marginBottom: 8 } satisfies CSSProperties,
 } as const;

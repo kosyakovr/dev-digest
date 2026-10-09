@@ -45,7 +45,8 @@ export function ReviewFocus({
                 aria-label={t("focus.open", { file: item.file, line: item.line })}
                 onClick={() => onOpen(item.file, item.line)}
               >
-                <span className="mono">{`${item.file}:${item.line} — ${item.reason}`}</span>
+                <span className="mono" style={s.location}>{`${item.file}:${item.line}`}</span>
+                <span>{` — ${item.reason}`}</span>
               </button>
             </li>
           ))}

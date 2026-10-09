@@ -4,7 +4,7 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { SectionLabel, Skeleton } from "@devdigest/ui";
+import { Badge, SectionLabel, Skeleton } from "@devdigest/ui";
 import type { Risk, RiskSeverity } from "@devdigest/shared";
 import { s } from "./styles";
 
@@ -22,9 +22,9 @@ function RiskRow({ risk, onOpenFile }: { risk: Risk; onOpenFile: (file: string) 
     <li style={s.row}>
       <div style={s.head}>
         <span style={s.title}>{risk.title}</span>
-        <span style={s.severity(SEVERITY_COLOR[risk.severity] ?? "var(--text-muted)")}>
+        <Badge color={SEVERITY_COLOR[risk.severity] ?? "var(--text-muted)"} style={s.severity}>
           {t(`severity.${risk.severity}`)}
-        </span>
+        </Badge>
       </div>
       {first && (
         <button
