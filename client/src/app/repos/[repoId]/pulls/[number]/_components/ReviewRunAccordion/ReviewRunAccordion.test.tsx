@@ -97,6 +97,19 @@ describe("ReviewRunAccordion", () => {
     expect(counters.compareDocumentPosition(firstCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("AC-47: the banner shows verdict, findings and blockers, score and agent, and offers no brief refresh", () => {
+    renderWithIntl(<ReviewRunAccordion review={REVIEW} prId="pr1" defaultOpen />);
+    expect(screen.getByText("Request changes")).toBeInTheDocument();
+    expect(screen.getByText("2 findings · 1 blockers")).toBeInTheDocument();
+    expect(screen.getByText("PR SCORE")).toBeInTheDocument();
+    // the score is in the header badge and in the banner's circle
+    expect(screen.getAllByText("38")).toHaveLength(2);
+    // the agent name is in the header and in the banner
+    expect(screen.getAllByText("Security Reviewer")).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "Re-run the brief for this PR" })).toBeNull();
+    expect(screen.queryByRole("img", { name: /latest agent review/ })).toBeNull();
+  });
+
   it("is the surface that offers Accept / Dismiss on a finding", () => {
     renderWithIntl(<ReviewRunAccordion review={REVIEW} prId="pr1" defaultOpen />);
     // The first card starts expanded, so its actions are reachable.

@@ -8,7 +8,7 @@ import { useActiveRepo } from "@/lib/repo-context";
 import { useGenerateOnboardingTour, useOnboardingTour } from "@/lib/hooks/onboarding";
 import { ELAPSED_TICK_MS } from "../../constants";
 import { elapsedSeconds, sectionId } from "../../helpers";
-import { RegenerateDialog } from "../RegenerateDialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { TourHeader } from "../TourHeader";
 import { TourNotices } from "../TourNotices";
 import { TourSection } from "../TourSection";
@@ -159,7 +159,16 @@ export function TourView({ repoId }: { repoId: string }) {
           />
         ))}
       </div>
-      {confirmOpen && <RegenerateDialog onConfirm={confirmDialog} onCancel={closeDialog} />}
+      {confirmOpen && (
+        <ConfirmDialog
+          title={t("confirm.title")}
+          body={t("confirm.body")}
+          confirmLabel={t("confirm.confirm")}
+          cancelLabel={t("confirm.cancel")}
+          onConfirm={confirmDialog}
+          onCancel={closeDialog}
+        />
+      )}
     </div>
   );
 }

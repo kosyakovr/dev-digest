@@ -110,6 +110,17 @@ describe('promptLogPayload — default mode (the prompt: assembled line)', () =>
     expect(p.info).not.toHaveProperty('strategy');
     expect(p.info).not.toHaveProperty('chunks');
   });
+
+  it('REC-1: brief kind carries kind, provider, model and the totals, with no trigger, strategy or chunks', () => {
+    const p = promptLogPayload(
+      { kind: 'brief', provider: 'openai', model: 'gpt-4.1', sections, totalChars: 10 },
+      'default',
+    );
+    expect(p.info).toMatchObject({ kind: 'brief', provider: 'openai', model: 'gpt-4.1', totalChars: 10 });
+    expect(p.info).not.toHaveProperty('trigger');
+    expect(p.info).not.toHaveProperty('strategy');
+    expect(p.info).not.toHaveProperty('chunks');
+  });
 });
 
 describe('promptLogPayload — verbose mode (the prompt: detail lines)', () => {

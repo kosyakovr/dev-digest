@@ -4,7 +4,18 @@
  * an UNKNOWN cost must not render as a number at all.
  */
 import { describe, it, expect } from "vitest";
-import { formatCost, formatTokensTotal } from "./format";
+import { formatCost, formatTokensTotal, shortSha } from "./format";
+
+describe("shortSha (A-17)", () => {
+  it("keeps the first 7 characters", () => {
+    expect(shortSha("abcdef0123")).toBe("abcdef0");
+  });
+
+  it("leaves a SHA of 7 characters or fewer as it is", () => {
+    expect(shortSha("abc12")).toBe("abc12");
+    expect(shortSha("abcdef0")).toBe("abcdef0");
+  });
+});
 
 describe("formatCost", () => {
   it("keeps 4 decimals under a cent so a cheap run is not rounded to $0.00", () => {

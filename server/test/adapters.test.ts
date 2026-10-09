@@ -2,8 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { z } from 'zod';
 import { Review } from '@devdigest/shared';
 import {
+  MockPrBlast,
+  MockPrIntent,
   MockLLMProvider,
   MockGitClient,
   MockGitHubClient,
@@ -187,5 +190,37 @@ describe('pricing / cost discipline', () => {
   it('estimates cost for known models and returns null for unknown', () => {
     expect(estimateCost('gpt-4o-mini', 1_000_000, 0)).toBeCloseTo(0.15, 5);
     expect(estimateCost('some-future-model', 1000, 1000)).toBeNull();
+  });
+});
+
+describe('L05 Risk Brief test doubles', () => {
+  const schema = z.object({}).passthrough();
+  const req = { model: 'm', schema, schemaName: 'X', messages: [] };
+
+  it('MockPrBlast returns the given objects and records one call each', async () => {
+    const blast = { changed_symbols: [], downstream: [], summary: 'B' };
+    const history = { history: [], degraded: true, reason: 'github_unavailable' as const };
+    const mock = new MockPrBlast(blast, history);
+    expect(await mock.getBlast('w1', 'p1')).toBe(blast);
+    expect(await mock.getHistory('w1', 'p1')).toBe(history);
+    expect(mock.blastCalls).toEqual([{ workspaceId: 'w1', prId: 'p1' }]);
+    expect(mock.historyCalls).toEqual([{ workspaceId: 'w1', prId: 'p1' }]);
+  });
+
+  it('MockPrIntent.get resolves to {intent:null}; derive is not configured and rejects', async () => {
+    const mock = new MockPrIntent();
+    await expect(mock.get('w1', 'p1')).resolves.toEqual({ intent: null });
+    await expect(mock.derive('w1', 'p1')).rejects.toThrow();
+  });
+
+  it('MockLLMProvider: costUsd null stays null, a number is returned, no option keeps 0.001', async () => {
+    const asNull = await new MockLLMProvider('openai', { costUsd: null, structured: {} }).completeStructured(req);
+    expect(asNull.costUsd).toBeNull();
+    const given = await new MockLLMProvider('openai', { costUsd: 0.25, structured: {} }).completeStructured(req);
+    expect(given.costUsd).toBe(0.25);
+    const dflt = await new MockLLMProvider('openai', { structured: {} }).completeStructured(req);
+    expect(dflt.costUsd).toBe(0.001);
+    const completeNull = await new MockLLMProvider('openai', { costUsd: null }).complete({ model: 'm', messages: [] });
+    expect(completeNull.costUsd).toBeNull();
   });
 });

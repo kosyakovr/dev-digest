@@ -2,9 +2,50 @@
   "block": {
     "intent": "Intent",
     "blast": "Blast radius",
-    "risks": "Risks",
+    "risks": "Risk areas",
     "history": "PR history"
   },
+  "section": "PR Brief",
+  "empty": {
+    "title": "No brief yet",
+    "body": "Generate a Why+Risk brief for this PR."
+  },
+  "generate": "Generate brief",
+  "generating": "Generating brief…",
+  "regenerate": "Re-run the brief for this PR",
+  "stale": "Generated for {sha} — there are new commits",
+  "provenance": "Verdict, findings and score come from the latest agent review; what / why / risks / review-focus come from the brief.",
+  "focus": {
+    "title": "Review focus — read these first",
+    "open": "Open {file}:{line} in Files changed",
+    "empty": "No review focus items"
+  },
+  "risk": {
+    "open": "Open {file} in Files changed",
+    "why": "Why this is a risk"
+  },
+  "severity": {
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "notInDiff": "File not in this PR's diff",
+  "degraded": {
+    "blast": "Blast radius was incomplete when this brief was written ({reason}).",
+    "history": "PR history was incomplete when this brief was written ({reason})."
+  },
+  "meta": "{model} · {cost}",
+  "costUnknown": "—",
+  "elapsed": "{seconds} s elapsed",
+  "confirm": {
+    "title": "Replace this brief?",
+    "body": "Regenerating makes one model call on your API key and replaces the current brief.",
+    "confirm": "Regenerate",
+    "cancel": "Cancel"
+  },
+  "loadError": "Could not load the brief.",
+  "retry": "Retry",
+  "generateError": "Could not generate the brief: {message}",
   "noRisks": "No notable risks flagged.",
   "noHistory": "No prior PRs overlap these files.",
   "overlap": "{count} overlap",

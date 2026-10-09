@@ -11,7 +11,7 @@ import { worstSeverity, type DiffFindingApi } from "../findings";
 import { InlineFinding } from "../InlineFinding";
 import { commentTargetFor, type CommentThread, type DiffCommentApi, cs } from "../comments";
 import { type Line } from "../helpers";
-import { s, lineRowFor, lineSignFor, findingStripeFor, findingLabelFor } from "../styles";
+import { s, lineRowFor, lineSignFor, findingStripeFor, findingLabelFor, targetLineStyle } from "../styles";
 import { CommentThreadView } from "../CommentThreadView";
 import { InlineComposer } from "../InlineComposer";
 
@@ -22,6 +22,7 @@ export function CodeLine({
   commenting,
   findings = [],
   findingApi,
+  highlighted,
 }: {
   ln: Line;
   path: string;
@@ -30,6 +31,8 @@ export function CodeLine({
   /** Findings anchored to this line, already sorted (see findings.ts). */
   findings?: FindingRecord[];
   findingApi?: DiffFindingApi;
+  /** A deep link points at this row: mark and highlight it. */
+  highlighted?: boolean;
 }) {
   const t = useTranslations("shell");
   const [hover, setHover] = React.useState(false);
@@ -53,10 +56,17 @@ export function CodeLine({
   return (
     <div
       style={cs.rowWrap}
+      data-target-line={highlighted ? "true" : undefined}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <div style={{ ...lineRowFor(ln.kind), ...(worst ? findingStripeFor(SEV[worst].c) : {}) }}>
+      <div
+        style={{
+          ...lineRowFor(ln.kind),
+          ...(highlighted ? targetLineStyle : {}),
+          ...(worst ? findingStripeFor(SEV[worst].c) : {}),
+        }}
+      >
         <span className="mono tnum" style={{ ...s.lineNo, position: "relative" }}>
           {showAdd && target && (
             <button

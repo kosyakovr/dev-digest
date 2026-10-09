@@ -50,13 +50,27 @@ function ScopeColumn({
   );
 }
 
-export function IntentCard({ prId }: { prId: string | null | undefined }) {
+export function IntentCard({
+  prId,
+  children,
+}: {
+  prId: string | null | undefined;
+  /** Rendered after the card's own content (the brief's Risk areas); not while loading. */
+  children?: React.ReactNode;
+}) {
   const t = useTranslations("intent");
   const { data, isLoading, isError, refetch } = usePrIntent(prId);
   const derive = useDeriveIntent(prId);
 
   if (isLoading) return <Skeleton height={140} />;
-  if (isError && !data) return <ErrorState title={t("loadError")} retryLabel={t("retry")} onRetry={() => refetch()} />;
+  if (isError && !data) {
+    return (
+      <>
+        <ErrorState title={t("loadError")} retryLabel={t("retry")} onRetry={() => refetch()} />
+        {children}
+      </>
+    );
+  }
 
   const intent = data?.intent ?? null;
   if (!intent) {
@@ -71,6 +85,7 @@ export function IntentCard({ prId }: { prId: string | null | undefined }) {
           ctaLoading={derive.isPending}
         />
         {derive.isError && <div role="alert" style={s.error}>{t("deriveError", { message: derive.error.message })}</div>}
+        {children}
       </>
     );
   }
@@ -130,6 +145,7 @@ export function IntentCard({ prId }: { prId: string | null | undefined }) {
         <div style={s.footer}>
           {cost ? t("meta", { model: intent.model, cost }) : intent.model}
         </div>
+        {children}
       </div>
     </section>
   );

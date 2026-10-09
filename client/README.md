@@ -25,7 +25,7 @@ Routes (`src/app/**/page.tsx`) and the API surface each leans on (via
 flowchart TD
   ROOT["/"] -->|"useRepos → GET /repos"| PULLS["/repos/:repoId/pulls<br/>PR list"]
   ONB["/onboarding<br/>add repo"] -->|"POST /repos"| API[("Fastify API")]
-  PULLS --> PR["/pulls/:number<br/>review detail<br/>(overview · diff · findings)"]
+  PULLS --> PR["/pulls/:number<br/>review detail<br/>(overview · diff · findings)<br/>Files changed accepts ?file=&line="]
 
   AGENTS["/agents"] --> AGENT["/agents/:id<br/>editor (config · skills · context)"]
   SKILLS["/skills"] --> SKILL["/skills/:id<br/>editor (config · context · preview · versions)"]
@@ -35,7 +35,7 @@ flowchart TD
   TOUR["/repos/:repoId/tour<br/>Onboarding Tour"]
 
   PULLS -->|"GET /repos/:id/pulls · /repos/:id/index-state"| API
-  PR -->|"GET /pulls/:id · /reviews · /smart-diff · /pulls/:id/comments<br/>POST /pulls/:id/review · /findings/:id/(accept|dismiss)<br/>GET,POST /pulls/:id/intent<br/>GET /pulls/:id/blast · /pulls/:id/history"| API
+  PR -->|"GET /pulls/:id · /reviews · /smart-diff · /pulls/:id/comments<br/>POST /pulls/:id/review · /findings/:id/(accept|dismiss)<br/>GET,POST /pulls/:id/intent<br/>GET /pulls/:id/blast · /pulls/:id/history<br/>GET,POST /pulls/:id/brief"| API
   AGENTS -->|"/agents · /agents/:id · /agents/:id/skills"| API
   SKILLS -->|"/skills · /skills/:id/versions · /skill-types<br/>POST /skills/import/preview"| API
   CONV -->|"GET /repos/:id/conventions · PATCH,DELETE /conventions/:id<br/>POST /repos/:id/conventions/(extract|skill)"| API
@@ -47,7 +47,8 @@ flowchart TD
 ```
 
 Cross-cutting chrome lives in `src/components/app-shell` (nav, breadcrumbs,
-`g`-then-key shortcuts). Pages are thin; feature logic sits in colocated
+`g`-then-key shortcuts); `src/components/confirm-dialog` is the shared confirm
+modal (the tour's regenerate and the brief's refresh use it). Pages are thin; feature logic sits in colocated
 `_components/<Name>/` folders, each with its own `*.test.tsx`.
 
 ## Testing

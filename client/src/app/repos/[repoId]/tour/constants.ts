@@ -10,9 +10,6 @@ export const ELAPSED_TICK_MS = 1_000;
 /** How long "Copied!" (or the copy failure text) stays on screen. */
 export const COPY_FEEDBACK_MS = 2_000;
 
-/** SHAs are shown in their short git form. */
-export const SHORT_SHA_LENGTH = 7;
-
 export type UnavailableReason = Exclude<BlastDegradedReason, "index_partial">;
 
 /**

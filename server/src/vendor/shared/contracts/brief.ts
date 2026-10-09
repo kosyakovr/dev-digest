@@ -136,10 +136,42 @@ export const SmartDiff = z.object({
 export type SmartDiff = z.infer<typeof SmartDiff>;
 
 // ---- Composed PR Brief (pr_brief.json) ----
+export const ReviewFocusItem = z.object({
+  file: z.string(),
+  line: z.number().int().min(1),
+  reason: z.string(),
+});
+export type ReviewFocusItem = z.infer<typeof ReviewFocusItem>;
+
+export const PrBriefGeneration = z.object({
+  /** The PR head SHA the brief was generated for. */
+  head_sha: z.string(),
+  generated_at: z.string(),
+  provider: z.string(),
+  model: z.string(),
+  tokens_in: z.number().int(),
+  tokens_out: z.number().int(),
+  /** null when the provider reports no cost. */
+  cost_usd: z.number().nullable(),
+  /** Paths of the project-context docs whose text went into the prompt. */
+  specs_read: z.array(z.string()),
+});
+export type PrBriefGeneration = z.infer<typeof PrBriefGeneration>;
+
 export const PrBrief = z.object({
   intent: Intent,
   blast: BlastRadius,
   risks: Risks,
   history: PrHistory,
+  summary: z.string(),
+  review_focus: z.array(ReviewFocusItem),
+  generation: PrBriefGeneration,
 });
 export type PrBrief = z.infer<typeof PrBrief>;
+
+export const PrBriefResponse = z.object({
+  brief: PrBrief.nullable(),
+  generating: z.boolean(),
+  stale: z.boolean(),
+});
+export type PrBriefResponse = z.infer<typeof PrBriefResponse>;

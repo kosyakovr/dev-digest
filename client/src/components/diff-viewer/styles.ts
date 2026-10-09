@@ -118,6 +118,21 @@ export function findingLabelFor(color: string, bg: string, open: boolean): CSSPr
   };
 }
 
+/** A diff row a deep link points at: an accent stripe and tint over the row. */
+const TARGET_LINE_BG = "var(--accent-bg)";
+export const targetLineStyle: CSSProperties = {
+  boxShadow: "inset 3px 0 0 var(--accent)",
+  background: TARGET_LINE_BG,
+};
+
+/** One-off pulse of the deep-linked row: fades from a stronger accent tint to
+    the resting tint (Web Animations API; no global keyframes). */
+export const TARGET_PULSE_DURATION_MS = 1600;
+export const targetPulseKeyframes: Keyframe[] = [
+  { background: "color-mix(in srgb, var(--accent) 45%, transparent)" },
+  { background: TARGET_LINE_BG },
+];
+
 /** Heading + list wrapper for findings that have no rendered line. */
 export const outsideStyles = {
   wrap: { padding: "8px 0", borderBottom: "1px solid var(--border)" } satisfies CSSProperties,

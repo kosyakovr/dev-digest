@@ -87,6 +87,46 @@ describe("IntentCard", () => {
     expect(screen.queryByText("Could not load the intent.")).toBeNull();
   });
 
+  it("AC-45: with a child (the brief's Risk areas) the empty state still offers Derive, followed by the child", () => {
+    query = { data: { intent: null }, isLoading: false, isError: false };
+    render(
+      <NextIntlClientProvider locale="en" messages={{ intent: messages }}>
+        <IntentCard prId="p1">
+          <div>CHILD</div>
+        </IntentCard>
+      </NextIntlClientProvider>,
+    );
+    const derive = screen.getByRole("button", { name: "Derive intent" });
+    expect(screen.getByText("No intent derived yet.")).toBeInTheDocument();
+    expect(derive.compareDocumentPosition(screen.getByText("CHILD")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(derive);
+    expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("AC-45: a child renders after a derived intent and after a load error, but not while loading", () => {
+    const withChild = () => (
+      <NextIntlClientProvider locale="en" messages={{ intent: messages }}>
+        <IntentCard prId="p1">
+          <div>CHILD</div>
+        </IntentCard>
+      </NextIntlClientProvider>
+    );
+    const { rerender } = render(withChild());
+    expect(screen.getByText(STATEMENT)).toBeInTheDocument();
+    expect(
+      screen.getByText(STATEMENT).compareDocumentPosition(screen.getByText("CHILD")) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    query = { data: undefined, isLoading: false, isError: true };
+    rerender(withChild());
+    expect(screen.getByText("Could not load the intent.")).toBeInTheDocument();
+    expect(screen.getByText("CHILD")).toBeInTheDocument();
+
+    query = { data: undefined, isLoading: true, isError: false };
+    rerender(withChild());
+    expect(screen.queryByText("CHILD")).toBeNull();
+  });
+
   it("the intent cannot be loaded and nothing is cached: an error with Retry, and Retry refetches", () => {
     query = { data: undefined, isLoading: false, isError: true };
     render(tree());

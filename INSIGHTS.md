@@ -29,6 +29,16 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 
 ## What Doesn't Work
 
+- 2026-10-09 — `scripts/change-set.sh --snapshot` makes a `commit-tree` with
+  the current clock in author/committer, so its id changes every second on an
+  UNCHANGED tree (Risk Brief run: each reviewer reported a different id, all
+  with an empty `--since` delta), while plan-verifier ends with a `--tree` key
+  that `--since` rejects ("unknown snapshot") → to ask "same tree?" compare
+  `--tree` keys (or `git cat-file -p <snap>` line 1), never two `--snapshot`
+  ids (sdd-run § 9's check would always say "not current"); feed `--since`
+  only an id printed by `--snapshot`. (ref: scripts/change-set.sh:53,
+  .claude/skills/sdd-run/SKILL.md § 9, .claude/agents/plan-verifier.md:142)
+
 - 2026-10-09 — The L05 tour plan's done-when "`git diff --stat -- server/src/db`
   prints nothing" was wider than spec AC-47 and AGENTS.md (migrations + schema
   only), so the architecture fix that moved `RepoRow` into `server/src/db/rows.ts`

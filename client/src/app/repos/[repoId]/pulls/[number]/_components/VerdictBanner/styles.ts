@@ -35,6 +35,16 @@ export const s = {
     color: "var(--text-secondary)",
     marginTop: 8,
   } satisfies CSSProperties,
+  provenance: {
+    display: "inline-flex",
+    color: "var(--text-muted)",
+    cursor: "help",
+  } satisfies CSSProperties,
+  regenerate: { marginLeft: "auto" } satisfies CSSProperties,
+  spinner: {
+    color: "var(--accent)",
+    animation: "ddspin 1s linear infinite",
+  } satisfies CSSProperties,
   scoreCol: {
     display: "flex",
     flexDirection: "column",

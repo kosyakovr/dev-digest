@@ -6,7 +6,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon, SEV } from "@devdigest/ui";
 import type { PrFile, SmartDiffRole } from "@devdigest/shared";
-import { DiffViewer, type DiffCommentApi, type DiffFindingApi } from "@/components/diff-viewer";
+import { DiffViewer, type DiffCommentApi, type DiffFindingApi, type DiffTarget } from "@/components/diff-viewer";
 import { COLLAPSED_BY_DEFAULT, ROLE_LABEL_KEY } from "./constants";
 import { rs } from "./styles";
 
@@ -16,11 +16,15 @@ interface RoleGroupProps {
   filesWithFindings: number;
   commenting: DiffCommentApi;
   findings: DiffFindingApi;
+  target?: DiffTarget | null;
 }
 
-export function RoleGroup({ role, files, filesWithFindings, commenting, findings }: RoleGroupProps) {
+export function RoleGroup({ role, files, filesWithFindings, commenting, findings, target }: RoleGroupProps) {
   const t = useTranslations("prReview");
-  const [open, setOpen] = React.useState(!COLLAPSED_BY_DEFAULT.has(role));
+  // A group holding the deep-link target starts open, whatever its default.
+  const [open, setOpen] = React.useState(
+    !COLLAPSED_BY_DEFAULT.has(role) || (!!target && files.some((f) => f.path === target.file)),
+  );
 
   return (
     <div style={rs.group}>
@@ -38,7 +42,7 @@ export function RoleGroup({ role, files, filesWithFindings, commenting, findings
         )}
         <span style={rs.count}>{t("smartDiff.filesCount", { count: files.length })}</span>
       </button>
-      {open && <DiffViewer files={files} commenting={commenting} findings={findings} />}
+      {open && <DiffViewer files={files} commenting={commenting} findings={findings} target={target} />}
     </div>
   );
 }

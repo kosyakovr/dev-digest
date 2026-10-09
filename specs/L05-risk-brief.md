@@ -1,6 +1,6 @@
 # Risk Brief — what a PR does, why, and where to look first
 
-**Status:** approved
+**Status:** in-progress
 **Lesson / ticket:** L05
 **Packages:** server, client, and both vendored `@devdigest/shared` copies (reviewer-core, mcp-server and e2e unchanged)
 

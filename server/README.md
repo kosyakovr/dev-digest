@@ -66,11 +66,12 @@ the Skills Lab group is what the L02 lesson added on top of the starter set.
 flowchart TB
   subgraph Repos_PRs["Repos & PRs"]
     repos["repos<br/>/repos"]
-    pulls["pulls<br/>/pulls/:id · /pulls/:id/comments"]
+    pulls["pulls<br/>/pulls/:id · /pulls/:id/comments<br/>(GET /pulls/:id also stores head_sha)"]
     polling["polling<br/>/repos/:id/poll"]
   end
   subgraph Review["Review & runs"]
     intent["intent<br/>/pulls/:id/intent (GET · POST)"]
+    brief["brief (L05)<br/>/pulls/:id/brief (GET · POST)"]
     reviews["reviews<br/>/pulls/:id/review · /reviews · /smart-diff · /findings/:id/(accept|dismiss)<br/>/runs/:id/(events|trace)"]
   end
   subgraph Agents["Agents"]
@@ -91,6 +92,9 @@ flowchart TB
   subgraph Context["Project Context (L05)"]
     context["context<br/>/context/sources · /repos/:id/context(/file)<br/>/agents/:id/context · /skills/:id/context (GET · PUT)"]
   end
+  brief -->|"container.intent get · derive"| intent
+  brief -->|"container.prBlast getBlast · getHistory"| blast
+  brief -->|"projectContext.resolveForRun"| context
   subgraph Platform["Platform"]
     settings["settings<br/>/settings · /providers"]
     workspace["workspace<br/>/workspace"]

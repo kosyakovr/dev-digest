@@ -1,5 +1,5 @@
 # Implementation Plan: Risk Brief
-**Status:** approved
+**Status:** done
 **Spec:** specs/L05-risk-brief.md @ bc1a7b1
 **Approved:** 2026-10-09 by the user — gates: GT-1 ✓ (option A) · execution mode: multi-agent · accepted: REC-1, REC-2, REC-3, REC-4
 Packages: server, client, both vendored `@devdigest/shared` `contracts/brief.ts` · Requirements: specs/L05-risk-brief.md · Lesson/ticket: L05
@@ -621,6 +621,24 @@ None open. REC-1…REC-4 were accepted by the user on 2026-10-09 and are folded 
 - Moving the tour onto `ConfirmDialog` could change its dialog DOM. The tour tests are the oracle and must pass unchanged; if one fails on a selector rather than on behaviour, the implementer stops and reports it, instead of editing the test.
 - jsdom has no `Element.prototype.scrollIntoView`, so tests that set a target must stub it.
 - The deep-link target applies when Files changed mounts. A second link while already on Files changed is not a flow here, because the links live on Overview.
+
+## Amendments
+- **AM-1** 2026-10-09 — WP9 Files also includes `DV/helpers.ts` (the `DiffTarget` interface) and `DV/index.ts` (a type-only re-export of `DiffTarget`) — why: the implementer placed the shared diff-viewer type in its package helpers (frontend-ui-architecture §2); plan-verifier r0 SCOPE-1/2 — approved by the user 2026-10-09
+- **Waived** 2026-10-09 — WP8 Files `OV/styles.ts` is not modified — why: each new sub-component has its own `styles.ts`, and OverviewTab needs no new styles (plan-verifier r0 WP8.files) — waived by the user 2026-10-09
+- **Deferred** 2026-10-09 — TP-6 (`scripts/e2e.sh`) is left to the CI `e2e-web` job — why: locally agent-browser does not start under the isolated HOME that keeps `~/.devdigest/secrets.json` out of reach (plan-verifier r0 TP-6) — user decision 2026-10-09
+- **Deferred** 2026-10-09 — AC-22 / spec AC-35, the visible pulse of the deep-link target line, is left to a manual check on the dev stack before the push (or CI `e2e-web`) — why: it runs only through the Web Animations API in a real browser; the code is in `DV/FileCard/FileCard.tsx:76-78` and every other deep-link clause has a passing test (plan-verifier r1) — user decision 2026-10-09
+
+## Run log
+- 2026-10-09 sdd-run started — directives: none
+- 2026-10-09 test-writer T1 — 21 tests in 5 files (8 server, 13 client), all red:assertion
+- 2026-10-09 implementer — server WP1–4 done · client WP5–9 done · T1 5/5 files green · deviations 1 (AC-35 pulse omitted: needs @keyframes in a file outside WP9)
+- 2026-10-09 test-writer T2 — ~150 new tests in 24 files, T1 mutation-proved 21/21, suspected defects 3 (NFR-9 log fields)
+- 2026-10-09 review round 0 — snapshot c5abc2775e9a · PV FAIL (104 PASS · 11 FAIL · 1 UNVERIFIABLE) · AR comment W1 · SR approve 0
+- 2026-10-09 fix round 1 — PV-AC-16 (NFR-9), AR-1, PV-WP9.steps (pulse); AM-1, WP8.files waived, TP-6 deferred · snapshot 718c20a0088d · AR approve · SR approve · PV INCOMPLETE (0 FAIL; AC-22 pulse UNVERIFIABLE, demo)
+- 2026-10-09 plan-verifier final — INCOMPLETE on tree 718c20a0088d (0 FAIL); the user accepted AC-22/AC-35 pulse as deferred, so the run continues to docs
+- 2026-10-09 docs — server/README.md, client/README.md, server/docs/pull-files.md, server/docs/risk-brief.md (new), server/docs/README.md
+- 2026-10-09 insights — INSIGHTS.md (change-set snapshot ids), client/INSIGHTS.md (real QueryClient refetch timing)
+- 2026-10-09 committed
 
 <!-- test-brief -->
 ## Test brief

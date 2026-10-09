@@ -3,7 +3,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { SectionLabel, Button, Skeleton } from "@devdigest/ui";
-import { DiffViewer, type DiffCommentApi, type DiffFindingApi } from "@/components/diff-viewer";
+import { DiffViewer, type DiffCommentApi, type DiffFindingApi, type DiffTarget } from "@/components/diff-viewer";
 import {
   usePrComments,
   useCreatePrComment,
@@ -27,9 +27,11 @@ interface DiffTabProps {
   files: PrFile[];
   /** Inline commenting is offered only on open PRs (GitHub rejects otherwise). */
   canComment?: boolean;
+  /** Deep link (`?file=&line=`): open, scroll to and mark this file and line. */
+  target?: DiffTarget | null;
 }
 
-export function DiffTab({ prId, filesCount, additions, deletions, files, canComment }: DiffTabProps) {
+export function DiffTab({ prId, filesCount, additions, deletions, files, canComment, target }: DiffTabProps) {
   const t = useTranslations("prReview");
   const { data: comments } = usePrComments(prId);
   const smart = useSmartDiff(prId);
@@ -76,11 +78,11 @@ export function DiffTab({ prId, filesCount, additions, deletions, files, canComm
   const findingsUnavailable =
     smart.isError && !smart.data ? <p style={note}>{t("smartDiff.findingsUnavailable")}</p> : null;
   // The flat list in the PR's own order — Original order, and Smart order's fallback.
-  const flat = <DiffViewer files={files} commenting={commenting} findings={findingApi} />;
+  const flat = <DiffViewer files={files} commenting={commenting} findings={findingApi} target={target} />;
 
   let body: React.ReactNode;
   if (files.length === 0) {
-    body = <DiffViewer files={files} commenting={commenting} />;
+    body = <DiffViewer files={files} commenting={commenting} />; // no files: nothing to target
   } else if (order === "original") {
     body = (
       <>
@@ -113,6 +115,7 @@ export function DiffTab({ prId, filesCount, additions, deletions, files, canComm
             filesWithFindings={g.filesWithFindings}
             commenting={commenting}
             findings={findingApi}
+            target={target}
           />
         ))}
       </>

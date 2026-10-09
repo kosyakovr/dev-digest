@@ -1,4 +1,4 @@
-import type { IntentSource, RepoRef, UnifiedDiff } from '@devdigest/shared';
+import type { IntentSource, PrIntentResponse, RepoRef, UnifiedDiff } from '@devdigest/shared';
 import type { ReviewIntent } from '@devdigest/reviewer-core';
 import type { PullRow } from '../../db/rows.js';
 import type { RunLogger } from '../../platform/run-logger.js';
@@ -27,6 +27,12 @@ export interface PrIntentFacade {
     runLog: RunLogger;
     logger?: IntentLogger;
   }): Promise<ReviewIntent | undefined>;
+
+  /** The stored intent (never calls the model). `stale` = the PR head moved since. */
+  get(workspaceId: string, prId: string): Promise<PrIntentResponse>;
+
+  /** Derive now, ignoring the cache. Throws 422 (no key) or 502 (model failed). */
+  derive(workspaceId: string, prId: string, logger?: IntentLogger): Promise<PrIntentResponse>;
 }
 
 /** Everything the classifier is shown (all of it untrusted). */
