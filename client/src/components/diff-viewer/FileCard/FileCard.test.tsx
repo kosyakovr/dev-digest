@@ -1,6 +1,5 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup, within } from "@testing-library/react";
-import { NextIntlClientProvider } from "next-intl";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { render, screen, cleanup, within } from "@testing-library/react";import { NextIntlClientProvider } from "next-intl";
 import type { FindingRecord, Severity } from "@devdigest/shared";
 import type { PrFile } from "@/lib/types";
 import shell from "../../../../messages/en/shell.json";
@@ -144,5 +143,71 @@ describe("FileCard findings", () => {
     expect(screen.getByRole("article", { name: "Title C1" })).toBeInTheDocument();
     expect(screen.getByLabelText("Has findings")).toBeInTheDocument();
     expect(screen.getByText("4")).toBeInTheDocument(); // the comment counter, unchanged
+  });
+});
+
+describe("FileCard deep-link target (AC-34, AC-36, NFR-10)", () => {
+  // A big file: 300 changed lines, so it starts CLOSED without a target.
+  // New side of the hunk: 10 (ctx), 11 (add), 12 (ctx), 13 (ctx).
+  const BIG_PATCH = "@@ -10,3 +10,4 @@\n ctx10\n+add11\n ctx12\n ctx13";
+  const big = (over: Partial<PrFile> = {}) => file({ additions: 300, deletions: 0, patch: BIG_PATCH, ...over });
+  const scrollIntoView = vi.fn();
+  const header = () => screen.getByText("src/a.ts").parentElement as HTMLElement;
+
+  function renderTargeted(f: PrFile, target: { file: string; line: number | null } | null) {
+    return render(
+      <NextIntlClientProvider locale="en" messages={{ shell, prReview }}>
+        <FileCard file={f} target={target} />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  beforeEach(() => {
+    scrollIntoView.mockReset();
+    Element.prototype.scrollIntoView = scrollIntoView;
+  });
+  afterEach(() => {
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  });
+
+  it("without a target a big file stays closed, nothing scrolls, nothing is marked", () => {
+    const { container } = renderTargeted(big(), null);
+    expect(screen.queryByText("add11")).toBeNull();
+    expect(container.querySelector("[data-target-line]")).toBeNull();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("a target opens a closed file, marks the one target line, scrolls it into view and focuses the header", () => {
+    const { container } = renderTargeted(big(), { file: "src/a.ts", line: 11 });
+    expect(screen.getByText("add11")).toBeInTheDocument();
+    const marked = container.querySelectorAll('[data-target-line="true"]');
+    expect(marked).toHaveLength(1);
+    expect(marked[0]!.textContent).toContain("add11");
+    expect(scrollIntoView).toHaveBeenCalled();
+    expect(scrollIntoView.mock.contexts[0]).toBe(marked[0]);
+    expect(document.activeElement).toBe(header());
+  });
+
+  it("a context line on the new side is the target too", () => {
+    const { container } = renderTargeted(big(), { file: "src/a.ts", line: 12 });
+    const marked = container.querySelectorAll('[data-target-line="true"]');
+    expect(marked).toHaveLength(1);
+    expect(marked[0]!.textContent).toContain("ctx12");
+  });
+
+  it("a target line that is not rendered still opens the file, marks no line, and scrolls the card", () => {
+    const { container } = renderTargeted(big(), { file: "src/a.ts", line: 99 });
+    expect(screen.getByText("add11")).toBeInTheDocument();
+    expect(container.querySelector("[data-target-line]")).toBeNull();
+    expect(scrollIntoView).toHaveBeenCalled();
+    expect(document.activeElement).toBe(header());
+  });
+
+  it("a target without a line (a risk file) opens the file and marks no line", () => {
+    const { container } = renderTargeted(big(), { file: "src/a.ts", line: null });
+    expect(screen.getByText("add11")).toBeInTheDocument();
+    expect(container.querySelector("[data-target-line]")).toBeNull();
+    expect(document.activeElement).toBe(header());
   });
 });

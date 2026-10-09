@@ -15,6 +15,7 @@ import { OverviewTab } from "./_components/OverviewTab";
 import { FindingsTab } from "./_components/FindingsTab";
 import { DiffTab } from "./_components/DiffTab";
 import RunTraceDrawer from "./_components/RunTraceDrawer";
+import { readDiffTarget, withDiffTarget } from "./helpers";
 import { usePullDetail, usePulls } from "../../../../../lib/hooks";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePrReviews, useCancelRun, usePrActiveRuns, usePrRuns, useDeleteRun } from "../../../../../lib/hooks/reviews";
@@ -69,7 +70,15 @@ export default function PRDetailPage() {
     else sp.set(key, val);
     router.replace(`/repos/${repoId}/pulls/${number}${sp.toString() ? `?${sp.toString()}` : ""}`);
   };
-  const setTab = (t: string) => setParam("tab", t);
+  // A tab click drops any deep-link target so it cannot leak into another visit.
+  const setTab = (t: string) => {
+    const sp = new URLSearchParams(search.toString());
+    sp.set("tab", t);
+    sp.delete("file");
+    sp.delete("line");
+    router.replace(`/repos/${repoId}/pulls/${number}?${sp.toString()}`);
+  };
+  const diffTarget = readDiffTarget(search.toString());
 
   // Reviews come newest-first; each is its own run (grouped into accordions).
   const runs = reviews ?? [];
@@ -138,7 +147,20 @@ export default function PRDetailPage() {
       />
 
       <div style={{ padding: "24px 32px 44px", display: "flex", flexDirection: "column", gap: 24, maxWidth: 1080, margin: "0 auto" }}>
-        {tab === "overview" && <OverviewTab prId={prId} repoId={repoId} repoFullName={repoFullName} headSha={pr.head_sha} prBody={pr.body} />}
+        {tab === "overview" && (
+          <OverviewTab
+            prId={prId}
+            repoId={repoId}
+            repoFullName={repoFullName}
+            headSha={pr.head_sha}
+            prBody={pr.body}
+            changedFiles={pr.files.map((f) => f.path)}
+            reviews={runs}
+            onOpenFile={(file, line) =>
+              router.push(`/repos/${repoId}/pulls/${number}?${withDiffTarget(search.toString(), file, line)}`)
+            }
+          />
+        )}
 
         {tab === "findings" && (
           <FindingsTab
@@ -173,6 +195,7 @@ export default function PRDetailPage() {
             deletions={pr.deletions}
             files={pr.files}
             canComment={pr.status === "open"}
+            target={diffTarget}
           />
         )}
       </div>

@@ -33,10 +33,14 @@ import type {
   AuthWorkspace,
   SecretsProvider,
   SecretKey,
+  PrIntentResponse,
+  BlastRadius,
+  PrHistory,
 } from '@devdigest/shared';
 import { parseUnifiedDiff } from './git/diff-parser.js';
 import type { ReviewIntent } from '@devdigest/reviewer-core';
 import type { PrIntentFacade } from '../modules/intent/types.js';
+import type { PrBlastFacade } from '../modules/blast/types.js';
 import type { ProjectContextFacade } from '../modules/context/types.js';
 
 /**
@@ -58,6 +62,8 @@ export interface MockLLMOptions {
   structuredBySchema?: Record<string, unknown>;
   completionText?: string;
   embedding?: number[];
+  /** Cost reported by every call; `null` is kept as null. Absent → 0.001. */
+  costUsd?: number | null;
 }
 
 export class MockLLMProvider implements LLMProvider {
@@ -87,8 +93,12 @@ export class MockLLMProvider implements LLMProvider {
       model: req.model,
       tokensIn: 100,
       tokensOut: 50,
-      costUsd: 0.001,
+      costUsd: this.cost(),
     };
+  }
+
+  private cost(): number | null {
+    return 'costUsd' in this.opts ? (this.opts.costUsd ?? null) : 0.001;
   }
 
   async completeStructured<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>> {
@@ -103,7 +113,7 @@ export class MockLLMProvider implements LLMProvider {
       model: req.model,
       tokensIn: 100,
       tokensOut: 50,
-      costUsd: 0.001,
+      costUsd: this.cost(),
       raw: JSON.stringify(fixture),
       attempts: 1,
     };
@@ -385,6 +395,35 @@ export class MockPrIntent implements PrIntentFacade {
   ): Promise<ReviewIntent | undefined> {
     this.calls.push(a);
     return this.intent;
+  }
+  readonly getCalls: { workspaceId: string; prId: string }[] = [];
+  readonly deriveCalls: { workspaceId: string; prId: string }[] = [];
+  async get(workspaceId: string, prId: string): Promise<PrIntentResponse> {
+    this.getCalls.push({ workspaceId, prId });
+    return { intent: null };
+  }
+  async derive(workspaceId: string, prId: string): Promise<PrIntentResponse> {
+    this.deriveCalls.push({ workspaceId, prId });
+    throw new Error('MockPrIntent.derive not configured');
+  }
+}
+
+// ---------- Mock PR blast ----------
+/** Stub for `overrides.prBlast`: returns constructor-given results and records calls. */
+export class MockPrBlast implements PrBlastFacade {
+  readonly blastCalls: { workspaceId: string; prId: string }[] = [];
+  readonly historyCalls: { workspaceId: string; prId: string }[] = [];
+  constructor(
+    private readonly blast: BlastRadius = { changed_symbols: [], downstream: [], summary: '' },
+    private readonly history: PrHistory = { history: [] },
+  ) {}
+  async getBlast(workspaceId: string, prId: string): Promise<BlastRadius> {
+    this.blastCalls.push({ workspaceId, prId });
+    return this.blast;
+  }
+  async getHistory(workspaceId: string, prId: string): Promise<PrHistory> {
+    this.historyCalls.push({ workspaceId, prId });
+    return this.history;
   }
 }
 

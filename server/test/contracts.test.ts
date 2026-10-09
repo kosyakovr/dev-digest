@@ -22,6 +22,8 @@ import {
   PrMeta,
   PrFindingPreview,
   ContextItem,
+  PrBrief,
+  PrBriefResponse,
 } from '@devdigest/shared';
 
 /**
@@ -482,5 +484,53 @@ describe('L05 project-context contracts', () => {
     expect(() => ContextItem.parse({ path: 'a.md', position: 1.5 })).toThrow();
     expect(ContextItem.parse({ path: 'a.md', position: null })).toEqual({ path: 'a.md', position: null });
     expect(ContextItem.parse({ path: 'a.md', position: 0 }).position).toBe(0);
+  });
+});
+
+describe('L05 Risk Brief contracts', () => {
+  const brief = {
+    intent: { intent: 'Do X', in_scope: [], out_of_scope: [] },
+    blast: { changed_symbols: [], downstream: [], summary: '' },
+    risks: { risks: [] },
+    history: { history: [] },
+    summary: 'S',
+    review_focus: [{ file: 'src/a.ts', line: 1, reason: 'R' }],
+    generation: {
+      head_sha: 'old1111',
+      generated_at: '2026-10-09T10:00:00.000Z',
+      provider: 'openai',
+      model: 'gpt-4.1',
+      tokens_in: 100,
+      tokens_out: 50,
+      cost_usd: null,
+      specs_read: ['docs/x.md'],
+    },
+  };
+
+  it('a review_focus line must be an integer of at least 1', () => {
+    expect(PrBrief.parse(brief).review_focus[0]!.line).toBe(1);
+    const at = (line: number) => ({ ...brief, review_focus: [{ file: 'src/a.ts', line, reason: 'R' }] });
+    expect(() => PrBrief.parse(at(0))).toThrow();
+    expect(() => PrBrief.parse(at(1.5))).toThrow();
+  });
+
+  it('cost_usd may be null (unknown) but not absent; the new members are required', () => {
+    expect(PrBrief.parse(brief).generation.cost_usd).toBeNull();
+    const { cost_usd: _c, ...noCost } = brief.generation;
+    expect(() => PrBrief.parse({ ...brief, generation: noCost })).toThrow();
+    const { summary: _s, ...noSummary } = brief;
+    expect(() => PrBrief.parse(noSummary)).toThrow();
+    const { generation: _g, ...noGeneration } = brief;
+    expect(() => PrBrief.parse(noGeneration)).toThrow();
+  });
+
+  it('PrBriefResponse: an empty state parses, a brief parses, a missing flag does not', () => {
+    expect(PrBriefResponse.parse({ brief: null, generating: false, stale: false })).toEqual({
+      brief: null,
+      generating: false,
+      stale: false,
+    });
+    expect(PrBriefResponse.parse({ brief, generating: true, stale: true }).brief?.summary).toBe('S');
+    expect(() => PrBriefResponse.parse({ brief: null, generating: false })).toThrow();
   });
 });

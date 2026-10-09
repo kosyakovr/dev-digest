@@ -1,0 +1,40 @@
+import type { CSSProperties } from "react";
+
+export const s = {
+  wrap: { display: "flex", flexDirection: "column", gap: 10, marginTop: 4 } satisfies CSSProperties,
+  list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 } satisfies CSSProperties,
+  row: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    minWidth: 0,
+    border: "1px solid var(--border)",
+    borderRadius: 8,
+    padding: "10px 12px",
+  } satisfies CSSProperties,
+  head: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 } satisfies CSSProperties,
+  title: { flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: "var(--text-primary)" } satisfies CSSProperties,
+  severity: { flexShrink: 0 } satisfies CSSProperties,
+  fileBtn: {
+    background: "none",
+    border: "none",
+    padding: 0,
+    cursor: "pointer",
+    fontSize: 13,
+    color: "var(--accent-text)",
+    textAlign: "left",
+    wordBreak: "break-all",
+  } satisfies CSSProperties,
+  toggle: {
+    alignSelf: "flex-start",
+    background: "none",
+    border: "none",
+    padding: 0,
+    cursor: "pointer",
+    fontSize: 12,
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
+  explanation: { margin: 0, fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 } satisfies CSSProperties,
+  refs: { display: "flex", flexDirection: "column", gap: 2 } satisfies CSSProperties,
+  muted: { fontSize: 13, color: "var(--text-muted)" } satisfies CSSProperties,
+} as const;

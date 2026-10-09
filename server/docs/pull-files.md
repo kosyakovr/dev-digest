@@ -5,6 +5,14 @@ route re-fetches the PR from GitHub, deletes the PR's rows and inserts the fresh
 list (`server/src/modules/pulls/routes.ts`, the `t.prFiles` delete and insert).
 PR import and the PR list never write it.
 
+The same update also writes `pull_requests.head_sha` from GitHub's detail
+(`server/src/modules/pulls/routes.ts:349`); the offline fallback does not.
+The `stale` flag of the brief compares against that column.
+
+`POST /pulls/:id/brief` reads `pr_files` and answers 422 while the PR has none
+(`server/src/modules/brief/service.ts:116`; message `NO_FILES_MESSAGE` in
+`brief/constants.ts`). See [risk-brief.md](risk-brief.md).
+
 ## Consequence
 
 Any reader keyed on `pr_files` that is not the web app's PR page — an MCP tool,

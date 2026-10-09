@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { Icon, SEV } from "@devdigest/ui";
 import type { PrFile } from "@/lib/types";
 import { AUTO_EXPAND_MAX_LINES } from "../constants";
-import { parsePatch, type Line } from "../helpers";
+import { parsePatch, type DiffTarget, type Line } from "../helpers";
 import {
   buildThreads,
   keysForLine,
@@ -16,7 +16,13 @@ import {
   type DiffCommentApi,
 } from "../comments";
 import { findingsForLine, partitionFindings, type DiffFindingApi } from "../findings";
-import { s, chevronFor, outsideStyles } from "../styles";
+import {
+  s,
+  chevronFor,
+  outsideStyles,
+  targetPulseKeyframes,
+  TARGET_PULSE_DURATION_MS,
+} from "../styles";
 import { InlineFinding } from "../InlineFinding";
 import { CodeLine } from "../CodeLine";
 import { OutdatedComments } from "../OutdatedComments";
@@ -36,16 +42,43 @@ export function FileCard({
   file,
   commenting,
   findings,
+  target,
 }: {
   file: PrFile;
   commenting?: DiffCommentApi;
   findings?: DiffFindingApi;
+  /** Set on the card a deep link points at: starts open, scrolls, takes focus. */
+  target?: DiffTarget | null;
 }) {
   const t = useTranslations("shell");
   const [open, setOpen] = React.useState(
-    (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
+    !!target || (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
   );
   const lines = React.useMemo(() => parsePatch(file.patch), [file.patch]);
+  const cardRef = React.useRef<HTMLDivElement>(null);
+  const headerRef = React.useRef<HTMLDivElement>(null);
+
+  // The one row the link points at: an added or context line with that new-side number.
+  const targetIndex = React.useMemo(() => {
+    const line = target?.line;
+    if (line == null) return -1;
+    return lines.findIndex((ln) => (ln.kind === "add" || ln.kind === "ctx") && ln.newNo === line);
+  }, [lines, target?.line]);
+
+  // Synchronise with the DOM on mount: bring the target row (or, when that line
+  // is not rendered, the card) into view and move focus to the header.
+  React.useEffect(() => {
+    if (!target) return;
+    headerRef.current?.focus({ preventScroll: true });
+    const row = cardRef.current?.querySelector('[data-target-line="true"]');
+    (row ?? cardRef.current)?.scrollIntoView?.({ block: "center" });
+    // Pulse the row once; the static highlight stays as the resting state.
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    if (row && !reduceMotion) {
+      row.animate?.(targetPulseKeyframes, { duration: TARGET_PULSE_DURATION_MS, easing: "ease-out" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Group this file's comments into threads, then split into ones we can anchor
   // to a rendered line vs. "outdated" (GitHub dropped the line / it's not here).
@@ -75,8 +108,8 @@ export function FileCard({
     : 0;
 
   return (
-    <div style={s.fileCard}>
-      <div onClick={() => setOpen((o) => !o)} style={s.fileHeader}>
+    <div ref={cardRef} style={s.fileCard}>
+      <div ref={headerRef} tabIndex={target ? -1 : undefined} onClick={() => setOpen((o) => !o)} style={s.fileHeader}>
         <Icon.ChevronRight size={13} style={chevronFor(open)} />
         <Icon.FileText size={14} style={s.fileIcon} />
         <span className="mono" style={s.filePath}>
@@ -134,6 +167,7 @@ export function FileCard({
                 commenting={commenting}
                 findings={findingsForLine(ln, matchedFindings)}
                 findingApi={findings}
+                highlighted={i === targetIndex}
               />
             ))
           )}

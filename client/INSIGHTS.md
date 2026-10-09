@@ -55,6 +55,13 @@ Non-obvious findings a future session needs. **Read this before working here.**
   DiffTab's smart-diff fallback survived until a stale-data case was added →
   every hook-mocked error test needs a second case with `isError: true` AND
   `data` set. (ref: client/src/app/repos/[repoId]/pulls/[number]/_components/DiffTab/DiffTab.test.tsx)
+- 2026-10-09 — With a REAL `QueryClient` (not a mocked hook) the same case is
+  vacuous if asserted straight after `await act(async () =>
+  queryClient.refetchQueries(...))`: the failed refetch reaches the observer on
+  a later tick, so the UI still shows the pre-refetch state and a mutation of
+  `isError && !state` → `isError` survived → after a refetch, `await
+  waitFor(...)` on the error-state UI before asserting the kept data. (ref:
+  client/src/app/repos/[repoId]/pulls/[number]/_components/OverviewTab/OverviewTab.test.tsx AC-43)
 
 - 2026-09-23 — `kit/Checkbox`'s `label` is VISIBLE text, not an accessible name:
   it renders `{label}` inside the wrapping `<label>` (Checkbox.tsx:12, no

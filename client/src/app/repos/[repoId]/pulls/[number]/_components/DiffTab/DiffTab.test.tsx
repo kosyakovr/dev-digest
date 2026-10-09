@@ -319,3 +319,99 @@ describe("DiffTab", () => {
     expect(screen.getAllByRole("article").map((a) => a.getAttribute("aria-label"))).toEqual(["New"]);
   });
 });
+
+/**
+ * Deep-link target from the Risk Brief (plan docs/plans/L05-risk-brief.md,
+ * WP9.tests [T1]; spec AC-34, AC-35). A `target` opens the file's role group
+ * and marks the target line; jsdom has no scrollIntoView, so it is stubbed.
+ */
+describe("DiffTab · deep-link target", () => {
+  // New side of this hunk: lines 10..13 (ctx10, add11, ctx12, ctx13).
+  const A_PATCH = "@@ -10,3 +10,4 @@\n ctx10\n+add11\n ctx12\n ctx13";
+  const DOC_PATCH = "@@ -1,2 +1,3 @@\n # Guide\n+guide-added\n more";
+  const TARGET_FILES: PrFile[] = [mk("src/a.ts", A_PATCH), mk("docs/guide.md", DOC_PATCH)];
+
+  beforeEach(() => {
+    setSmart({
+      data: smartResponse({
+        groups: [
+          { role: "core", files: [{ path: "src/a.ts", additions: 3, deletions: 0, finding_lines: [] }] },
+          { role: "docs", files: [{ path: "docs/guide.md", additions: 3, deletions: 0, finding_lines: [] }] },
+        ],
+      }),
+    });
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+  afterEach(() => {
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  });
+
+  function renderWithTarget(target: { file: string; line: number | null }) {
+    return render(
+      <NextIntlClientProvider locale="en" messages={{ shell, prReview }}>
+        <DiffTab
+          prId="pr1"
+          filesCount={2}
+          additions={6}
+          deletions={0}
+          files={TARGET_FILES}
+          canComment={false}
+          target={target}
+        />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("AC-34: a target in a collapsed role group opens the group and renders the file's patch lines", () => {
+    renderWithTarget({ file: "docs/guide.md", line: null });
+    expect(header("Docs")).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("guide-added")).toBeInTheDocument();
+  });
+
+  it("AC-35: the target line is the one element marked data-target-line", () => {
+    const { container } = renderWithTarget({ file: "src/a.ts", line: 11 });
+    const marked = container.querySelectorAll('[data-target-line="true"]');
+    expect(marked).toHaveLength(1);
+    expect(marked[0]!.textContent).toContain("add11");
+  });
+
+  it("AC-36: a target line the diff does not render still opens the file, with no marked line", () => {
+    const { container } = renderWithTarget({ file: "src/a.ts", line: 99 });
+    expect(screen.getByText("add11")).toBeInTheDocument();
+    expect(container.querySelector("[data-target-line]")).toBeNull();
+  });
+
+  it("AC-34: only the target's own role group is forced open; another collapsed group stays collapsed", () => {
+    renderWithTarget({ file: "src/a.ts", line: 11 });
+    expect(header("Core")).toHaveAttribute("aria-expanded", "true");
+    expect(header("Docs")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("guide-added")).toBeNull();
+  });
+
+  it("AC-34: the target file's header takes focus (NFR-10)", () => {
+    renderWithTarget({ file: "docs/guide.md", line: null });
+    const path = screen.getByText("docs/guide.md");
+    expect(path.parentElement).toBe(document.activeElement);
+  });
+
+  it("AC-48: without a target the groups, collapse defaults and marks are as before", () => {
+    const { container } = render(
+      <NextIntlClientProvider locale="en" messages={{ shell, prReview }}>
+        <DiffTab prId="pr1" filesCount={2} additions={6} deletions={0} files={TARGET_FILES} canComment={false} />
+      </NextIntlClientProvider>,
+    );
+    expect(header("Core")).toHaveAttribute("aria-expanded", "true");
+    expect(header("Docs")).toHaveAttribute("aria-expanded", "false");
+    expect(container.querySelector("[data-target-line]")).toBeNull();
+    expect(screen.queryByText("guide-added")).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("AC-34: in the flat fallback (smart diff unavailable) the target line is still marked", () => {
+    setSmart({ data: undefined, isError: true });
+    const { container } = renderWithTarget({ file: "src/a.ts", line: 11 });
+    expect(screen.getByText("src/a.ts")).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-target-line="true"]')).toHaveLength(1);
+  });
+});

@@ -35,6 +35,9 @@ import type { RepoIntel } from '../modules/repo-intel/types.js';
 import type { PrIntentFacade } from '../modules/intent/types.js';
 import { resolveFeatureModel, getFeatureModelOverride } from '../modules/settings/feature-models.js';
 import { IntentService } from '../modules/intent/service.js';
+import type { PrBlastFacade } from '../modules/blast/types.js';
+import { BlastService } from '../modules/blast/service.js';
+import { PrHistoryService } from '../modules/blast/history.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
 import { type DepGraph, DepCruiseGraph } from '../adapters/depgraph/index.js';
 import { type Tokenizer, TiktokenTokenizer } from '../adapters/tokenizer/index.js';
@@ -64,6 +67,8 @@ export interface ContainerOverrides {
   intent?: PrIntentFacade;
   /** Project-context facade (L05) — tests inject a stub that reads no git objects. */
   projectContext?: ProjectContextFacade;
+  /** Blast-radius + PR-history facade (L05 brief) — tests inject a stub with fixed results. */
+  prBlast?: PrBlastFacade;
 }
 
 export class Container {
@@ -93,6 +98,7 @@ export class Container {
   private _intent?: PrIntentFacade;
   private _reposRepo?: RepoRepository;
   private _projectContext?: ProjectContextFacade;
+  private _prBlast?: PrBlastFacade;
 
   constructor(config: AppConfig, db: Db, private overrides: ContainerOverrides = {}) {
     this.config = config;
@@ -154,6 +160,20 @@ export class Container {
     if (this.overrides.intent) return this.overrides.intent;
     this._intent ??= new IntentService(this);
     return this._intent;
+  }
+
+  /** Blast radius + prior-PR history facade (L05 brief): both degrade instead of throwing. */
+  get prBlast(): PrBlastFacade {
+    if (this.overrides.prBlast) return this.overrides.prBlast;
+    if (!this._prBlast) {
+      const blast = new BlastService(this);
+      const history = new PrHistoryService(this);
+      this._prBlast = {
+        getBlast: (w, p, l) => blast.getBlast(w, p, l),
+        getHistory: (w, p, l) => history.getHistory(w, p, l),
+      };
+    }
+    return this._prBlast;
   }
 
   /** Provider+model for a system LLM feature: workspace override, else registry default. */

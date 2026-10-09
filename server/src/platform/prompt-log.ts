@@ -36,7 +36,7 @@ export function childLogger<L extends ChildableLogger>(logger: L, bindings: Reco
 }
 
 export interface PromptLogInput {
-  kind: 'review' | 'intent';
+  kind: 'review' | 'intent' | 'brief';
   provider: string;
   model: string;
   /** Review only. */

@@ -1,12 +1,10 @@
 /** Pure helpers for the Onboarding Tour page. */
 
 import type { OnboardingSection, OnboardingSectionKind } from "@devdigest/shared";
-import { SHORT_SHA_LENGTH, UNAVAILABLE_REASONS, type UnavailableReason } from "./constants";
+import { UNAVAILABLE_REASONS, type UnavailableReason } from "./constants";
 
-/** A SHA in short form (A-32). */
-export function shortSha(sha: string): string {
-  return sha.slice(0, SHORT_SHA_LENGTH);
-}
+// Promoted to the shared formatters (the Risk Brief also shows short SHAs).
+export { shortSha } from "@/lib/format";
 
 /** The id of a section card, used by "On this page" to scroll to it. */
 export function sectionId(kind: string): string {

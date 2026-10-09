@@ -37,6 +37,11 @@ export function formatCost(usd: number | null | undefined): string | null {
     : `$${roundTo(usd, 2).toFixed(2)}`;
 }
 
+/** A git SHA in its short, 7-character form. */
+export function shortSha(sha: string): string {
+  return sha.slice(0, 7);
+}
+
 /**
  * Total tokens for one run, e.g. "9,119 tok". Distinct from the run-trace
  * drawer's `formatTokens`, which renders the in→out shape "12k→1.5k".
