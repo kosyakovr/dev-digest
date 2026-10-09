@@ -1,6 +1,6 @@
 /**
  * GET /pulls/:id/smart-diff — PR files grouped by role + the finding lines of
- * the "latest review set" (server/specs/L03-smart-diff.md, gates G1/G2/G3).
+ * the "latest review set" (specs/L03-smart-diff.md, gates G1/G2/G3).
  *
  * Oracles come from the approved plan: the newest `agent_runs` batch (every run
  * sharing the newest `ran_at`) → its `kind='review'` reviews; no batch reviews →

@@ -1,12 +1,13 @@
 #!/bin/sh
 # Agent scope guard — PreToolUse hook declared in the frontmatter of the
-# brainstormer, planner, test-writer, doc-writer, architecture-reviewer,
-# security-reviewer and plan-verifier subagents, so it runs ONLY while one of
-# them is active. One argument selects the profile:
+# brainstormer, implementation-planner, test-writer, doc-writer, spec-creator,
+# architecture-reviewer, security-reviewer and plan-verifier subagents, so it
+# runs ONLY while one of them is active. One argument selects the profile:
 #
-#   test-writer — may write test files only (+ its red-proof worktree in $TMPDIR)
-#   doc-writer  — may write markdown docs only
-#   read-only   — may write nothing, and Bash may not write either
+#   test-writer  — may write test files only (+ its red-proof worktree in $TMPDIR)
+#   doc-writer   — may write markdown docs only (never specs or plans)
+#   spec-creator — may write draft specs only (specs/, <pkg>/specs/)
+#   read-only    — may write nothing, and Bash may not write either
 #
 # Every profile shares the deny core of implementer-guard.sh (migrations, lock
 # files, dependency changes, git history/state, .claude/, CLAUDE.md) and adds its
@@ -32,8 +33,8 @@ decide() { # $1 = deny|ask, $2 = reason (no double quotes, backslashes or newlin
 }
 
 case "$PROFILE" in
-  test-writer|doc-writer|read-only) ;;
-  *) decide ask "missing or unknown profile - the hook command must name test-writer, doc-writer or read-only." ;;
+  test-writer|doc-writer|spec-creator|read-only) ;;
+  *) decide ask "missing or unknown profile - the hook command must name test-writer, doc-writer, spec-creator or read-only." ;;
 esac
 
 INPUT=$(cat | tr '\n\r' '  ')
@@ -152,15 +153,39 @@ case "$TOOL" in
       decide deny "test-writer writes test files only - if production code looks wrong, leave the test red and report it under Suspected defects."
     fi
 
+    if [ "$PROFILE" = spec-creator ]; then
+      case "$REL" in
+        specs/*.md|server/specs/*.md|client/specs/*.md|reviewer-core/specs/*.md|mcp-server/specs/*.md) ;;
+        *) decide deny "spec-creator writes specs only - specs/<file>.md (several packages) or <pkg>/specs/<file>.md (one package)." ;;
+      esac
+      SPEC=${REL#*/specs/}; SPEC=${SPEC#specs/}
+      case "$SPEC" in
+        */*) decide deny "a spec lives directly in its specs/ folder, not in a subfolder." ;;
+        README.md|_template.md) decide deny "the specs README and template are conventions the user owns - propose a change in the report." ;;
+      esac
+      # Drafts only: no status change in the new content (approved is set by the
+      # main session on the user's word), no edit of a spec past draft without asking.
+      if matches "$INPUT" '\*\*Status:\*\*[[:space:]]*(approved|in-progress|done)'; then
+        decide ask "spec-creator writes drafts only - approve a status change only if the user asked for it."
+      fi
+      case "$FILE" in /*) ABS=$FILE ;; *) ABS="${CLAUDE_PROJECT_DIR:-.}/$FILE" ;; esac
+      if [ -f "$ABS" ] && ! grep -E -q '^\*\*Status:\*\*[[:space:]]*draft[[:space:]]*$' "$ABS"; then
+        decide ask "$REL is not a draft (approved, in-progress, done or no status line) - approve only if the user asked to change this spec."
+      fi
+      exit 0
+    fi
+
     # doc-writer
     case "$REL" in
       AGENTS.md|*/AGENTS.md)
         decide ask "AGENTS.md is loaded into every session - approve only a change the user asked for." ;;
-      *specs/*.md|docs/agent-prompts/*.md)
+      specs/*|*/specs/*|docs/plans/*)
+        decide deny "specs and plans are not docs - spec-creator writes specs, the main session saves plans. Report what they now get wrong under Discrepancies." ;;
+      docs/agent-prompts/*.md)
         case "$REL" in
           docs/agent-prompts/README.md) exit 0 ;;
         esac
-        decide ask "specs are intent written before code, and docs/agent-prompts mirror the seeded prompts - approve only if the user asked for this edit." ;;
+        decide ask "docs/agent-prompts mirror the seeded prompts - approve only if the user asked for this edit." ;;
       docs/*.md|server/docs/*.md|client/docs/*.md|reviewer-core/docs/*.md|e2e/docs/*.md|README.md|*/README.md|TESTING.md)
         exit 0 ;;
     esac
@@ -212,6 +237,9 @@ case "$TOOL" in
        || quoted_db_run "$CMD" '[[:space:]{!](pnpm|npm|yarn|bun)[[:space:]]+([^[:space:]]+[[:space:]]+)*\$?db:(generate|migrate|seed|push)' '[[:space:]/{!]drizzle-kit(@[^[:space:]]*)?(/[^[:space:]]*)?[[:space:]]+(generate|push|drop|migrate|up|check|pull|introspect|studio)' '[[:space:]=]\$?db:(generate|migrate|seed|push)'; then
       decide deny "db:* / drizzle-kit write migrations or the database, both off-limits (root AGENTS.md)."
     fi
+    if matches "$BARE" "review-record\.sh[[:space:]]+add([[:space:]]|$)"; then
+      decide deny "only the main session records a finished review - a subagent recording one would let /pr-self-review skip its group."
+    fi
     if matches "$CMD" "${B}docker[[:space:]]+(rm|rmi|kill|stop|volume|system|network[[:space:]]+rm)|${B}docker[[:space:]]+compose[^;&|]*[[:space:]]down"; then
       decide deny "agents do not stop or delete containers and volumes."
     fi
@@ -235,6 +263,7 @@ case "$TOOL" in
       case "$PROFILE" in
         test-writer) decide deny "shell writes are allowed only inside the red-proof worktree (a path containing $MARK) - write test files with Write/Edit." ;;
         doc-writer)  decide deny "shell writes are not allowed - write docs with Write/Edit." ;;
+        spec-creator) decide deny "shell writes are not allowed - write the spec with Write/Edit." ;;
         *)           decide deny "this agent is read-only - no redirects into files, rm, mv, cp, tee, sed -i." ;;
       esac
     fi

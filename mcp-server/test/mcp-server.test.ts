@@ -48,7 +48,7 @@ const EXPECTED_TOOLS = [
     name: 'get_findings',
     title: 'Get review findings',
     description:
-      'Get findings of a finished DevDigest AI review of a pull request: latest, or by run_id or agent. Read-only; safe to poll after run_agent_on_pr.',
+      'Get findings of finished DevDigest AI reviews of a pull request: the latest review of every agent with total_findings, or one by run_id or agent. Read-only; safe to poll.',
   },
   {
     name: 'get_conventions',
@@ -68,7 +68,7 @@ const FIELD_DESCRIPTIONS: Record<string, string> = {
   pr: 'Pull request: owner/repo#123, GitHub PR URL, or DevDigest PR id',
   agent: 'Agent name or id from list_agents',
   repo: 'Repository: owner/repo or DevDigest repo id',
-  run_id: 'run_id from run_agent_on_pr; omit for the latest review',
+  run_id: 'run_id from run_agent_on_pr; omit for the latest review of every agent',
 };
 
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };

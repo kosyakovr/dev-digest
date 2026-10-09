@@ -28,6 +28,26 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## What Doesn't Work
 
+- 2026-10-09 — A VALUE import from `@devdigest/shared` (e.g.
+  `OnboardingSectionKind.enum.first_tasks`, `BlastDegradedReason.exclude(…)`)
+  breaks `next build` / `next dev` with `Can't resolve './contracts/findings.js'`:
+  the vendored barrel uses `.js` specifiers, which Next's webpack does not map
+  to `.ts`, while `tsc` and vitest do — so typecheck and every unit test stayed
+  green and `scripts/checks.sh` (no `next build`) passed. Every other client
+  file imports only types, which are erased → import with `import type` and
+  check literals against the union (`"x" satisfies Kind`, `switch (v as Kind)`,
+  `as const satisfies readonly Kind[]`); after touching shared imports run
+  `pnpm build`. (ref: client/src/app/repos/[repoId]/tour/constants.ts:3-20)
+- 2026-10-09 (correction to the entry above) — `as const satisfies readonly
+  Kind[]` is one-way: it rejects a renamed or unknown member but NOT a member
+  the contract later adds, which then silently gets the fallback wording → for
+  a list that must cover the union, key an object by it
+  (`{ a: true, … } as const satisfies Record<Kind, true>` + `Object.keys`): a
+  missing key is TS1360, an extra one TS2353. "Every other client file" means
+  every other NON-test file (two tests import values; Next does not bundle
+  them). (ref: client/src/app/repos/[repoId]/tour/constants.ts:5,23-29,
+  tour/helpers.ts:31, tour/_components/TourSection/TourSection.tsx:30)
+
 - 2026-10-02 — A TanStack Query result can be `{ data: <stale>, isError: true }`
   at once (a failed REFETCH keeps the last good data), so mocking only
   `{ isError: true, data: undefined }` lets a fallback written as `!data` pass
@@ -76,6 +96,23 @@ Non-obvious findings a future session needs. **Read this before working here.**
   modals shipped this way. (ref: client/src/vendor/ui/kit/Modal.tsx:60)
 
 ## Tool & Library Notes
+
+- 2026-10-09 — Under `vi.useFakeTimers()` RTL's `waitFor` / `findBy*` hang
+  here → pass `vi.useFakeTimers({ shouldAdvanceTime: true })` and drive
+  intervals and timeouts with `act(async () => { vi.advanceTimersByTime(n) })`.
+  (ref: client/src/app/repos/[repoId]/tour/page.test.tsx)
+
+- 2026-10-09 — A test that needs the real global toast (`MutationCache.onError`
+  in `client/src/lib/providers.tsx:45-47`) cannot share a file that
+  `vi.mock`s `@/lib/toast`; the mock is file-wide → put it in its own file
+  rendering the real `Providers`. (ref: client/src/app/repos/[repoId]/tour/page.toast.test.tsx)
+
+- 2026-10-06 — `pnpm exec vitest run <path>` treats the path as a filter
+  pattern, so the `[id]` / `[repoId]` in Next route folders becomes a regex
+  character class, and vitest silently runs fewer files (hit in L05 T1 and T2)
+  → filter by a file-name fragment (`vitest run ContextTab TraceBody`) and
+  check the "Test Files" count in the output.
+  (ref: client/src/app/agents/[id]/…/ContextTab.test.tsx)
 
 - 2026-10-02 — TanStack `query.isStaleByTime(x)` treats `x` AS the staleTime, so
   `expect(query.isStaleByTime(4 * 60_000)).toBe(false)` passes even when the hook

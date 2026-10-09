@@ -125,3 +125,13 @@ this repo keeps its values in `.env.local`, so pass the variable explicitly.
 
 `scripts/e2e.sh` applies the full chain to an ephemeral database on every run, so
 a broken migration fails CI rather than a developer's machine.
+
+## With the implementer agent
+
+`implementer-guard.sh` denies every write under `server/src/db/migrations/**`,
+even after the user approves the plan's migration Gate — so delegating an
+approved migration to the implementer just bounces. The main session writes
+the `.sql`, the snapshot and the journal entry by this document **before**
+launching the implementer; the implementer then only edits
+`src/db/schema/*.ts` to match (the guard asks once more for that). Proven on
+`0013_extend_pr_intent` (L03 Intent Layer, 2026-10-01).

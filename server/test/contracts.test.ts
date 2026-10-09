@@ -11,6 +11,8 @@ import {
   SmartDiffResponse,
   Conformance,
   Onboarding,
+  OnboardingSectionKind,
+  OnboardingTourState,
   EvalRun,
   MemoryItem,
   RunTrace,
@@ -19,6 +21,7 @@ import {
   PrDetail,
   PrMeta,
   PrFindingPreview,
+  ContextItem,
 } from '@devdigest/shared';
 
 /**
@@ -209,9 +212,16 @@ describe('AI contracts parse fixtures', () => {
         completeness_pct: 80,
       }),
     ).not.toThrow();
+    // L05: `source`, `index_status`, `indexed_sha`, `files_indexed` and `generated_at`
+    // are required on a stored tour (plan WP1 / R-21).
     expect(() =>
       Onboarding.parse({
-        sections: [{ kind: 'architecture', title: 'T', body: 'b', links: [] }],
+        sections: [{ kind: 'architecture_overview', title: 'T', body: 'b', links: [] }],
+        source: 'skeleton',
+        index_status: 'full',
+        indexed_sha: 'abc1234',
+        files_indexed: 3,
+        generated_at: '2026-10-08T10:00:00.000Z',
       }),
     ).not.toThrow();
     expect(() =>
@@ -235,6 +245,73 @@ describe('AI contracts parse fixtures', () => {
         sources: [{ pr: 401, context: 'ctx' }],
       }),
     ).not.toThrow();
+  });
+
+  describe('Onboarding tour contract (L05 WP1)', () => {
+    const doc = {
+      sections: [
+        {
+          kind: 'how_to_run',
+          title: 'How to run locally',
+          body: '',
+          links: [{ label: 'a.ts', path: 'a.ts', note: null }],
+          steps: [{ command: 'pnpm install', note: null }],
+        },
+        {
+          kind: 'first_tasks',
+          title: 'First tasks',
+          body: '',
+          links: [],
+          tasks: [{ title: 'Add a test', scope: 'src/a.ts', difficulty: 'low' }],
+        },
+      ],
+      source: 'llm',
+      index_status: 'partial',
+      index_reason: 'no_data',
+      indexed_sha: 'abc1234',
+      files_indexed: 3,
+      generated_at: '2026-10-08T10:00:00.000Z',
+      model: null,
+      cost_usd: null,
+    };
+
+    it('OnboardingTourState accepts an empty state', () => {
+      expect(() =>
+        OnboardingTourState.parse({ tour: null, generating: false, stale: false, current_indexed_sha: null }),
+      ).not.toThrow();
+    });
+
+    it('Onboarding requires source and the other server-set fields', () => {
+      expect(() => Onboarding.parse({ sections: [] })).toThrow();
+      const { source: _source, ...withoutSource } = doc;
+      expect(() => Onboarding.parse(withoutSource)).toThrow();
+      const { indexed_sha: _sha, ...withoutSha } = doc;
+      expect(() => Onboarding.parse(withoutSha)).toThrow();
+    });
+
+    it('a full document with null model and cost and a blast-style index_reason parses', () => {
+      const parsed = Onboarding.parse(doc);
+      expect(parsed.model).toBeNull();
+      expect(parsed.cost_usd).toBeNull();
+      expect(parsed.index_reason).toBe('no_data');
+    });
+
+    it('rejects a task difficulty outside low | medium and an unknown skeleton_reason', () => {
+      const bad = structuredClone(doc);
+      (bad.sections[1]!.tasks![0] as { difficulty: string }).difficulty = 'high';
+      expect(() => Onboarding.parse(bad)).toThrow();
+      expect(() => Onboarding.parse({ ...doc, skeleton_reason: 'because' })).toThrow();
+    });
+
+    it('OnboardingSectionKind lists exactly the five kinds, in order', () => {
+      expect(OnboardingSectionKind.options).toEqual([
+        'architecture_overview',
+        'critical_paths',
+        'how_to_run',
+        'guided_reading',
+        'first_tasks',
+      ]);
+    });
   });
 
   it('RunTrace (data2.jsx TRACE single-document)', () => {
@@ -369,5 +446,41 @@ describe('platform DTOs', () => {
     const parsed = PrFindingPreview.parse({ ...preview, accepted_at: 'now', dismissed_at: null });
     expect(parsed).not.toHaveProperty('accepted_at');
     expect(parsed).not.toHaveProperty('dismissed_at');
+  });
+});
+
+describe('L05 project-context contracts', () => {
+  const baseTrace = {
+    config: { agent: 'A', model: 'm', source: 'local' },
+    stats: { duration_ms: 1, tokens_in: 1, tokens_out: 1, cost_usd: null, findings: 0, grounding: '0/0 passed' },
+    prompt_assembly: { system: 's', user: 'u' },
+    tool_calls: [],
+    raw_output: '{}',
+    memory_pulled: [],
+    specs_read: [],
+    log: [],
+  };
+
+  it('a stored trace without project_context still parses, with the field undefined (AC-44)', () => {
+    const trace = RunTrace.parse(baseTrace);
+    expect(trace.project_context).toBeUndefined();
+  });
+
+  it('a trace with project_context entries parses and keeps them', () => {
+    const entries = [{ path: 'specs/a.md', tokens: 3, status: 'included', via_skill: null, text: 'x' }];
+    expect(RunTrace.parse({ ...baseTrace, project_context: entries }).project_context).toEqual(entries);
+  });
+
+  it('a skipped entry needs one of the three reasons', () => {
+    const skipped = { path: 'a.md', tokens: 0, status: 'skipped', via_skill: null, text: null };
+    expect(() => RunTrace.parse({ ...baseTrace, project_context: [{ ...skipped, reason: 'not_found' }] })).not.toThrow();
+    expect(() => RunTrace.parse({ ...baseTrace, project_context: [{ ...skipped, reason: 'because' }] })).toThrow();
+  });
+
+  it('ContextItem: a position is a non-negative integer or null', () => {
+    expect(() => ContextItem.parse({ path: 'a.md', position: -1 })).toThrow();
+    expect(() => ContextItem.parse({ path: 'a.md', position: 1.5 })).toThrow();
+    expect(ContextItem.parse({ path: 'a.md', position: null })).toEqual({ path: 'a.md', position: null });
+    expect(ContextItem.parse({ path: 'a.md', position: 0 }).position).toBe(0);
   });
 });

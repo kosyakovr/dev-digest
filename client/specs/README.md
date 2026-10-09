@@ -1,8 +1,15 @@
 # specs
 
 Feature specs written **before** implementation. One file per feature:
-`<lesson>-<feature>.md` (e.g. `L01-cost-badge.md`), started from [_template.md](_template.md).
+`<lesson>-<feature>.md` (e.g. `L01-cost-badge.md`), started from the full
+template [specs/_template.md](../../specs/_template.md) (EARS
+acceptance criteria, states and edge cases, `[NEEDS CLARIFICATION]` instead of
+guesses). Usually written by the [`spec-creator`](../../.claude/agents/spec-creator.md)
+agent, then planned by `implementation-planner`.
 
-- Update `Status` as work progresses; mark `done` when merged.
-- A feature spanning several packages keeps ONE spec — link to it from the other
-  packages' `specs/` instead of duplicating it.
+- `Status` moves `draft → approved → in-progress → done`; who moves it and
+  when: [specs/README.md § Status](../../specs/README.md#status).
+- Only specs that touch this package alone live here. A feature spanning several
+  packages keeps ONE spec in [specs/](../../specs/README.md); a file here
+  may hold only this package's details and links back to it — the short form in
+  [_template.md](_template.md).

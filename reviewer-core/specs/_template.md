@@ -1,19 +1,19 @@
-# <Feature name>
+# <Feature name> (<package>)
 
-**Status:** draft | in-progress | done
-**Lesson / ticket:** <e.g. L01>
+<!--
+Which template:
+- A feature that touches ONLY this package → copy the full template,
+  ../../specs/_template.md, into this folder.
+- This package's details of a cross-package feature → this short form. Goal,
+  non-goals, contract and acceptance criteria stay in the specs/ spec, once.
+-->
 
-## Goal
-What problem this solves and for whom.
+**Status:** draft | approved | in-progress | done
+**Lesson / ticket:** <e.g. L05>
 
-## Non-goals
-What is explicitly out of scope.
+One spec for the feature: [../../specs/<file>.md](../../specs/<file>.md)
+(goal, non-goals, contract, acceptance criteria AC-1..AC-n). This file records only
+what is specific to this package.
 
-## Contract
-API routes, Zod contracts (`@devdigest/shared`), UI surface — whatever this package exposes.
-
-## Acceptance criteria
-- [ ] ...
-
-## Test plan
-Which suite covers it (see ../../TESTING.md) and the cases that matter.
+## <Package-specific section — e.g. UI surface, internals, limits>
+- <detail> (AC-n)

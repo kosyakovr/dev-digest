@@ -1,7 +1,7 @@
 import { simpleGit, type SimpleGit } from 'simple-git';
 import { join } from 'node:path';
 import { mkdir, readFile, access, rm } from 'node:fs/promises';
-import { constants } from 'node:fs';
+import { constants, existsSync } from 'node:fs';
 import type {
   GitClient,
   RepoRef,
@@ -10,6 +10,7 @@ import type {
   BlameLine,
   GitCommit,
 } from '@devdigest/shared';
+import { ValidationError } from '../../platform/errors.js';
 import { parseUnifiedDiff } from './diff-parser.js';
 
 /**
@@ -42,7 +43,15 @@ export class SimpleGitClient implements GitClient {
   }
 
   private git(repo: RepoRef): SimpleGit {
-    return simpleGit(this.clonePathFor(repo));
+    const dir = this.clonePathFor(repo);
+    // simpleGit() throws a raw "directory does not exist" (→ 500) when the repo was
+    // cloned under another DEVDIGEST_CLONE_DIR or the clone was deleted; a directory
+    // without .git (a clone cut off mid-write, see clone()) would make git climb to a
+    // parent repository instead.
+    if (!existsSync(join(dir, '.git'))) {
+      throw new ValidationError('This repository has not been cloned yet.');
+    }
+    return simpleGit(dir);
   }
 
   private async exists(path: string): Promise<boolean> {
@@ -163,6 +172,13 @@ export class SimpleGitClient implements GitClient {
     } catch {
       return null;
     }
+  }
+
+  /** Every blob path in the tree at `ref`, from the object database (`git ls-tree`). */
+  async listFiles(repo: RepoRef, ref: string): Promise<string[]> {
+    if (!HEX_REF.test(ref)) throw new Error(`listFiles: invalid ref "${ref}"`);
+    const out = await this.git(repo).raw(['ls-tree', '-r', '--name-only', '-z', ref]);
+    return out.split('\0').filter((p) => p.length > 0);
   }
 }
 

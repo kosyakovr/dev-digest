@@ -11,88 +11,66 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
 - Settled knowledge moves to [docs/](docs/); this file is the draft, not the doc.
 - Captured by the `engineering-insights` skill.
 
-> **Consolidated 2026-09-22, -23 and -24** with the user's approval; settled
-> knowledge moved to docs and the `.claude/*/README.md` files, no finding dropped.
-> Prior text: `git show 438513f:INSIGHTS.md` (the 2026-09-24 entries live on in those READMEs).
+> **Consolidated 2026-09-22, -23, -24 and 2026-10-05** with the user's approval;
+> no finding dropped. Prior text: `git show 7de415a:INSIGHTS.md`. This file now
+> keeps only traps of the environment and the agent workflow that every session
+> needs; each moved entry is stated in full at its destination:
+> - LLM `maxTokens` and hidden reasoning → [reviewer-core/docs/llm-token-budget.md](reviewer-core/docs/llm-token-budget.md)
+> - `pr_files` written only by `GET /pulls/:id` → [server/docs/pull-files.md](server/docs/pull-files.md)
+> - shared contracts with no route, `SUM(cost_usd)` vs null → [docs/shared-contracts.md](docs/shared-contracts.md)
+> - approved migrations and the implementer guard → [docs/hand-written-migrations.md](docs/hand-written-migrations.md) § With the implementer agent
+> - the author's reverted lesson solutions, session notes, cost plumbing → [docs/lesson-log.md](docs/lesson-log.md)
+> - `git stash` on an untracked file in a red-proof → [TESTING.md](TESTING.md) § Conventions
+> - hook end-to-end testing, hooks failing open → [.claude/hooks/README.md](.claude/hooks/README.md);
+>   the `.it.test` `FAKE_HOME` trap, a fresh headless session → [.claude/agents/README.md](.claude/agents/README.md);
+>   skill authoring → [.claude/skills/README.md](.claude/skills/README.md); old `server/specs/` paths → [specs/README.md](specs/README.md)
 
 ## What Works
 
-- 2026-10-01 — `implementer-guard.sh` denies every write under
-  `server/src/db/migrations/**` even AFTER the user approves the migration gate,
-  so delegating an approved migration to the implementer just bounces → the main
-  session writes the `.sql`, snapshot and journal entry (per
-  docs/hand-written-migrations.md) BEFORE launching the implementer, and the
-  implementer only edits `src/db/schema/*.ts` to match. (ref: L03 intent, 0013_extend_pr_intent)
-
-- 2026-09-24 — A hook cannot be tested end to end through an agent in this repo
-  (it refuses first, citing AGENTS.md) nor via a project agent in `-p` (hooks
-  skipped) → use `--settings` in a throwaway dir with no AGENTS.md, or
-  `--agents '<json>'`. Recipe: `.claude/hooks/README.md` § Testing a hook end to end.
-
-- 2026-09-23 — The course author's own implementation of each lesson is in this
-  repo's history, REVERTED (`c6af1e4` "homework belongs in forks" rolled back
-  `641b637` "feat(conventions): …"), so it is unreachable from `main` and
-  `git log` on its deleted paths shows nothing → before designing a lesson
-  feature run `git log --all --grep '<feature>'` (or `--diff-filter=D`): the
-  commit message carries measured findings and `docs/specs/conventions.md` is a
-  full design doc. It will not cherry-pick (different base) but it names the
-  traps — e.g. a structured response's FIELD ORDER is generation order, so
-  `category` placed first collapsed a live scan to one category and a flat 0.90
-  confidence. Tell the user when you use it: it is someone else's homework.
-
-- 2026-09-19 — A drizzle migration can be added WITHOUT `pnpm db:generate`, and
-  hand-writing it is safer (no unrelated schema drift) → follow
-  [docs/hand-written-migrations.md](docs/hand-written-migrations.md) (proven on 0011, 0012).
-
 ## What Doesn't Work
 
-- 2026-10-02 — The default model `deepseek/deepseek-v4-flash` REASONS before it
-  answers, and its hidden reasoning (0–900 tokens per call, varying by upstream)
-  counts against `maxTokens`, so a cap sized for the JSON alone (intent had 800)
-  cut half the calls off mid-JSON — reported as "structured output failed schema
-  validation", never as truncation (live probe: 7 of 10 attempts
-  `finish_reason: length`, 3 with ZERO content) → size `maxTokens` for reasoning
-  plus answer (intent now 3_000; only generated tokens are billed); to diagnose,
-  log `finish_reason` and `usage.completion_tokens_details.reasoning_tokens`.
-  (ref: server/src/modules/intent/constants.ts, reviewer-core/src/llm/openrouter.ts)
+- 2026-10-09 — The L05 tour plan's done-when "`git diff --stat -- server/src/db`
+  prints nothing" was wider than spec AC-47 and AGENTS.md (migrations + schema
+  only), so the architecture fix that moved `RepoRow` into `server/src/db/rows.ts`
+  (onion-architecture §3) failed plan-verifier and cost amendment AM-1 →
+  implementation-planner should scope the no-migration check to
+  `server/src/db/migrations` and `server/src/db/schema*`, never all of
+  `server/src/db`. (ref: docs/plans/L05-onboarding-tour.md § Amendments AM-1)
 
-- 2026-10-02 — `pr_files` is written ONLY by `GET /pulls/:id` (it re-fetches the
-  PR from GitHub, `server/src/modules/pulls/routes.ts:314`); PR import/list never
-  writes it, so any non-browser reader keyed on it (MCP tool, script, curl)
-  sees 0 changed files for a PR nobody opened in the web app — `/pulls/:id/blast`
-  answered "0 symbols", not degraded → call `GET /pulls/:id` first, as
-  `mcp-server/src/usecases/blast.ts` does via `syncPull`.
+- 2026-10-06 — The "isolated" `.it.test` suite is NOT isolated from real keys:
+  `scripts/checks.sh:122` (and the `.claude/agents/README.md` § Running the
+  integration suite without real keys recipe) run `env -u GITHUB_TOKEN -u
+  OPENAI_API_KEY …`, but `server/src/platform/config.ts:1` does
+  `import 'dotenv/config'`, which re-fills every UNSET var from `server/.env`.
+  Here that file holds all four keys, so the L05 run's `server-it.log` showed
+  authenticated Octokit calls (`x-ratelimit-limit: 5000`, token-expiration
+  header) → a fake HOME and `env -u` are not enough; also point dotenv away
+  from `server/.env` (e.g. `DOTENV_CONFIG_PATH=/dev/null`) or set the keys to
+  empty strings, which dotenv does not override, and prove it by grepping a
+  fresh `server-it.log` for `x-ratelimit-limit`. (ref: server/src/platform/config.ts:1,
+  scripts/checks.sh:122)
+- 2026-10-09 — `scripts/e2e.sh` has the same leak: it exports only DB/ports
+  (`scripts/e2e.sh:40-43`), so dotenv fills `GITHUB_TOKEN` from `server/.env`;
+  plan-verifier's L05 e2e run logged `x-ratelimit-limit: 5000`,
+  `x-ratelimit-used: 26` (real token, no LLM call) → tell verifiers not to run
+  `scripts/e2e.sh` unless the change touches an e2e flow, or run it with
+  `DOTENV_CONFIG_PATH=/dev/null`, and grep its output for `x-ratelimit-limit`.
+  (ref: scripts/e2e.sh:35-43, .git/devdigest/runs/L05-onboarding-tour/r0-pv.md)
 
-- 2026-10-02 — `git stash push -- <path>` on an UNTRACKED (new) file is a silent
-  no-op, so a "red-proof" that stashes the new component and re-runs its test
-  passes against the very code it meant to remove → for a new file, mutate a
-  copy (`cp` to the scratchpad, edit, run, `cp` back) instead of stashing.
-- 2026-10-02 (ref for the entry above) — (ref: client/src/app/repos/[repoId]/pulls/[number]/_components/OverviewTab/_components/BlastCard/BlastCard.test.tsx, the graph.empty red-proof in L04 Blast radius)
+- 2026-10-06 — doc-writer's scope guard denies every non-markdown file, even
+  one the plan lists under § Docs to update (L05: `server/.env.example`), and
+  the item only surfaces as "blocked" at the docs stage → implementation-planner
+  should give a non-`.md` doc item (`.env.example`, config samples) to an
+  implementer WP, not to § Docs to update. (ref: .claude/hooks/agent-scope-guard.sh,
+  docs/plans/L05-project-context.md § Docs to update)
 
-- 2026-10-02 — The isolated `.it.test` recipe in `.claude/agents/README.md:328`
-  creates its fake `HOME` with `mktemp -d` and removes it with `rm -rf`, and the
-  agent scope guard DENIES both for subagents (writes are allowed only when the
-  command contains `devdigest-redproof-`), so a test-writer following the doc
-  verbatim cannot run one DB-backed file → inside an agent use
-  `mkdir -p /tmp/devdigest-redproof-home<N>` as `FAKE_HOME` (and `rm -rf` that
-  path); the main session or `scripts/checks.sh` can run the recipe as written.
-  (ref: .claude/hooks/README.md:179, Smart Diff L03)
-- 2026-10-02 (correction) — The recipe itself now uses the literal
-  `FAKE_HOME=/tmp/devdigest-redproof-home1` + `mkdir -p`, so agents can run it
-  as written; the trap above applies only to older copies of it.
-  (ref: .claude/agents/README.md:328)
-
-- 2026-09-24 — Writing a markdown file through a Bash heredoc (or `python3 - <<EOF`)
-  gets DENIED by the pr-self-review gate whenever the prose merely mentions a
-  push, e.g. a table cell quoting the command: the gate regex-tests the whole
-  command string before anything else, heredoc body included, and here reported
-  a stale report instead of the real cause → write file content with the
-  Write/Edit tools; keep Bash for commands. (ref: .claude/hooks/pr-self-review-gate.mjs)
-
-- 2026-09-21 — A `PreToolUse` hook that exits non-zero FAILS OPEN (the tool runs
-  anyway), and `node` here is an asdf shim invisible under `env -i` → every hook
-  answers what it cannot handle with `{"permissionDecision":"ask"}` + exit 0, and
-  a test asserts it under `env -i`. Details: `.claude/hooks/README.md` § The `node` resolution problem.
+- 2026-09-24 — Any Bash command whose TEXT contains a push command — a heredoc
+  writing markdown that quotes one, `python3 - <<EOF`, even a `grep` for the
+  string — is DENIED by the pr-self-review gate, which regex-tests the whole
+  command before anything else and then reports a stale report, not the real
+  cause (hit again 2026-10-05 by a grep) → write file content with Write/Edit,
+  and search for such strings with the Grep tool, not Bash.
+  (ref: .claude/hooks/pr-self-review-gate.mjs)
 
 - 2026-09-20 — Do NOT create a `CLAUDE.md` or `CLAUDE.local.md` here: the default
   `instructionFiles` mode (`claude-md-or-agents-md`) drops EVERY `AGENTS.md` the
@@ -104,30 +82,52 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
   legacy `projectInstructions: "both"` are both NO-OPs, though the setting is
   checked in anyway. (ref: .claude/settings.json:2)
 
-- 2026-09-19 — A plain SQL `SUM(cost_usd)` silently understates cost (it skips the
-  NULLs that `reviewer-core` treats as sticky "unknown") → never read null as 0;
-  see `server/specs/L01-run-cost.md` § Null semantics.
-
-- 2026-09-19 — A Zod schema in `*/src/vendor/shared/contracts/` does NOT imply a
-  route serves it: `AgentColumn.cost_usd`, `MultiAgentRun.total_cost_usd` and
-  `AgentStats` (contracts/observability.ts:46,82,108) plus `AgentPerfRow` /
-  `AgentPerf.summary` (contracts/productionize.ts:152,177) have no server
-  implementation at all — grepping their names hits only the contract file →
-  before building UI or estimating work against a shared contract, confirm a
-  registered route in `server/src/modules/` actually returns it.
-  (ref: server/src/vendor/shared/contracts/observability.ts:46)
-
 ## Codebase Patterns
 
-- 2026-09-22 — Per-run dollar cost is plumbed end-to-end: `agent_runs.cost_usd`
-  exists again (`0010_add_agent_run_cost.sql`, `schema/runs.ts:22`) and
-  `run-executor` persists `ReviewOutcome.costUsd` → read the stored value, never
-  re-derive cost. The NULL-semantics entry above still governs aggregation. The
-  column was absent between `d45ab0d` and the L01 lesson, so older code and
-  designs that assume it is missing are stale, not wrong.
-  (ref: server/src/modules/reviews/run-executor.ts:266,287)
-
 ## Tool & Library Notes
+
+- 2026-10-06 — Since L05's SR-1 test (a project-context doc containing `\u0000`),
+  `server-it.log` holds NUL bytes. So `scripts/checks.sh:90`'s summary `grep`
+  treats it as binary and prints "Binary file (standard input) matches"
+  instead of the `Tests … passed` line. Agents then reported "cannot find the
+  failing test". The FAIL/PASS result itself is still right → read the log
+  with `grep -a` (e.g. `grep -a -E '^ FAIL |^ +Tests '`); the lasting fix is
+  `grep -a` in checks.sh's summary line. (ref: scripts/checks.sh:90,
+  server/test/context-run.it.test.ts SR-1 case)
+
+- 2026-10-06 — `Artifact read` on a Claude Design UI prototype saves a bundler
+  page, not readable screens: its JSX is gzip+base64 inside
+  `<script type="__bundler/manifest">` (one ~1.8 MB line, too long for one
+  Read), so a grep for labels in it finds nothing → before handing it to
+  spec-creator, JSON-parse the manifest, base64-decode and gunzip each entry
+  whose `compressed` is true, and name each module by its leading
+  `/* screen_x.jsx — … */` comment; a doc-style artifact (field manual) is
+  plain HTML — strip tags instead. (ref: .claude/agents/README.md:61, L05
+  project-context spec)
+
+- 2026-09-20 → 2026-10-05 — `grep` at the Bash TOOL prompt is **ugrep** (a zsh
+  function from `~/.claude/shell-snapshots/`, not exported), and that shell is
+  **zsh**: a BRE backreference dies with a non-zero exit that looks like a
+  passing `||` check; a `$` inside a pattern is an anchor, so
+  `grep -n 'x "$tmp"'` finds nothing and a `grep … && sed -i …` chain skips the
+  edit silently; `"$t:a.ts"` (git's `<tree>:<path>`) expands zsh's `:a`
+  modifier. A `bash` script (`scripts/*.sh`, hooks) runs BSD `/usr/bin/grep`
+  instead → match positive forms, use `grep -F` for a literal `$`, write
+  `"${t}:a.ts"`, confirm an edit with `git diff`, and prove a script's patterns
+  by running the script under `bash` and `/bin/bash` 3.2.
+  (ref: .claude/skills/onion-architecture/SKILL.md §13, scripts/test-spec-lint.sh)
+- 2026-10-06 — The same zsh does NOT word-split an unquoted `$F`: L05's
+  test-writer passed several test files through `vitest run $F`, and vitest got
+  one bogus argument and printed nothing, which looks like "all green" → pass
+  explicit arguments or a zsh array (`${=F}` or `"${files[@]}"`), and treat a
+  vitest run that reports 0 files as a failure. (ref: .git/devdigest/runs/L05-project-context/t2.md)
+
+- 2026-10-01 — `git grep -E` here does NOT understand `\s`: the secret pattern
+  `(secret|key|token|password)\s*[:=]\s*['"][^'"]{8,}` matched 0 files with exit
+  1 — indistinguishable from a clean scan — while the same pattern with
+  `[[:space:]]` matched 9 → write POSIX classes (`[[:space:]]`, `[[:alnum:]]`)
+  in every `git grep -E` pattern, and prove a new pattern on a planted sample.
+  (ref: .claude/agents/security-reviewer.md Step 2)
 
 - 2026-10-02 — Local pnpm is 12.8.1 but CI pins pnpm 10 (`pnpm/action-setup@v4`
   `version: 10`), so a lock file a session creates for a NEW package is only safe
@@ -138,77 +138,23 @@ Anything scoped to a single package goes in that package's `INSIGHTS.md`.
   `allowBuilds: esbuild: true` in the package's own `pnpm-workspace.yaml`.
   (ref: mcp-server/pnpm-workspace.yaml, .github/workflows/mcp-server.yml)
 
-- 2026-10-01 — `git grep -E` here does NOT understand `\s`: the secret pattern
-  `(secret|key|token|password)\s*[:=]\s*['"][^'"]{8,}` matched 0 files with exit
-  1 — indistinguishable from a clean scan — while the same pattern with
-  `[[:space:]]` matched 9 → write POSIX classes (`[[:space:]]`, `[[:alnum:]]`)
-  in every `git grep -E` pattern, and prove a new pattern on a planted sample.
-  (ref: .claude/agents/security-reviewer.md Step 2)
-
-- 2026-09-20 — `grep` in this environment is **ugrep**, not GNU grep: a BRE
-  backreference (`grep -v "^src/modules/\([a-z-]*\)/[^:]*:.*modules/\1/"`) that
-  GNU grep accepts dies on `ugrep: error: ... invalid escape`, and it fails with a
-  non-zero EXIT rather than a wrong result, so inside a `||`-chained script it
-  looks like a passing check → avoid backreferences and match the positive form
-  directly. (ref: .claude/skills/onion-architecture/SKILL.md §13)
-
-- 2026-09-21 — A fresh headless session IS available in a VSCode-extension session
-  with no `claude` on `PATH`: `"$CLAUDE_CODE_EXECPATH" -p '…'` (2.1.281) → use it
-  for anything needing a FRESH session (skill triggering, instruction files,
-  agent loading and models). Recipes and traps: `.claude/agents/README.md` §
-  Changing an agent. It is never a trusted workspace (no frontmatter hooks).
-
-- 2026-09-20 — Authoring a skill: the `skill-creator` validator dies without
-  PyYAML, and `skills-lock.json` is not the skill inventory → `.claude/skills/README.md`
-  § Authoring a skill in this repo.
-
 ## Recurring Errors & Fixes
 
-- 2026-09-21 — A pattern shipped without being RUN, three times: the ugrep
-  backreference (2026-09-20), `frontend-ui-architecture` §15's `fetch(` matching
-  `refetch()`, and an e2e flow command form that does not exist (`e2e/INSIGHTS.md`
-  2026-09-22) → treat every §-numbered "Enforcement" section and new flow as
-  untested code: run it, and ship its EXPECTED output beside it (known benign
-  hits: `.claude/skills/pr-self-review/greps.md` § The patterns).
-- 2026-10-02 — A fourth time, in a PLAN: the L04 "Done when" check
-  `grep -rn "fetch(" mcp-server/src` "lists only http.ts" passed vacuously
-  because the code calls an injected `fetchImpl(` (0 hits = pass), and the core
-  check `grep "^import" | grep -v "'zod'"` could never be empty (intra-core
-  `import type`) → a plan's done-when grep needs one planted hit that must
-  appear and one that must not; prefer a `boundaries.test.ts` that parses
-  imports (mcp-server/test/boundaries.test.ts) over shell greps.
-- 2026-10-02 — A fifth time, through `git grep` itself: it skips UNTRACKED files,
-  so every done-when `git grep` over a brand-new folder (`server/src/modules/blast/`,
-  `OverviewTab/_components/BlastCard/`) returned 0 hits = "pass" before the first
-  commit, checking nothing (caught by plan-verifier) → for uncommitted work use
-  `grep -rn` or `git grep --untracked`. (ref: Blast radius plan WP4/WP6 done-when)
+- 2026-09-21 → 2026-10-02 — A check shipped without being RUN passes vacuously,
+  five times: the ugrep backreference; `frontend-ui-architecture` §15's `fetch(`
+  matching `refetch()`; an e2e flow command form that does not exist
+  (`e2e/INSIGHTS.md` 2026-09-22); the L04 plan's done-when
+  `grep -rn "fetch(" mcp-server/src` (the code calls an injected `fetchImpl(`,
+  0 hits = "pass") and `grep "^import" | grep -v "'zod'"` (never empty); and
+  done-when `git grep` over brand-new folders, which skips UNTRACKED files →
+  treat every "Enforcement" section, flow and done-when check as untested code:
+  give it one planted hit that must appear and one that must not, ship its
+  expected output beside it (`.claude/skills/pr-self-review/greps.md` § The
+  patterns), use `grep -rn` or `git grep --untracked` on uncommitted work, and
+  prefer a test that parses imports (`mcp-server/test/boundaries.test.ts`).
 
 ## Session Notes
 
-- 2026-10-02 — L04 Blast radius: `GET /pulls/:id/blast` + `/history` (module
-  `blast/`), repo-intel facade fixed (per-symbol cap, reasons, hop 2, no clone
-  reads), contracts in both vendored copies, Overview card, MCP `get_blast_radius`
-  (spec: server/specs/L04-blast-radius.md).
-- 2026-10-02 — L04 MCP server: new pnpm package `mcp-server/` (stdio, 5 tools,
-  thin HTTP client, onion by analogy routed via pr-self-review group A), verbatim
-  tool descriptions pinned by tests, SR-1 quoted locations (spec:
-  mcp-server/specs/L04-mcp-server.md).
-- 2026-10-02 — L03 Smart Diff: path-only `classifyFile` + `GET /pulls/:id/smart-diff`
-  (no migration, `SmartDiffRole` widened to 5 in both vendored copies), role
-  groups and inline findings on Files changed (spec: server/specs/L03-smart-diff.md).
-- 2026-10-01 — L03 Intent Layer: cheap-model PR intent (migration 0013 on
-  `pr_intent`, contracts in both vendored copies, `## Stated intent` review slot,
-  one live call at $0.00013) (spec: server/specs/L03-intent-layer.md).
-- 2026-09-24 — L02 subagents: test-writer, plan-verifier, architecture-reviewer,
-  doc-writer + `agent-scope-guard.sh`; tests moved from implementer to test-writer
-  (design and sources: .claude/agents/README.md).
-- 2026-09-23 — L02 conventions: cross-package feature (migration 0012 extending
-  `conventions`, contracts in both vendored copies, a `SKILLS LAB` nav section,
-  one live scan at $0.0029) (spec: server/specs/L02-conventions.md).
-- 2026-09-22 — L02 skills: cross-package feature (new `skill_types` table, contract
-  changes in both vendored copies, ordered skill bodies into the prompt).
-- 2026-09-19 → 21 — L01 run-cost (spec: server/specs/L01-run-cost.md), then the
-  `pr-self-review` and `frontend-ui-architecture` skills; each skill's own
-  `README.md` and `docs/pr-self-review.md` carry the design and contested calls.
+One line per session lives in [docs/lesson-log.md](docs/lesson-log.md).
 
 ## Open Questions

@@ -101,3 +101,8 @@ cd e2e && npm install && npm test
   because the server type-checks against `../reviewer-core/src`).
 - **`server/clones/**` is runtime data** (git-ignored) and never collected by
   any suite.
+- **A red-proof never stashes a new file.** `git stash push -- <path>` on an
+  UNTRACKED file is a silent no-op, so a "red-proof" that stashes a new
+  component and re-runs its test passes against the very code it meant to
+  remove (L04 BlastCard, 2026-10-02). Prove a test red in a throwaway worktree
+  (`.claude/agents/test-writer.md` Step 5) or on a mutated COPY of the file.

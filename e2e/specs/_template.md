@@ -1,6 +1,6 @@
 # <Feature name>
 
-**Status:** draft | in-progress | done
+**Status:** draft | approved | in-progress | done
 **Lesson / ticket:** <e.g. L01>
 
 ## Goal

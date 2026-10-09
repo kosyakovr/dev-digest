@@ -14,11 +14,23 @@ import { TraceSection } from "../TraceSection";
 import { ToolCallRow } from "../ToolCallRow";
 import { PromptBlock } from "../PromptBlock";
 import { FindingsSection } from "../FindingsSection";
+import { SpecsReadRow } from "../SpecsReadRow";
 import { Row, Stat } from "../atoms";
 
-export function TraceBody({ trace, findings }: { trace: RunTrace; findings: FindingRecord[] }) {
+export function TraceBody({
+  trace,
+  findings,
+  agentId,
+}: {
+  trace: RunTrace;
+  findings: FindingRecord[];
+  /** The run's agent, for the "Remove from agent" link; null when unknown. */
+  agentId?: string | null;
+}) {
   const t = useTranslations("runs");
   const stats = trace.stats;
+  const entries = trace.project_context ?? [];
+  const included = entries.filter((e) => e.status === "included" && e.text != null);
   return (
     <>
       <TraceSection icon="Settings" title={t("trace.configuration")}>
@@ -37,8 +49,10 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
             <span>{t("trace.config.items", { count: trace.memory_pulled.length })}</span>
           </Row>
           <Row label={t("trace.config.specsRead")}>
-            <div style={s.specsWrap}>
-              {trace.specs_read.length === 0 ? (
+            <div style={entries.length > 0 ? s.specsList : s.specsWrap}>
+              {entries.length > 0 ? (
+                entries.map((e) => <SpecsReadRow key={e.path} entry={e} agentId={agentId} />)
+              ) : trace.specs_read.length === 0 ? (
                 <span style={s.specsNone}>{t("trace.config.none")}</span>
               ) : (
                 trace.specs_read.map((sp, i) => (
@@ -85,8 +99,22 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
         {trace.prompt_assembly.repo_map != null && (
           <PromptBlock label={t("trace.prompt.repoMap")} text={trace.prompt_assembly.repo_map} color={PROMPT_COLORS.repoMap} />
         )}
-        {trace.prompt_assembly.specs != null && (
-          <PromptBlock label={t("trace.prompt.specs")} text={trace.prompt_assembly.specs} color={PROMPT_COLORS.specs} />
+        {included.length > 0 ? (
+          <>
+            <div style={s.specsHeading}>{t("trace.prompt.specs")}</div>
+            {included.map((e) => (
+              <PromptBlock
+                key={e.path}
+                label={`${e.path} · ${t("trace.config.specTokens", { count: e.tokens })}`}
+                text={e.text ?? ""}
+                color={PROMPT_COLORS.specs}
+              />
+            ))}
+          </>
+        ) : (
+          trace.prompt_assembly.specs != null && (
+            <PromptBlock label={t("trace.prompt.specs")} text={trace.prompt_assembly.specs} color={PROMPT_COLORS.specs} />
+          )
         )}
         {trace.prompt_assembly.callers != null && (
           <PromptBlock label={t("trace.prompt.callers")} text={trace.prompt_assembly.callers} color={PROMPT_COLORS.callers} />

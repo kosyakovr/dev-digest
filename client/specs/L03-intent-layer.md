@@ -4,7 +4,7 @@
 **Lesson / ticket:** L03
 
 One spec for the feature:
-[../../server/specs/L03-intent-layer.md](../../server/specs/L03-intent-layer.md)
+[../../specs/L03-intent-layer.md](../../specs/L03-intent-layer.md)
 (goal, non-goals, contract, routes, acceptance criteria). This file records only
 what is client-specific.
 

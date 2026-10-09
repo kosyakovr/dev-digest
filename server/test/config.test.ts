@@ -64,12 +64,42 @@ describe('loadConfig — DEVDIGEST_PROMPT_LOG', () => {
     expect(c.logLevel).toBe('info');
   });
 
-  it('absent flag and an explicit "default" both leave the log level alone', () => {
-    for (const env of [{ NODE_ENV: 'development' }, { NODE_ENV: 'development', DEVDIGEST_PROMPT_LOG: 'default' }]) {
+  it('absent flag and an explicit "default" both leave the log level alone', () => {    for (const env of [{ NODE_ENV: 'development' }, { NODE_ENV: 'development', DEVDIGEST_PROMPT_LOG: 'default' }]) {
       const c = loadConfig(env);
       expect(c.promptLog).toBe('default');
       expect(c.promptLogRequested).toBe('default');
       expect(c.logLevel).toBe('info');
     }
+  });
+});
+
+/**
+ * L05 — PROJECT_CONTEXT_FOLDERS (plan R-3, A-1, A-21): comma-separated, trimmed;
+ * a name that is empty or holds `/ * ? { } ,` or `..` is ignored (and reported);
+ * with no valid name left the defaults apply.
+ */
+describe('loadConfig — PROJECT_CONTEXT_FOLDERS', () => {
+  it('defaults to docs and specs, with nothing ignored', () => {
+    const c = loadConfig({ NODE_ENV: 'test' });
+    expect(c.contextFolders).toEqual(['docs', 'specs']);
+    expect(c.contextFoldersIgnored).toEqual([]);
+  });
+
+  it('trims each name', () => {
+    const c = loadConfig({ NODE_ENV: 'test', PROJECT_CONTEXT_FOLDERS: ' adr , rfc ' });
+    expect(c.contextFolders).toEqual(['adr', 'rfc']);
+    expect(c.contextFoldersIgnored).toEqual([]);
+  });
+
+  it('keeps the valid names and reports every invalid one, in order, the empty one included', () => {
+    const c = loadConfig({ NODE_ENV: 'test', PROJECT_CONTEXT_FOLDERS: 'docs,a/b,*,,x..y,{c}' });
+    expect(c.contextFolders).toEqual(['docs']);
+    expect(c.contextFoldersIgnored).toEqual(['a/b', '*', '', 'x..y', '{c}']);
+  });
+
+  it('falls back to the defaults when no name is valid', () => {
+    const c = loadConfig({ NODE_ENV: 'test', PROJECT_CONTEXT_FOLDERS: 'a/b,*' });
+    expect(c.contextFolders).toEqual(['docs', 'specs']);
+    expect(c.contextFoldersIgnored).toEqual(['a/b', '*']);
   });
 });

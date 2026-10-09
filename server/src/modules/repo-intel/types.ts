@@ -178,4 +178,33 @@ export interface RepoIntel {
     opts?: { exclude?: string[] },
   ): Promise<string[]>;
   getCriticalPaths(repoId: string): Promise<string[][]>;
+
+  // --- Onboarding tour: every index fact the tour skeleton needs ----------
+  /** One read-only bundle for the onboarding module. Never throws. */
+  getOnboardingFacts(repoId: string): Promise<OnboardingIndexFacts>;
+}
+
+/**
+ * Index facts for the onboarding tour. When `usable` is false every list is
+ * empty (the repo-intel degraded contract); the status/reason say why.
+ */
+export interface OnboardingIndexFacts {
+  /** 'none' = flag off or no repo_index_state row. */
+  status: IndexStatus | 'none';
+  /** Absent only for 'full'. */
+  reason?: DegradedReason;
+  /** status 'full' | 'partial'. */
+  usable: boolean;
+  /** '' when none. */
+  indexedSha: string;
+  filesIndexed: number;
+  /** Every file_rank row, rank DESC then path ASC. */
+  files: Array<{ path: string; rank: number }>;
+  /** First 10 of `files` that are not junk (tests, configs, …). */
+  readingPath: string[];
+  criticalPaths: string[][];
+  /** importer → imported. */
+  edges: Array<{ from: string; to: string }>;
+  /** file_facts.endpoints, files with at least one only. */
+  endpointsByFile: Record<string, string[]>;
 }

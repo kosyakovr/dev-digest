@@ -48,6 +48,7 @@ edit()  { printf '{"tool_name":"%s","tool_input":{"file_path":"%s","old_string":
 bash_() { printf '{"tool_name":"Bash","tool_input":{"command":"%s","description":"x"}}' "$1"; }
 tw()  { run_case test-writer "$@"; }
 dw()  { run_case doc-writer  "$@"; }
+sc()  { run_case spec-creator "$@"; }
 ro()  { run_case read-only   "$@"; }
 
 # ================================================================ test-writer
@@ -129,9 +130,14 @@ dw allow "TESTING.md"                  "$(edit Edit  "$ROOT/TESTING.md")"
 # ---- Edit / Write: ask
 dw ask   "root AGENTS.md"              "$(edit Edit  "$ROOT/AGENTS.md")"
 dw ask   "package AGENTS.md"           "$(edit Edit  "$ROOT/server/AGENTS.md")"
-dw ask   "spec"                        "$(edit Edit  "$ROOT/server/specs/L03-x.md")"
 dw ask   "reviewer prompt"             "$(edit Edit  "$ROOT/docs/agent-prompts/general-reviewer.md")"
 # ---- Edit / Write: denied
+dw deny  "package spec"                "$(edit Edit  "$ROOT/server/specs/L03-x.md")"
+dw deny  "cross-package spec"          "$(edit Edit  "$ROOT/specs/L05-x.md")"
+dw deny  "specs README"                "$(edit Edit  "$ROOT/specs/README.md")"
+dw deny  "relative spec"               "$(edit Write "specs/L05-x.md")"
+dw deny  "plan"                        "$(edit Write "$ROOT/docs/plans/L05-x.md")"
+dw deny  "plans README"                "$(edit Edit  "$ROOT/docs/plans/README.md")"
 dw deny  "root INSIGHTS.md"            "$(edit Edit  "$ROOT/INSIGHTS.md")"
 dw deny  "client INSIGHTS.md"          "$(edit Edit  "$ROOT/client/INSIGHTS.md")"
 dw deny  "agents README"               "$(edit Edit  "$ROOT/.claude/agents/README.md")"
@@ -147,6 +153,12 @@ dw allow "ls links"                    "$(bash_ 'ls server/docs docs 2>/dev/null
 dw deny  "redirect a doc"              "$(bash_ 'cat a.md > docs/b.md')"
 dw deny  "tee a doc"                   "$(bash_ 'echo x | tee docs/b.md')"
 dw deny  "git add"                     "$(bash_ 'git add docs/b.md')"
+dw deny  "record a review"             "$(bash_ 'scripts/review-record.sh add architecture-reviewer approve')"
+ro deny  "reviewer records itself"     "$(bash_ 'scripts/review-record.sh add security-reviewer approve')"
+ro deny  "record via bash"             "$(bash_ 'bash scripts/review-record.sh add architecture-reviewer comment')"
+tw deny  "test-writer records"         "$(bash_ 'scripts/review-record.sh add security-reviewer approve')"
+ro allow "reviewer reads coverage"     "$(bash_ 'scripts/review-record.sh covered security-reviewer abc123 server/src/app.ts')"
+ro allow "review-record help"          "$(bash_ 'scripts/review-record.sh --help')"
 dw deny  "mermaid-cli via npx"         "$(bash_ 'npx -y @mermaid-js/mermaid-cli -i a.mmd -o a.svg')"
 dw deny  "worktree add"                "$(bash_ "git worktree add --detach $RP HEAD")"
 # An apostrophe inside double quotes must not open a '...' span that hides the
@@ -156,6 +168,60 @@ APOS_SED=$(cat <<'JSON'
 JSON
 )
 dw deny  "apostrophe then sed -i"      "$APOS_SED"
+
+# ================================================================ spec-creator
+# ---- Edit / Write: allowed (new files - nothing exists under /repo)
+sc allow "new cross-package spec"      "$(edit Write "$ROOT/specs/L05-x.md" '**Status:** draft')"
+sc allow "new server spec"             "$(edit Write "$ROOT/server/specs/L05-x.md")"
+sc allow "new client spec"             "$(edit Write "$ROOT/client/specs/L05-x.md")"
+sc allow "new reviewer-core spec"      "$(edit Write "$ROOT/reviewer-core/specs/L05-x.md")"
+sc allow "new mcp-server spec"         "$(edit Write "$ROOT/mcp-server/specs/L05-x.md")"
+sc allow "relative path"               "$(edit Write "specs/L05-rel.md")"
+sc allow "template status line"        "$(edit Write "$ROOT/specs/L05-y.md" '**Status:** draft | approved | in-progress | done')"
+# ---- existing specs: a draft is editable, anything else asks
+SC_DIR=$(mktemp -d "${TMPDIR:-/tmp}/devdigest-spec-guard.XXXXXX")
+trap 'rm -rf "$SC_DIR"' EXIT
+mkdir -p "$SC_DIR/specs" "$SC_DIR/server/specs" "$SC_DIR/client/specs"
+printf '# A\n\n**Status:** draft\n' > "$SC_DIR/specs/L05-draft.md"
+printf '# B\n\n**Status:** done\n'  > "$SC_DIR/server/specs/L03-done.md"
+printf '# C\n\nno status line\n'    > "$SC_DIR/client/specs/L04-old.md"
+printf '# D\n\n**Status:** approved\n' > "$SC_DIR/specs/L05-approved.md"
+export CLAUDE_PROJECT_DIR="$SC_DIR"
+sc allow "edit own draft"              "$(edit Edit  "$SC_DIR/specs/L05-draft.md")"
+sc ask   "edit a done spec"            "$(edit Edit  "$SC_DIR/server/specs/L03-done.md")"
+sc ask   "overwrite a done spec"       "$(edit Write "$SC_DIR/server/specs/L03-done.md" '**Status:** draft')"
+sc ask   "edit a spec with no status"  "$(edit Edit  "$SC_DIR/client/specs/L04-old.md")"
+sc ask   "edit an approved spec"       "$(edit Edit  "$SC_DIR/specs/L05-approved.md")"
+export CLAUDE_PROJECT_DIR="$ROOT"
+# ---- Edit / Write: ask
+sc ask   "draft promoted to done"      "$(edit Edit  "$ROOT/specs/L05-x.md" '**Status:** done')"
+sc ask   "new spec in progress"        "$(edit Write "$ROOT/server/specs/L05-x.md" '**Status:** in-progress')"
+sc ask   "draft promoted to approved"  "$(edit Edit  "$ROOT/specs/L05-x.md" '**Status:** approved')"
+# ---- Edit / Write: denied
+sc deny  "specs README"                "$(edit Edit  "$ROOT/specs/README.md")"
+sc deny  "package template"            "$(edit Edit  "$ROOT/server/specs/_template.md")"
+sc deny  "spec subfolder"              "$(edit Write "$ROOT/specs/l05/x.md")"
+sc deny  "non-markdown in specs"       "$(edit Write "$ROOT/specs/x.json")"
+sc deny  "e2e flow"                    "$(edit Write "$ROOT/e2e/specs/09-x.flow.json")"
+sc deny  "e2e specs markdown"          "$(edit Write "$ROOT/e2e/specs/L05-x.md")"
+sc deny  "root docs"                   "$(edit Write "$ROOT/docs/x.md")"
+sc deny  "package docs"                "$(edit Write "$ROOT/server/docs/x.md")"
+sc deny  "root AGENTS.md"              "$(edit Edit  "$ROOT/AGENTS.md")"
+sc deny  "INSIGHTS.md"                 "$(edit Edit  "$ROOT/server/INSIGHTS.md")"
+sc deny  "agent definition"            "$(edit Edit  "$ROOT/.claude/agents/spec-creator.md")"
+sc deny  "source file"                 "$(edit Edit  "$ROOT/server/src/modules/blast/routes.ts")"
+sc deny  "migration"                   "$(edit Write "$ROOT/server/src/db/migrations/0014_x.sql")"
+sc deny  "vendored contract"           "$(edit Edit  "$ROOT/client/src/vendor/shared/contracts/a.ts")"
+sc deny  "dot-dot escape"              "$(edit Write "$ROOT/specs/../x.md")"
+sc deny  "outside the project"         "$(edit Write "/tmp/x/specs/L05-x.md")"
+# ---- Bash
+sc allow "history search"              "$(bash_ "git log --all --oneline -i --grep 'blast'")"
+sc allow "route grep"                  "$(bash_ 'grep -rnE "app\\.(get|post)\\(" server/src/modules/')"
+sc allow "branch name"                 "$(bash_ 'git branch --show-current')"
+sc deny  "redirect a spec"             "$(bash_ 'cat a.md > specs/L05-x.md')"
+sc deny  "sed -i a spec"               "$(bash_ "sed -i '' 's/a/b/' specs/L05-x.md")"
+sc deny  "curl"                        "$(bash_ 'curl https://www.figma.com/file/x')"
+sc deny  "git add"                     "$(bash_ 'git add specs/L05-x.md')"
 
 # ================================================================ read-only
 # ---- Edit / Write: everything denied

@@ -44,9 +44,15 @@ satisfies the gate.
    silently dropped: every path lands in `changed_files`, `excluded_files` or
    `unrouted_files`.
 3. **Deterministic checks** — free, always run: the routing drift guard, the
-   vendored-contract twin check, and the greps.
+   vendored-contract twin check, the spec lint (`scripts/spec-lint.sh` on a
+   changed spec, WARNING only) and the greps.
 4. **Review** — one sub-agent per active group, ≤3 concurrent, each told to *read*
    its skill files by path and given only its own slice of the diff at `-U10`.
+   Groups A, C and E are skipped (A shrinks to `fastify-best-practices` / `zod`)
+   when `scripts/review-record.sh covered` shows that `architecture-reviewer` or
+   `security-reviewer` already reviewed those files exactly as they are at
+   `HEAD`, from the branch's merge-base, under the same skills digest — the main
+   session records each reviewer's final round with `review-record.sh add`.
 5. **Ground** — findings whose file, line range or `+`-line evidence does not exist
    in the diff are dropped, mirroring `reviewer-core/src/grounding.ts`.
 6. **Verify** — only if a CRITICAL survives, one adversarial agent tries to break

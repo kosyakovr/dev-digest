@@ -40,5 +40,14 @@ describe('assemblePrompt is byte-identical to the pre-change snapshot (AC-8)', (
       ]);
       expect(out.assembly).toEqual({ ...c.assembly, system, user: c.user });
     });
+
+    // L05 AC-41: an empty `specs` is the same as an absent one — no section, same bytes.
+    it(`${c.name}: specs: [] leaves the prompt byte-identical`, () => {
+      const { specs: _drop, ...base } = c.input;
+      const out = assemblePrompt({ ...base, specs: [] });
+      expect(out).toEqual(assemblePrompt(base));
+      expect(out.messages[1]!.content).not.toContain('## Project context');
+      if (!c.input.specs?.length) expect(out.messages[1]!.content).toBe(c.user);
+    });
   }
 });

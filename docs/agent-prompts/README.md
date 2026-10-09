@@ -42,7 +42,7 @@ delimiter-wrapped (`assemblePrompt` in `reviewer-core/src/prompt.ts`):
 ## Skills / rules        (linked skill bodies)
 ## Relevant memory       (curated memory items)
 ## Repo skeleton         (untrusted, repo-derived)
-## Project context       (untrusted spec chunks)
+## Project context       (untrusted; one <untrusted source="<repo path>"> block per document attached to the agent or its skills, in the Context-tab order; omitted when none)
 ## Callers of changed symbols  (untrusted, repo-derived)
 ## Diff to review        (untrusted)
 ```
@@ -65,7 +65,7 @@ section names, sources, trust, chars and estimated tokens, provider/model and a
 | `pr_description` | `pr.body` | untrusted |
 | `intent` | `intent.derived` | untrusted |
 | `skills` / `memory` | `agent.skills` / `memory` | trusted |
-| `repo_map` / `specs` / `callers` | `repo-intel.map` / `specs` / `repo-intel.callers` | untrusted |
+| `repo_map` / `specs` / `callers` | `repo-intel.map` / `project-context` (attached docs) / `repo-intel.callers` | untrusted |
 | `diff` | `pr.diff` | untrusted |
 
 `DEVDIGEST_PROMPT_LOG=verbose` (explicit development/test `NODE_ENV` only) adds a per-chunk `prompt: detail` debug line with hashes and a masked system-prompt preview.
@@ -73,7 +73,7 @@ section names, sources, trust, chars and estimated tokens, provider/model and a
 ## Stated intent — context, never a filter
 
 The `## Stated intent` section is the server's derived paraphrase of the PR's
-title, description, ticket and spec (spec: `server/specs/L03-intent-layer.md`).
+title, description, ticket and spec (spec: `specs/L03-intent-layer.md`).
 It carries a confidence (`high`/`medium`/`low`, computed in code) and a trusted
 caution line after it. Invariants, enforced by the prompt and by the absence of
 any code path that reads the intent after the model call:

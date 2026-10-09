@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Review } from '@devdigest/shared';
 import {
   MockLLMProvider,
@@ -7,6 +10,7 @@ import {
   MockCodeIndex,
   MockEmbedder,
 } from '../src/adapters/mocks.js';
+import { SimpleGitClient } from '../src/adapters/git/simple-git.js';
 import { assemblePrompt } from '../src/platform/prompt.js';
 import { groundFindings } from '../src/platform/grounding.js';
 import { estimateCost } from '../src/adapters/llm/pricing.js';
@@ -37,6 +41,49 @@ describe('mock adapters (no network)', () => {
     expect((await ci.symbols({ owner: 'a', name: 'b' }))[0]!.name).toBe('rateLimit');
     const emb = await new MockEmbedder().embed(['a', 'b']);
     expect(emb[0]!).toHaveLength(1536);
+  });
+});
+
+describe('GitClient.listFiles (L05)', () => {
+  const repo = { owner: 'acme', name: 'app' };
+
+  it('MockGitClient lists only the blobs recorded at the asked ref, without the ref prefix', async () => {
+    const git = new MockGitClient({
+      head: 'a1b2c3d4',
+      filesAtRef: { 'a1b2c3d4:docs/a.md': 'a', 'ffff0000:docs/b.md': 'b' },
+    });
+    expect(await git.listFiles(repo, 'a1b2c3d4')).toEqual(['docs/a.md']);
+    expect(await git.listFiles(repo, 'ffff0000')).toEqual(['docs/b.md']);
+    expect(await git.listFiles(repo, 'deadbeef')).toEqual([]);
+  });
+
+  it('SimpleGitClient refuses a non-hex ref (no option or branch name reaches git)', async () => {
+    const git = new SimpleGitClient('/nonexistent-clone-dir');
+    await expect(git.listFiles(repo, 'HEAD')).rejects.toThrow(/invalid ref/i);
+    await expect(git.listFiles(repo, '--output=/tmp/x')).rejects.toThrow(/invalid ref/i);
+  });
+
+  it('SimpleGitClient answers 422 "not cloned yet" when the clone directory is missing, not a raw simple-git error', async () => {
+    // A repo cloned under another DEVDIGEST_CLONE_DIR has a clone_path but no directory here.
+    const git = new SimpleGitClient('/nonexistent-clone-dir');
+    const missing = { code: 'validation_error', statusCode: 422, message: 'This repository has not been cloned yet.' };
+    await expect(git.currentHead(repo)).rejects.toMatchObject(missing);
+    await expect(git.listFiles(repo, 'a1b2c3d4')).rejects.toMatchObject(missing);
+  });
+
+  it('SimpleGitClient also answers 422 for a clone directory without .git (a clone cut off mid-write)', async () => {
+    // Without the .git check, git would climb to a parent repository (./clones sits inside this checkout).
+    const root = await mkdtemp(join(tmpdir(), 'devdigest-git-'));
+    try {
+      await mkdir(join(root, repo.owner, repo.name), { recursive: true });
+      const git = new SimpleGitClient(root);
+      await expect(git.currentHead(repo)).rejects.toMatchObject({
+        statusCode: 422,
+        message: 'This repository has not been cloned yet.',
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
 

@@ -4,7 +4,7 @@
 **Lesson / ticket:** L02
 
 The feature spans `server/` and `client/`, so it keeps **one** spec:
-[../../server/specs/L02-skills.md](../../server/specs/L02-skills.md) — goal,
+[../../specs/L02-skills.md](../../specs/L02-skills.md) — goal,
 non-goals, routes, contracts and acceptance criteria all live there.
 
 This file records only what is client-specific.

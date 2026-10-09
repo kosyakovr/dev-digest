@@ -28,6 +28,9 @@ import { ConfigError } from './errors.js';
 import { AgentsRepository } from '../modules/agents/repository.js';
 import { SkillsRepository } from '../modules/skills/repository.js';
 import { ReviewRepository } from '../modules/reviews/repository.js';
+import { RepoRepository } from '../modules/repos/repository.js';
+import type { ProjectContextFacade } from '../modules/context/types.js';
+import { ContextService } from '../modules/context/service.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import type { PrIntentFacade } from '../modules/intent/types.js';
 import { resolveFeatureModel, getFeatureModelOverride } from '../modules/settings/feature-models.js';
@@ -59,6 +62,8 @@ export interface ContainerOverrides {
   tokenizer?: Tokenizer;
   /** PR intent facade (L03) — tests inject a stub so reviews make no intent LLM/GitHub calls. */
   intent?: PrIntentFacade;
+  /** Project-context facade (L05) — tests inject a stub that reads no git objects. */
+  projectContext?: ProjectContextFacade;
 }
 
 export class Container {
@@ -86,6 +91,8 @@ export class Container {
   private _tokenizer?: Tokenizer;
   private _priceBook?: PriceBook;
   private _intent?: PrIntentFacade;
+  private _reposRepo?: RepoRepository;
+  private _projectContext?: ProjectContextFacade;
 
   constructor(config: AppConfig, db: Db, private overrides: ContainerOverrides = {}) {
     this.config = config;
@@ -108,6 +115,17 @@ export class Container {
 
   get skillsRepo(): SkillsRepository {
     return (this._skillsRepo ??= new SkillsRepository(this.db));
+  }
+
+  get reposRepo(): RepoRepository {
+    return (this._reposRepo ??= new RepoRepository(this.db));
+  }
+
+  /** Project-context facade (L05): the docs attached to an agent and its skills, read per run. */
+  get projectContext(): ProjectContextFacade {
+    if (this.overrides.projectContext) return this.overrides.projectContext;
+    this._projectContext ??= new ContextService(this);
+    return this._projectContext;
   }
 
   get reviewRepo(): ReviewRepository {

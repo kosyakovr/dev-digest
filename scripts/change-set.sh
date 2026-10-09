@@ -35,7 +35,10 @@ snapshot_tree() { # prints the tree hash of the working tree (untracked included
   local gitdir tmp tree
   gitdir=$(git rev-parse --git-dir) || return 2
   tmp=$(mktemp "${TMPDIR:-/tmp}/change-set-index.XXXXXX") || return 2
-  if [ -f "$gitdir/index" ]; then cp "$gitdir/index" "$tmp" || { rm -f "$tmp"; return 2; }; else rm -f "$tmp"; fi
+  # The copy is backdated so git treats every entry as racily clean and compares
+  # content: with a fresh mtime, a file rewritten in the same second as its last
+  # `git add`, at the same size, kept its OLD blob (5 of 100 snapshots, 2026-10-05).
+  if [ -f "$gitdir/index" ]; then cp "$gitdir/index" "$tmp" && touch -t 197001020000 "$tmp" || { rm -f "$tmp"; return 2; }; else rm -f "$tmp"; fi
   tree=$(GIT_INDEX_FILE="$tmp" git add -A >/dev/null 2>&1 && GIT_INDEX_FILE="$tmp" git write-tree)
   local rc=$?
   rm -f "$tmp" "$tmp.lock"

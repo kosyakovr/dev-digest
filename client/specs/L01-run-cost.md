@@ -4,7 +4,7 @@
 **Lesson / ticket:** L01
 
 Cross-package feature — the canonical spec lives in
-[`server/specs/L01-run-cost.md`](../../server/specs/L01-run-cost.md).
+[`specs/L01-run-cost.md`](../../specs/L01-run-cost.md).
 
 Client-side surfaces it covers — see the spec's **UI component map** for the
 agreed, fixed placement. No new React components; three insertions plus one

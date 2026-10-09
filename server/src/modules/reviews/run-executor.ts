@@ -83,6 +83,9 @@ export class ReviewRunExecutor {
     const failAll = async (msg: string) => {
       for (const { runId, agent } of jobs) {
         await this.repo
+          .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed'))
+          .catch(() => undefined);
+        await this.repo
           .completeAgentRun(runId, {
             status: 'failed',
             durationMs: 0,
@@ -94,9 +97,6 @@ export class ReviewRunExecutor {
             grounding: '0/0 passed',
             error: msg,
           })
-          .catch(() => undefined);
-        await this.repo
-          .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed'))
           .catch(() => undefined);
         this.container.runBus.complete(runId);
       }
@@ -230,6 +230,29 @@ export class ReviewRunExecutor {
         runLog.info(`Injecting ${skillBodies.length} skill(s) into the prompt`);
       }
 
+      // L05 — project context: the docs attached to the agent and to its skills,
+      // read from the clone's HEAD. Never throws; a doc that cannot be read is a
+      // `skipped` entry and the run goes on. No extra LLM call.
+      const { docs: contextDocs, entries: contextEntries } =
+        await this.container.projectContext.resolveForRun({
+          workspaceId,
+          agentId: agent.id,
+          repo: { owner: repo.owner, name: repo.name },
+          cloned: repo.clonePath != null,
+        });
+      if (contextEntries.length > 0) {
+        const included = contextEntries.filter((e) => e.status === 'included');
+        const tokens = included.reduce((n, e) => n + e.tokens, 0);
+        runLog.info(
+          `Project context: ${included.length} document(s) included (≈ ${tokens} tokens), ${contextEntries.length - included.length} skipped`,
+        );
+        for (const e of contextEntries) {
+          if (e.status === 'skipped') {
+            runLog.info(`Project context: skipped ${e.path} — ${e.reason ?? 'unreadable'}`);
+          }
+        }
+      }
+
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
       // the CI runner). The service owns only I/O: repo-intel context resolution
@@ -245,6 +268,9 @@ export class ReviewRunExecutor {
         // Omit-when-empty, like callers/repoMap below: an agent with no enabled
         // skills must produce a byte-identical prompt to the pre-L02 baseline.
         ...(skillBodies.length > 0 ? { skills: skillBodies } : {}),
+        // L05 — attached project docs (path-labelled, untrusted); omitted when
+        // none were included so the prompt stays byte-identical (AC-41).
+        ...(contextDocs.length > 0 ? { specs: contextDocs } : {}),
         // T1.3 — pass the callers digest only when we built one. assemblePrompt
         // omits the section when this is empty/undefined.
         ...(callersDigest ? { callers: callersDigest } : {}),
@@ -313,19 +339,6 @@ export class ReviewRunExecutor {
       const blockers = countBlockers(keptFindings, agent.ciFailOn);
 
       // ---- Observability: agent_runs + ONE run_traces document --------------
-      await this.repo.completeAgentRun(runId, {
-        status: 'done',
-        durationMs,
-        tokensIn,
-        tokensOut,
-        costUsd,
-        findingsCount: findingRows.length,
-        grounding,
-        score: outcome.review.score,
-        blockers,
-        error: null,
-      });
-
       const trace: RunTrace = {
         config: {
           agent: agent.name,
@@ -352,13 +365,34 @@ export class ReviewRunExecutor {
         })),
         raw_output: outcome.raw,
         memory_pulled: [],
-        specs_read: [],
+        specs_read: contextDocs.map((d) => d.source),
+        ...(contextEntries.length > 0 ? { project_context: contextEntries } : {}),
         // Persisted log = the run's FULL event buffer (incl. shared pre-work:
         // diff load + intent), not just events recorded inside this method.
         log: runLog.logFor(runId),
       };
-      runLog.info('Run complete; trace persisted');
-      await this.repo.saveRunTrace(runId, trace);
+      runLog.info('Run complete; saving trace');
+      // The trace is written BEFORE the terminal status: a client that sees the
+      // run as terminal must never get a 404 from GET /runs/:id/trace (AM-2).
+      // A save failure is NOT swallowed: it reaches the catch below, which saves
+      // a fallback trace and ends the run as `failed` with the error text.
+      try {
+        await this.repo.saveRunTrace(runId, trace);
+      } catch (saveErr) {
+        throw new Error(`Run trace could not be saved: ${(saveErr as Error).message}`);
+      }
+      await this.repo.completeAgentRun(runId, {
+        status: 'done',
+        durationMs,
+        tokensIn,
+        tokensOut,
+        costUsd,
+        findingsCount: findingRows.length,
+        grounding,
+        score: outcome.review.score,
+        blockers,
+        error: null,
+      });
       this.container.runBus.complete(runId);
 
       return { review, findings: findingRows, grounding, raw: outcome.review };
@@ -369,6 +403,9 @@ export class ReviewRunExecutor {
       const status = cancelled ? 'cancelled' : 'failed';
       const msg = cancelled ? 'Cancelled by user' : (err as Error).message;
       runLog.error(cancelled ? 'Run cancelled by user' : `Run failed: ${msg}`);
+      await this.repo
+        .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed', Date.now() - start))
+        .catch(() => undefined);
       await this.repo
         .completeAgentRun(runId, {
           status,
@@ -382,9 +419,6 @@ export class ReviewRunExecutor {
           grounding: '0/0 passed',
           error: msg,
         })
-        .catch(() => undefined);
-      await this.repo
-        .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed', Date.now() - start))
         .catch(() => undefined);
       this.container.runBus.complete(runId);
       throw err;

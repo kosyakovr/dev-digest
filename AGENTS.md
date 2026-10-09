@@ -34,13 +34,23 @@ require it, stop and ask the user first.
 - Adding or changing tests, CI → [TESTING.md](TESTING.md)
 - Editing reviewer prompts → [docs/agent-prompts/README.md](docs/agent-prompts/README.md)
 - The pre-PR gate (what blocks a push, how to waive) → [docs/pr-self-review.md](docs/pr-self-review.md)
-- Subagents (researcher → planner → implementer → test-writer → plan-verifier / architecture-reviewer → doc-writer; the agent guards) → [.claude/agents/README.md](.claude/agents/README.md)
+- Subagents (researcher → spec-creator → implementation-planner → implementer → test-writer → plan-verifier / architecture-reviewer → doc-writer; the agent guards) → [.claude/agents/README.md](.claude/agents/README.md)
+- Cross-package feature specs → [specs/](specs/README.md)
+- The vendored `@devdigest/shared` contracts (twins, unserved schemas, null cost) → [docs/shared-contracts.md](docs/shared-contracts.md)
+- How Project Context works (attached docs → prompt → trace) → [server/docs/project-context.md](server/docs/project-context.md)
+- Implementation Plans (one per spec, same file name; status and who approves) → [docs/plans/](docs/plans/README.md)
+- Running an approved spec + plan through the agents (T1 → implementer → T2 → reviewers → fix rounds → docs) → `/sdd-run` ([.claude/skills/sdd-run/SKILL.md](.claude/skills/sdd-run/SKILL.md))
+- Before designing a lesson feature (the author's reverted solution in `git log --all`), and what each lesson built → [docs/lesson-log.md](docs/lesson-log.md)
 - Per-package: `<pkg>/README.md`, `<pkg>/docs/`, `<pkg>/specs/`, `<pkg>/INSIGHTS.md`
 
 ## Workflow
 1. Before the first edit in a package, read `<pkg>/INSIGHTS.md`. Treat it as
    high-confidence guidance unless told otherwise.
-2. New feature → write/find its spec in `<pkg>/specs/` first.
+2. New feature → write/find its spec first: in `<pkg>/specs/` if it touches one
+   package, in `specs/` if it touches several (`spec-creator` drafts it
+   from [specs/_template.md](specs/_template.md); save design links
+   to files for it first). A spec and its plan (`docs/plans/`) become
+   `approved` only on the user's direct word — the main session sets it.
 3. Learned something non-obvious → capture it with the `engineering-insights`
    skill, which routes it to the right `INSIGHTS.md`. Do not skip this at the end
    of a task that involved debugging, a failing test or a correction — but write

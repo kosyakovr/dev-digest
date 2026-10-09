@@ -4,8 +4,10 @@
 #
 # It turns the "do not touch" rules of the root AGENTS.md into a mechanical check:
 #   deny  — migrations, lock files, dependency changes, git history/state changes,
-#           anything under .claude/ (its own guard rails), CLAUDE.md, and test
-#           files (the test-writer agent owns them)
+#           anything under .claude/ (its own guard rails), CLAUDE.md, test files
+#           (the test-writer agent owns them), specs and plans (its input, which
+#           the plan-verifier grades it against), INSIGHTS.md and .git/ - by
+#           Edit/Write and by a shell write (redirect, heredoc, rm, mv, sed -i, ...)
 #   ask   — DB schema and package.json (allowed only with the user's say-so)
 #   allow — everything else: prints nothing, exits 0, normal permission flow.
 #
@@ -94,6 +96,14 @@ case "$TOOL" in
         decide deny "the implementer may not change .claude/ (its own guard rails, agents, skills, settings). Report it as an out-of-scope observation." ;;
       *CLAUDE.md|*CLAUDE.local.md)
         decide deny "a CLAUDE.md silently disables every AGENTS.md in this repo (root INSIGHTS.md, 2026-09-20)." ;;
+      */.git/*|.git/*)
+        decide deny "git internals (incl. the review records under .git/devdigest/) are not the implementer's to write." ;;
+      *INSIGHTS.md)
+        decide deny "INSIGHTS.md is written by the engineering-insights skill in the main session - report Insight candidates instead." ;;
+      */docs/plans/*|docs/plans/*)
+        decide deny "the plan is what plan-verifier grades you against - it changes only through the main session. Report a needed change under Deviations from plan." ;;
+      */specs/*.md|specs/*.md|*/server/specs/*|server/specs/*|*/client/specs/*|client/specs/*|*/reviewer-core/specs/*|reviewer-core/specs/*|*/mcp-server/specs/*|mcp-server/specs/*)
+        decide deny "specs are input - spec-creator writes them and the user approves them. A spec the code cannot follow is a deviation to report, not to fix." ;;
       *.test.ts|*.test.tsx|*/server/test/*|server/test/*|*/reviewer-core/test/*|reviewer-core/test/*|*/mcp-server/test/*|mcp-server/test/*|*/client/src/test/*|client/src/test/*|*/e2e/specs/*.flow.json|e2e/specs/*.flow.json)
         decide deny "tests are written by the test-writer agent, not the implementer. List what needs a test (and any existing test your change is meant to break) under Handoff to test-writer." ;;
       */server/src/db/schema.ts|*/server/src/db/schema/*)
@@ -117,6 +127,9 @@ case "$TOOL" in
     if matches "$CMD" "${B}git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+(commit|push|reset|rebase|merge|pull|clean|stash|checkout|restore|switch|cherry-pick|revert|am|apply|tag|branch[[:space:]]+-[dDmM])([[:space:]]|$)"; then
       decide deny "git history and working-tree state are not the implementer's to change (no commit, push, reset, checkout, stash...). Leave the diff uncommitted and report."
     fi
+    if matches "$BARE" "review-record\.sh[[:space:]]+add([[:space:]]|$)"; then
+      decide deny "only the main session records a finished review - it lets /pr-self-review skip a group."
+    fi
     if matches "$CMD" "${B}gh[[:space:]]+(pr|release|repo)[[:space:]]"; then
       decide deny "the implementer does not open PRs or touch GitHub."
     fi
@@ -138,6 +151,15 @@ case "$TOOL" in
        || { matches "$CMD" "$P" \
             && matches "$CMD" "${B}(rm|mv|cp|tee|touch|truncate|ln)[[:space:]]|sed[[:space:]]+(-[a-zA-Z]*i|--in-place)|perl[[:space:]]+-[a-zA-Z]*i"; }; then
       decide deny "Bash write to a protected path (migrations, lock files or .claude/)."
+    fi
+    # Paths that are only Edit/Write-protected above would otherwise fall to a
+    # heredoc (`cat > server/test/x.test.ts <<EOF`) - retro 2026-10-02 counted 32
+    # shell writes that bypassed this guard. Write files with Edit/Write.
+    O='(\.test\.tsx?|(server|reviewer-core|mcp-server)/test/|client/src/test/|specs/|docs/plans/|INSIGHTS\.md|\.git/)'
+    if matches "$CMD" ">>?[[:space:]]*[^[:space:]&|;]*$O" \
+       || { matches "$CMD" "$O" \
+            && matches "$CMD" "${B}(rm|mv|cp|tee|touch|truncate|ln)[[:space:]]|sed[[:space:]]+(-[a-zA-Z]*i|--in-place)|perl[[:space:]]+-[a-zA-Z]*i"; }; then
+      decide deny "Bash write to a test, spec, plan, INSIGHTS.md or .git/ path - tests go to test-writer, specs and plans are input, insights are candidates. Write your own files with Edit/Write."
     fi
     exit 0 ;;
 esac

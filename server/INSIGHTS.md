@@ -16,6 +16,33 @@ Non-obvious findings a future session needs. **Read this before working here.**
 
 ## What Works
 
+- 2026-10-09 — Testing an in-process "one at a time" guard (409) with a gated
+  stub LLM: if the guard is missing, the second request waits on the same
+  gate and the `.it` file hangs for the full 120 s deadline → race the second
+  request against a short timeout and `release()` the gate in `finally`
+  before asserting, so a missing guard fails in ~3 s. (ref:
+  server/test/onboarding.it.test.ts AC-20 case)
+
+- 2026-10-06 — A delete-then-insert concurrency race (two overlapping
+  `PUT /agents/:id/context` → 23505 → 500) became deterministic in an
+  `.it.test` with no timing. Install an AFTER INSERT statement trigger that
+  calls `pg_advisory_xact_lock(K)` while a second connection holds
+  `pg_advisory_lock(K)`, so request A parks mid-transaction. Poll
+  `pg_stat_activity` for `wait_event = 'advisory'`, fire request B, poll for a
+  second `wait_event_type = 'Lock'` backend, then unlock → it reproduces 3/3,
+  goes green with any serialising fix (`FOR NO KEY UPDATE` on the parent row),
+  and red again when the lock is removed. (ref: server/test/context-concurrency.it.test.ts)
+
+- 2026-10-06 — A write-ORDER race (a run marked `done` before its trace row was
+  written, which caused intermittent `GET /runs/:id/trace` 404s) became
+  deterministic in an `.it.test` with a Postgres trigger. On `agent_runs`, when
+  the status first turns terminal, the trigger records into a probe table
+  whether a `run_traces` row already exists, and the test asserts
+  `trace_existed: true`. It needs no timing, no repository spy, and holds
+  however the fix is built → use a trigger plus probe table for any "A must be
+  written before B" rule. Note: a transaction that writes B first and A second
+  still fails it. (ref: server/test/run-trace-order.it.test.ts)
+
 - 2026-09-22 — A "new" lesson feature here is usually mostly PRE-BUILT, and the
   starter gives no hint of it. L02 skills: the three tables were already in
   `0000_init.sql`, the contracts in `contracts/knowledge.ts`,
@@ -34,6 +61,32 @@ Non-obvious findings a future session needs. **Read this before working here.**
   src/adapters/mocks.ts:49)
 
 ## What Doesn't Work
+
+- 2026-10-09 — Where a clone lives has TWO sources of truth: `SimpleGitClient`
+  rebuilds the path from the CURRENT `DEVDIGEST_CLONE_DIR` + owner/name
+  (`adapters/git/simple-git.ts:40`) and ignores `repos.clone_path`, while
+  repo-intel's indexer reads `repo.clonePath` directly
+  (`repo-intel/pipeline/incremental.ts:154,218`). Here `server/.env` sets
+  `./clones`, but `kosyakovr/ai-agentic-sandbox-1` was cloned under the default
+  `~/.devdigest/workspace`, so `/repos/:id/context` 500'd with "Cannot use
+  simple-git on a directory that does not exist" (now a 422 "not cloned yet"),
+  and `kosyakovr/dev-digest` has a copy in BOTH dirs that can drift → after
+  changing `DEVDIGEST_CLONE_DIR`, move each clone under the new dir and update
+  `repos.clone_path`; compare the two with
+  `select full_name, clone_path from repos` when git and index disagree.
+- 2026-10-09 (correction to the entry above) — the path join is
+  `clonePathFor` at `simple-git.ts:41-43`, not `:40`; the guard in `git()`
+  (`:45-55`) now requires `<dir>/.git`, because a clone directory cut off
+  mid-write made git climb to a parent repository (with `./clones` that is
+  this checkout). (ref: server/src/adapters/git/simple-git.ts:41-55,
+  server/src/modules/repo-intel/pipeline/incremental.ts:154,218, 5ab26fa)
+
+- 2026-10-09 — Making a vendored contract field REQUIRED broke
+  `server/test/contracts.test.ts` › "Conformance / Onboarding / …", whose
+  fixture pinned the old shape; neither the plan nor the route tests saw it →
+  before making a `@devdigest/shared` field required, grep `server/test` and
+  `client/src` tests for the schema name and list each hit as an intended
+  break for test-writer. (ref: server/test/contracts.test.ts, L05 tour R-21)
 
 - 2026-10-02 — Blast radius is honestly EMPTY on an Angular/DI frontend, and it
   looks like a bug: on `kosyakovr/ai-agentic-sandbox-1` the repo-intel index
@@ -79,6 +132,16 @@ Non-obvious findings a future session needs. **Read this before working here.**
 ## Codebase Patterns
 
 ## Tool & Library Notes
+
+- 2026-10-06 — Postgres `jsonb` rejects a NUL (`\u0000`) with error 22P05,
+  while `text` columns and git blobs accept it. So repo-derived text (a project
+  context doc, a diff) that reaches a jsonb column such as `run_traces.trace`
+  makes the insert throw. Swallowing that error once hid a run's whole trace
+  (L05 SR-1) → let jsonb writes of repo text fail loudly. The same NUL is also
+  the cheapest deterministic way to make such a write fail in an `.it.test`:
+  serve `'a\u0000b'` from `MockGitClient` `filesAtRef`.
+  (ref: server/src/modules/reviews/run-executor.ts success-path saveRunTrace,
+  server/test/context-run.it.test.ts SR-1 case)
 
 - 2026-10-02 — A route-level `config.rateLimit` cannot be asserted under the
   default test config: `@fastify/rate-limit` is registered only when

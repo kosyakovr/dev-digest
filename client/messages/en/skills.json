@@ -108,6 +108,7 @@
   "editor": {
     "tabs": {
       "config": "Config",
+      "context": "Context",
       "preview": "Preview",
       "versions": "Versions"
     }

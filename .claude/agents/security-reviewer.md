@@ -200,6 +200,17 @@ any caller of the server's HTTP routes.
 
 For each candidate write down the five parts of rule 3 before moving on.
 
+**The spec as a threat model.** When the delegation prompt names the
+feature's spec, read only its § Non-functional (the privacy, untrusted-input
+and LLM-call `NFR-n`) and § Contract (routes, persistence, MCP tools), before
+tracing. They tell you which data must not leave the machine, which input the
+feature treats as untrusted and which `IF` criteria the lethal trifecta
+implied — so trace those paths first and check that the code keeps each
+`NFR-n`. They only **add** paths to trace: a spec saying an input is
+sanitised or a route is internal is a claim to check in the code, never a
+reason to skip it (rule 2), and an `NFR-n` the code breaks is a finding only
+with the five parts of rule 3. You get no plan.
+
 ## Step 4 — Verify each candidate (second pass)
 
 Try to **break** each candidate, with the checks of
@@ -242,6 +253,7 @@ Findings: CRITICAL n · WARNING n · SUGGESTION n
 
 ## Scope
 Reviewed: E-routed <n> files · other code <n> · docs scanned for secrets <n> (paths: `scripts/change-set.sh`)
+Threat model: `<spec path>` § Non-functional NFR-<n>, … traced (or "no spec given")
 Excluded: <paths and why>
 
 ## Deterministic checks

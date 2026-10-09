@@ -1,4 +1,16 @@
-import { pgTable, uuid, text, integer, boolean, jsonb, primaryKey, unique } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  text,
+  integer,
+  boolean,
+  jsonb,
+  primaryKey,
+  unique,
+  check,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
+import { isNotNull, sql } from 'drizzle-orm';
 import { now } from './_shared';
 import { workspaces } from './core';
 
@@ -59,4 +71,29 @@ export const skillVersions = pgTable(
     createdAt: now(),
   },
   (t) => ({ pk: primaryKey({ columns: [t.skillId, t.version] }) }),
+);
+
+/**
+ * Project-context docs attached to a skill (L05): paths only, `position` null =
+ * no manual order; same shape and constraints as `agent_context_docs`.
+ */
+export const skillContextDocs = pgTable(
+  'skill_context_docs',
+  {
+    skillId: uuid('skill_id')
+      .notNull()
+      .references(() => skills.id, { onDelete: 'cascade' }),
+    path: text('path').notNull(),
+    position: integer('position'),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.skillId, t.path] }),
+    positionCheck: check(
+      'skill_context_docs_position_check',
+      sql`${t.position} IS NULL OR ${t.position} >= 0`,
+    ),
+    positionUq: uniqueIndex('skill_context_docs_skill_position_uq')
+      .on(t.skillId, t.position)
+      .where(isNotNull(t.position)),
+  }),
 );

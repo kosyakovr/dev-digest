@@ -92,6 +92,10 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     else app.log.warn(`prompt logging: verbose ignored (${config.promptLogIgnoredReason ?? 'not local'})`);
   }
 
+  for (const name of config.contextFoldersIgnored) {
+    app.log.warn(`PROJECT_CONTEXT_FOLDERS: ignoring invalid folder name ${JSON.stringify(name)}`);
+  }
+
   // Use zod schemas directly for request validation + response serialization.
   // Routes opt in per-module via `app.withTypeProvider<ZodTypeProvider>()`.
   app.setValidatorCompiler(validatorCompiler);

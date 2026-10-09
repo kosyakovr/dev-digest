@@ -7,11 +7,55 @@
   "unknownError": "Unknown error",
   "generate": {
     "title": "Generate onboarding tour",
-    "body": "DevDigest indexes the repo and specs, then writes a 5-section guided tour: overview, architecture, key modules, getting started, and conventions & gotchas.",
+    "body": "DevDigest indexes the repo and writes a guided tour: architecture, critical paths, how to run, a reading order, and first tasks. Takes 30–60s and ~5,000 tokens.",
     "cta": "Generate onboarding tour",
     "generating": "Generating…"
   },
   "loadError": {
     "title": "Couldn’t load the onboarding tour"
+  },
+  "pendingHint": "This usually takes 30–60 s.",
+  "elapsed": "{seconds} s elapsed",
+  "header": {
+    "title": "Onboarding for {repo}",
+    "meta": "Generated from index of {files} files · last refreshed {time}",
+    "metaModel": "Generated from index of {files} files · last refreshed {time} · {model}"
+  },
+  "toc": "On this page",
+  "loading": "Loading onboarding tour…",
+  "notFound": "Repository not found",
+  "open": "Open",
+  "notice": {
+    "indexUnavailable": "Skeleton only — the repository index is unavailable ({reason}). Re-index the repository, then Regenerate.",
+    "reason": {
+      "flag_off": "repo intelligence is turned off",
+      "no_data": "the repository is not indexed yet",
+      "index_failed": "indexing failed",
+      "repo_too_large": "the repository is too large to index"
+    },
+    "llmUnavailable": "Skeleton only — no API key is set for the onboarding model. Add one in Settings → API Keys, then Regenerate.",
+    "llmFailed": "Skeleton only — the model call failed. Regenerate to try again.",
+    "llmTimeout": "Skeleton only — the model did not answer within 120 s. Regenerate to try again.",
+    "partial": "The index is partial — some files were skipped, so this tour may miss parts of the repository.",
+    "stale": "Out of date — the index moved from {tourSha} to {currentSha} after this tour was generated. Regenerate to update it."
+  },
+  "section": {
+    "empty": "The index has nothing for this section.",
+    "firstTasksSkeleton": "First tasks are written by the model. Regenerate once the model is available."
+  },
+  "difficulty": {
+    "low": "Low complexity",
+    "medium": "Medium complexity"
+  },
+  "copy": {
+    "label": "Copy command: {command}",
+    "copied": "Copied!",
+    "failed": "Couldn’t copy — select the command and copy it by hand."
+  },
+  "confirm": {
+    "title": "Replace this onboarding tour?",
+    "body": "Regenerating makes one model call on your API key and replaces the current tour. Takes 30–60s and ~5,000 tokens.",
+    "confirm": "Regenerate",
+    "cancel": "Cancel"
   }
 }
