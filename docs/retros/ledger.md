@@ -19,3 +19,4 @@ refuses a second row for the same run.
 | 2026-10-02 | `f69f800d@2026-10-02T14:32` | lessons/l04-3-blast-radius | L04 Blast radius | 14 | 2h39m | 3 / 1.2 | 91.0M | 97% | $39.05 | 8 | 1 | 3 | 6 | implementer: Edit/Write only + guard heredoc writes (32 bypassed the guard) |
 | 2026-10-05 | `ce11aead@start` | lessons/l05-lab | SDD workflow hardening (.claude/ tooling) | 1 | 1h13m | 1 / 1.0 | 36.6M | 99% | $13.44 | 7 | 0 | 1 | 1 | README rule 12: .claude/ audit by read-only agent → file, edits in fresh session |
 | 2026-10-08 | `7d725112@start` | lessons/l05-lab | L05 Onboarding Tour | 19 | 25h39m | 3 / 1.3 | 94.2M | 96% | $43.98 | 8 | 5 | 8 | 6 | checks.sh: add client next build — value import broke build past 437 tests |
+| 2026-10-09 | `50e7c789@start` | lessons/l05-lab | L05 Risk Brief | 17 | 5h57m | 3 / 1.2 | 113.8M | 96% | $54.27 | 8 | 6 | 5 | 6 | implementer-guard: deny heredoc/redirect writes to any project file (12 via cat> |
